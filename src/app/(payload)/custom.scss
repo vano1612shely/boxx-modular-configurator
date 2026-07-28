@@ -1,0 +1,39 @@
+// Cosmetics only.
+//
+// Payload's internal class names are not a public API, so nothing structural
+// lives here: every rule below is safe to silently stop applying after an
+// upgrade, and the admin still works without it.
+
+// Nav group headings read as body text by default, so the groups do not group.
+.nav__label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+// A catalog should fit on one screen.
+.collection-list .table td,
+.collection-list .table th {
+  padding-block: 8px;
+}
+
+// JSON columns (openings, sideAxes, hiddenNodePaths) are data, not prose.
+.field-type.json textarea,
+.field-type.code textarea {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+// Give grouped and repeated fields a visible boundary instead of a floating
+// label — the room arrays nest deeply and ran together.
+.field-type.group .group-field__wrap,
+.array-field__draggable-rows > li {
+  border-radius: 8px;
+}
+
+// The Scene Editor is a full-bleed tool; the document gutter only shrinks it.
+.template-default__wrap:has(.scene-editor-root) {
+  padding: 0;
+}

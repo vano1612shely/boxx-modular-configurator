@@ -1,0 +1,312 @@
+import {
+  OPENING_KINDS,
+  SHELL_DEFAULTS,
+  SHELL_SURFACES,
+  SUN_BEARINGS,
+  TEXTURED_SURFACES,
+  WALL_SIDES,
+} from '@/modules/shared/room-shell'
+import type { BuildingLine, BuildingModel, Model } from '@/payload-types'
+
+import type {
+  BuildingScene,
+  OpeningFit,
+  OpeningKind,
+  OpeningModelStyle,
+  RoomOpening,
+  RoomShellConfig,
+  RoomVertex,
+  RoomZone,
+  ShellSurface,
+  SunDirection,
+  SurfaceStyle,
+  Vec3Tuple,
+  WallSide,
+  ZoneBox,
+} from '../model/types'
+import { autoAssignSides, computeSideAxes } from './room-shell'
+
+type Vec3Group = { x?: number | null; y?: number | null; z?: number | null } | null | undefined
+type ZoneBoxGroup = { min?: Vec3Group; max?: Vec3Group } | null | undefined
+
+function toTuple(value: Vec3Group, fallback: Vec3Tuple = [0, 0, 0]): Vec3Tuple {
+  if (!value) return fallback
+  return [value.x ?? fallback[0], value.y ?? fallback[1], value.z ?? fallback[2]]
+}
+
+/** The nodePaths field is a JSON column — trust only an array of strings. */
+export function zoneNodePaths(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+}
+
+function toZoneBox(value: ZoneBoxGroup): ZoneBox {
+  const min = toTuple(value?.min)
+  const max = toTuple(value?.max)
+  // Normalize so min <= max on every axis regardless of how corners were dragged.
+  return {
+    min: [Math.min(min[0], max[0]), Math.min(min[1], max[1]), Math.min(min[2], max[2])],
+    max: [Math.max(min[0], max[0]), Math.max(min[1], max[1]), Math.max(min[2], max[2])],
+  }
+}
+
+export type RoomDoc = NonNullable<BuildingModel['rooms']>[number]
+
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function isWallSide(value: unknown): value is WallSide {
+  return typeof value === 'string' && (WALL_SIDES as readonly string[]).includes(value)
+}
+
+function isSunDirection(value: unknown): value is SunDirection {
+  return typeof value === 'string' && value in SUN_BEARINGS
+}
+
+/**
+ * Floor outline with a wall assigned to every edge.
+ *
+ * Rooms authored before walls existed carry no `side` — or, once the column
+ * exists, carry the schema default on every vertex, which claims the whole
+ * outline is one wall. Both mean "nobody has assigned these yet", so the
+ * grouping is derived from the geometry instead. That keeps the client working
+ * on legacy data without waiting on a backfill; the editor writes real values
+ * on first save.
+ */
+export function roomVertices(doc: RoomDoc): RoomVertex[] {
+  const points = (doc.floorPolygon ?? []).map((p) => ({ x: p.x, z: p.z }))
+  if (points.length < 3) return []
+
+  const stored = (doc.floorPolygon ?? []).map((p) => (p as { side?: unknown }).side)
+  const assigned = stored.every(isWallSide) && new Set(stored).size > 1
+
+  const sides = assigned ? (stored as WallSide[]) : autoAssignSides(points)
+  return points.map((p, i) => ({ ...p, side: sides[i] }))
+}
+
+/** The openings JSON column — keep only well-formed records. */
+export function roomOpenings(value: unknown): RoomOpening[] {
+  if (!Array.isArray(value)) return []
+
+  const openings: RoomOpening[] = []
+  for (const entry of value) {
+    const opening = entry as Partial<RoomOpening> | null
+    const kind: OpeningKind = opening?.kind === 'door' ? 'door' : 'window'
+    if (
+      !opening ||
+      typeof opening.id !== 'string' ||
+      !isWallSide(opening.side) ||
+      typeof opening.along !== 'number' ||
+      !Number.isFinite(opening.along)
+    ) {
+      continue
+    }
+
+    openings.push({
+      id: opening.id,
+      side: opening.side,
+      kind,
+      along: opening.along,
+      width: numberOr(opening.width, kind === 'door' ? SHELL_DEFAULTS.doorWidth : SHELL_DEFAULTS.windowWidth),
+      height: numberOr(
+        opening.height,
+        kind === 'door' ? SHELL_DEFAULTS.doorHeight : SHELL_DEFAULTS.windowHeight,
+      ),
+      sill: numberOr(opening.sill, kind === 'door' ? 0 : SHELL_DEFAULTS.windowSill),
+      yawDeg: numberOr(opening.yawDeg, 0),
+      mirror: opening.mirror === true,
+    })
+  }
+  return openings
+}
+
+function isOpeningFit(value: unknown): value is OpeningFit {
+  return value === 'stretch' || value === 'contain' || value === 'none'
+}
+
+/**
+ * URL of an optional model relationship.
+ *
+ * Same reasoning as textures: a room with no door model is the normal state on
+ * day one, so this reports "none" rather than throwing the page away.
+ */
+function optionalModelUrl(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null
+  const url = (value as { url?: unknown }).url
+  return typeof url === 'string' && url.length > 0 ? url : null
+}
+
+function roomOpeningModels(doc: RoomDoc): Record<OpeningKind, OpeningModelStyle> {
+  const group = doc.openingModels
+
+  return Object.fromEntries(
+    OPENING_KINDS.map((kind) => {
+      const entry = group?.[kind]
+      return [
+        kind,
+        {
+          url: optionalModelUrl(entry?.model),
+          fit: isOpeningFit(entry?.fit) ? entry.fit : 'stretch',
+          yawDeg: numberOr(entry?.yawDeg, 0),
+          depth: numberOr(entry?.depth, 0),
+        } satisfies OpeningModelStyle,
+      ]
+    }),
+  ) as Record<OpeningKind, OpeningModelStyle>
+}
+
+/** Outward axis per wall, falling back to the outline's own geometry. */
+function roomSideAxes(value: unknown, polygon: RoomVertex[]): RoomShellConfig['sideAxes'] {
+  const derived = computeSideAxes(polygon)
+  if (!value || typeof value !== 'object') return derived
+
+  const stored = value as Record<string, unknown>
+  for (const side of WALL_SIDES) {
+    const axis = stored[side] as { x?: unknown; z?: unknown } | undefined
+    if (axis && typeof axis.x === 'number' && typeof axis.z === 'number') {
+      derived[side] = { x: axis.x, z: axis.z }
+    }
+  }
+  return derived
+}
+
+/** Shell parameters, with every value clamped to something renderable. */
+function roomShell(doc: RoomDoc, polygon: RoomVertex[]): RoomShellConfig {
+  const shell = doc.shell as Record<string, unknown> | null | undefined
+
+  return {
+    floorY: numberOr(shell?.floorY, 0),
+    wallHeight: Math.max(numberOr(shell?.wallHeight, SHELL_DEFAULTS.wallHeight), 0.1),
+    wallThickness: Math.max(numberOr(shell?.wallThickness, SHELL_DEFAULTS.wallThickness), 0.01),
+    floorThickness: Math.max(numberOr(shell?.floorThickness, SHELL_DEFAULTS.floorThickness), 0.01),
+    ceilingThickness: Math.max(
+      numberOr(shell?.ceilingThickness, SHELL_DEFAULTS.ceilingThickness),
+      0.01,
+    ),
+    sideAxes: roomSideAxes(shell?.sideAxes, polygon),
+    sunDirection: isSunDirection(shell?.sunDirection) ? shell.sunDirection : null,
+  }
+}
+
+/**
+ * URL of an optional texture relationship.
+ *
+ * Deliberately not `assertDoc`: an unset texture slot is normal, and throwing
+ * would take the whole configurator page down over a missing wall finish.
+ */
+function optionalTextureUrl(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null
+  const url = (value as { url?: unknown }).url
+  return typeof url === 'string' && url.length > 0 ? url : null
+}
+
+/**
+ * Every surface the generator draws, but only three of them are stored.
+ *
+ * The rest keep their built-in look on purpose — see `TEXTURED_SURFACE_OPTIONS`
+ * — and still need an entry here, because the geometry planner asks for a tile
+ * size per surface whether or not anyone can set one.
+ */
+function roomSurfaces(doc: RoomDoc): Record<ShellSurface, SurfaceStyle> {
+  const group = (doc.surfaces ?? {}) as Record<string, unknown>
+  const textured = new Set<string>(TEXTURED_SURFACES)
+
+  return Object.fromEntries(
+    SHELL_SURFACES.map((surface) => {
+      const entry = textured.has(surface)
+        ? (group[surface] as
+            | { texture?: unknown; tileWidth?: unknown; tileHeight?: unknown }
+            | undefined)
+        : undefined
+      return [
+        surface,
+        {
+          url: optionalTextureUrl(entry?.texture),
+          tileWidth: Math.max(numberOr(entry?.tileWidth, 1), 0.01),
+          tileHeight: Math.max(numberOr(entry?.tileHeight, 1), 0.01),
+        } satisfies SurfaceStyle,
+      ]
+    }),
+  ) as Record<ShellSurface, SurfaceStyle>
+}
+
+/**
+ * One room document → the runtime room entity.
+ *
+ * Exported on its own because the admin Scene Editor previews a room straight
+ * from its unsaved draft: sharing this mapping is what stops the preview and
+ * the client from drifting apart.
+ */
+export function mapRoomZone(room: RoomDoc): RoomZone {
+  const floorPolygon = roomVertices(room)
+
+  return {
+    key: room.key,
+    name: room.name,
+    roomType: room.roomType,
+    floorPolygon,
+    shell: roomShell(room, floorPolygon),
+    openings: roomOpenings(room.openings),
+    surfaces: roomSurfaces(room),
+    openingModels: roomOpeningModels(room),
+    cameraPreset: {
+      position: toTuple(room.cameraPreset?.position, [6, 4, 6]),
+      target: toTuple(room.cameraPreset?.target),
+    },
+  }
+}
+
+function assertDoc<T>(value: number | T | null | undefined, label: string): T {
+  if (!value || typeof value === 'number') {
+    throw new Error(`Expected populated "${label}" relationship — fetch with depth >= 1.`)
+  }
+  return value
+}
+
+/** Maps a populated Payload building-models doc into the client-safe scene entity. */
+export function mapBuildingScene(doc: BuildingModel): BuildingScene {
+  const line = assertDoc<BuildingLine>(doc.line, 'line')
+  const model = assertDoc<Model>(doc.model, 'model')
+
+  if (!model.url) {
+    throw new Error(`Building model "${doc.title}" has no file URL.`)
+  }
+
+  const camera = doc.sceneConfig?.camera
+  const hiddenNodePaths = zoneNodePaths(doc.sceneConfig?.hiddenNodePaths)
+
+  const rooms: RoomZone[] = (doc.rooms ?? []).map(mapRoomZone)
+
+  return {
+    id: doc.id,
+    title: doc.title,
+    line: {
+      id: line.id,
+      name: line.name,
+      slug: line.slug,
+      unitLabel: line.unitLabel,
+      rules: {
+        restroomsRequiredAt: line.rules?.restroomsRequiredAt ?? null,
+        secondRestroomSetAt: line.rules?.secondRestroomSetAt ?? null,
+        maxUnits: line.rules?.maxUnits ?? null,
+      },
+    },
+    unitCount: doc.unitCount,
+    restroomCount: doc.restroomCount ?? 0,
+    sqft: doc.sqft ?? null,
+    dimensions: doc.dimensions ?? null,
+    modelUrl: model.url,
+    camera: {
+      position: toTuple(camera?.position, [10, 8, 12]),
+      target: toTuple(camera?.target, [0, 1, 0]),
+      fov: camera?.fov ?? 50,
+      minDistance: camera?.minDistance ?? 2,
+      maxDistance: camera?.maxDistance ?? 30,
+      minPolarDeg: camera?.minPolarDeg ?? 15,
+      maxPolarDeg: camera?.maxPolarDeg ?? 85,
+    },
+    roofBlocks: (doc.sceneConfig?.roofBlocks ?? []).map(toZoneBox),
+    hiddenNodePaths,
+    rooms,
+  }
+}

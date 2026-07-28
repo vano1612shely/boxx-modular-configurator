@@ -1,0 +1,20 @@
+# Netlify build configuration.
+#
+# The Next.js runtime is detected and installed by Netlify automatically, so it
+# is deliberately not pinned here — pinning it tends to drift behind the Next
+# version and break in ways that look like application bugs.
+
+[build]
+  # Schema first, then the app that expects it. A deploy that cannot migrate
+  # must fail here rather than boot against a database it disagrees with.
+  command = "pnpm run build:netlify"
+  publish = ".next"
+
+[build.environment]
+  # Matches local development. Payload 3 and Next 16 both want a current Node.
+  NODE_VERSION = "22"
+  # The admin bundle is large enough to exhaust the default heap mid-build.
+  NODE_OPTIONS = "--max-old-space-size=8000"
+
+# Payload's admin and REST API are Next routes, so no redirects are needed —
+# everything is served by the Next runtime.

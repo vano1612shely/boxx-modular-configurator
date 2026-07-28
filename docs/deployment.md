@@ -36,25 +36,54 @@ Set these in **Site configuration → Environment variables**. Everything except
 | `S3_SECRET_ACCESS_KEY` | |
 | `S3_PUBLIC_URL` | optional; serve uploads from the CDN instead of through the app |
 
-### Cloudflare R2
+### Supabase
 
-Any S3-compatible store works. R2 is the one to pick here because it does not
-charge for egress, and this app's payload is multi-megabyte `.glb` models that
-every visitor downloads.
+Any S3-compatible store works. Supabase is the one in use because it also
+provides the Postgres, so one free account covers both halves of the stack.
 
-1. **R2 → Create bucket.** Any name; put it in `S3_BUCKET`.
-2. **Settings → Public access → Allow.** R2 gives the bucket a
-   `https://pub-<hash>.r2.dev` domain — that is `S3_PUBLIC_URL`. Skip this and
-   the app still works, just slower and more expensive: see below.
-3. **R2 → API → Create API token**, Object Read & Write, scoped to that bucket.
-   The two values it shows once become `S3_ACCESS_KEY_ID` and
-   `S3_SECRET_ACCESS_KEY`.
-4. **`S3_ENDPOINT`** is `https://<account_id>.r2.cloudflarestorage.com`, shown
-   on the R2 overview page. `S3_REGION` stays `auto`.
+The showcase project is `mwkbmemvqrknqwhoahuf` in `eu-central-1`, with a public
+bucket named `assets`. Everything except the two secrets is already set on
+Netlify:
+
+| Variable | Value |
+| --- | --- |
+| `S3_BUCKET` | `assets` |
+| `S3_ENDPOINT` | `https://mwkbmemvqrknqwhoahuf.storage.supabase.co/storage/v1/s3` |
+| `S3_REGION` | `eu-central-1` |
+| `S3_PUBLIC_URL` | `https://mwkbmemvqrknqwhoahuf.supabase.co/storage/v1/object/public/assets` |
+
+The remaining two come from **Project Settings → Storage → S3 access keys**,
+which shows them once: `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. They are
+server-only — they bypass RLS entirely.
 
 `S3_PUBLIC_URL` is what decides whether a request for a building model hits the
 CDN or wakes a serverless function that streams the file through itself. Both
-work; only one of them is free and fast.
+work; only one of them is fast.
+
+### Connecting to Supabase Postgres
+
+Take the connection string from **Connect → Session pooler**, not the direct
+`db.<ref>.supabase.co` one.
+
+Netlify runs the app as serverless functions, so instances come and go
+constantly and each wants its own connections — a direct connection per
+instance exhausts Postgres' limit quickly. The pooler exists for exactly that.
+Use **session** mode rather than transaction mode: transaction mode does not
+support prepared statements, which the Postgres driver underneath Payload
+relies on.
+
+### Row level security
+
+Supabase serves the `public` schema over PostgREST using the anon key, and that
+key is designed to be published in client code. Payload's tables live in
+`public` and include password hashes and quote contact details, so RLS is
+enabled on all 25 of them with **no policies at all** — deny-everything for the
+public API.
+
+Payload is unaffected: it connects as the role that owns the tables, and
+ownership bypasses RLS. Supabase's linter will report `rls_enabled_no_policy`
+for every table at INFO level; that is the intended state here, not a finding
+to fix.
 
 `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD` are for local seeding only. Do not set
 them in production — the first admin is created through the admin UI, which

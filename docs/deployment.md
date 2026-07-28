@@ -60,6 +60,27 @@ server-only — they bypass RLS entirely.
 CDN or wakes a serverless function that streams the file through itself. Both
 work; only one of them is fast.
 
+### Uploads go straight to the bucket
+
+`clientUploads` is on, so the server only signs a URL and the browser PUTs the
+file to Supabase itself.
+
+This is not a tuning choice. A serverless function receives its request body
+through the platform, and that body is capped — on Lambda at 6 MB of base64,
+so anything over roughly 4.4 MB of binary is rejected before our code runs. A
+5 MB building model returns `413`; models here go to 100 MB. Routing uploads
+around the function removes the ceiling entirely.
+
+Two consequences:
+
+- **Models are not optimized on upload.** The file never reaches the server, so
+  nothing can rewrite it. Run `pnpm optimize:model <file.glb>` first — it
+  re-encodes textures and recompresses geometry, which on a large model is
+  minutes of CPU and is exactly what a request cannot spend.
+- **The bucket needs CORS for PUT** from the site's origin. Supabase allows
+  this by default; if an upload fails in the browser with a CORS error rather
+  than an HTTP status, that is the thing to check.
+
 ### Connecting to Supabase Postgres
 
 Take the connection string from **Connect → Session pooler**, not the direct

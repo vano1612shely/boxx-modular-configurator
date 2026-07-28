@@ -37,6 +37,19 @@ const servedDirectly = publicBucketUrl
 const plugins: Plugin[] = useS3
   ? [
       s3Storage({
+        /**
+         * The browser PUTs files straight to the bucket, never through us.
+         *
+         * Not an optimisation — the only way this works at all. A serverless
+         * function receives its request body through the platform, and that
+         * body is capped: on Lambda it is 6 MB of BASE64, so a binary file over
+         * roughly 4.4 MB is rejected before any of our code runs. A 5 MB
+         * building model already fails; a 100 MB one is not close.
+         *
+         * With this on, the server only signs a URL and the upload goes
+         * browser -> Supabase directly, so the size ceiling is the bucket's.
+         */
+        clientUploads: true,
         collections: {
           images: servedDirectly,
           models: servedDirectly,

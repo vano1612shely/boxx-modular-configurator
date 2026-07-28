@@ -13,14 +13,35 @@ const dirname = path.dirname(filename)
 
 const useS3 = Boolean(process.env.S3_BUCKET)
 
+/**
+ * Public base URL of the bucket — an R2 public domain, or a CDN in front of it.
+ *
+ * Optional, and worth setting. Without it Payload serves every upload through
+ * itself: a request for a 5 MB building model wakes a serverless function,
+ * which streams the object out of the bucket and back to the browser. That is
+ * an invocation, its wall-clock time and its bandwidth for a file that never
+ * changes. Point this at the bucket and the browser fetches it straight from
+ * the CDN instead, and the function is not involved at all.
+ *
+ * Trailing slash tolerated; the bucket must allow public reads.
+ */
+const publicBucketUrl = process.env.S3_PUBLIC_URL?.replace(/\/+$/, '')
+
+const servedDirectly = publicBucketUrl
+  ? {
+      generateFileURL: ({ filename, prefix }: { filename: string; prefix?: string }) =>
+        [publicBucketUrl, prefix, filename].filter(Boolean).join('/'),
+    }
+  : {}
+
 const plugins: Plugin[] = useS3
   ? [
       s3Storage({
         collections: {
-          images: true,
-          models: true,
+          images: servedDirectly,
+          models: servedDirectly,
           // Miss this and textures silently stay on the local disk in prod.
-          textures: true,
+          textures: servedDirectly,
         },
         bucket: process.env.S3_BUCKET ?? '',
         config: {

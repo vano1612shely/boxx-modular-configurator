@@ -34,6 +34,27 @@ Set these in **Site configuration → Environment variables**. Everything except
 | `S3_REGION` | `auto` for R2 |
 | `S3_ACCESS_KEY_ID` | |
 | `S3_SECRET_ACCESS_KEY` | |
+| `S3_PUBLIC_URL` | optional; serve uploads from the CDN instead of through the app |
+
+### Cloudflare R2
+
+Any S3-compatible store works. R2 is the one to pick here because it does not
+charge for egress, and this app's payload is multi-megabyte `.glb` models that
+every visitor downloads.
+
+1. **R2 → Create bucket.** Any name; put it in `S3_BUCKET`.
+2. **Settings → Public access → Allow.** R2 gives the bucket a
+   `https://pub-<hash>.r2.dev` domain — that is `S3_PUBLIC_URL`. Skip this and
+   the app still works, just slower and more expensive: see below.
+3. **R2 → API → Create API token**, Object Read & Write, scoped to that bucket.
+   The two values it shows once become `S3_ACCESS_KEY_ID` and
+   `S3_SECRET_ACCESS_KEY`.
+4. **`S3_ENDPOINT`** is `https://<account_id>.r2.cloudflarestorage.com`, shown
+   on the R2 overview page. `S3_REGION` stays `auto`.
+
+`S3_PUBLIC_URL` is what decides whether a request for a building model hits the
+CDN or wakes a serverless function that streams the file through itself. Both
+work; only one of them is free and fast.
 
 `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD` are for local seeding only. Do not set
 them in production — the first admin is created through the admin UI, which

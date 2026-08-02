@@ -160,17 +160,22 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
   // delta has been applied and before anything renders — so the offset is never
   // shown past the limit and the drag simply stops there. Clamping in a frame
   // loop instead raced the incoming deltas and stuttered at the edge.
+  //
+  // Per axis, not by magnitude: projecting onto a circle divides both axes, so
+  // pushing sideways past the limit kept shrinking the vertical component and
+  // the view crept upwards while the drag was still going. Clamping each axis
+  // on its own stops the one being pushed and leaves the other alone.
   useEffect(() => {
     const controls = controlsRef.current
     if (!controls || maxOffset <= 0) return
 
     const bound = () => {
       const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
-      const planar = Math.hypot(offset.x, offset.y)
-      if (planar <= maxOffset) return
+      const x = MathUtils.clamp(offset.x, -maxOffset, maxOffset)
+      const y = MathUtils.clamp(offset.y, -maxOffset, maxOffset)
+      if (x === offset.x && y === offset.y) return
 
-      const scale = maxOffset / planar
-      void controls.setFocalOffset(offset.x * scale, offset.y * scale, offset.z, false)
+      void controls.setFocalOffset(x, y, offset.z, false)
     }
 
     controls.addEventListener('control', bound)

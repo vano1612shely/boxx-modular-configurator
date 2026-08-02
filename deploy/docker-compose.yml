@@ -1,0 +1,46 @@
+# Production stack. Lives at /opt/boxx/docker-compose.yml on the server.
+#
+# Nothing that matters is kept inside a container: uploads and the database
+# directory are bind mounts from /opt/boxx, so `docker compose down` and a fresh
+# image change nothing about the data.
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - /opt/boxx/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [internal]
+
+  app:
+    image: ${APP_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: [.env]
+    # Bound to loopback: nginx is the only way in from outside.
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - /opt/boxx/uploads/models:/app/models
+      - /opt/boxx/uploads/textures:/app/textures
+      - /opt/boxx/uploads/images:/app/images
+      - /opt/boxx/uploads/media:/app/media
+    networks: [internal]
+
+# The database is reachable only from this network, and it publishes no port to
+# the host at all.
+networks:
+  internal:
+    driver: bridge

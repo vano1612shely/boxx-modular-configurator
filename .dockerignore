@@ -1,0 +1,24 @@
+.git
+.github
+.next
+node_modules
+docs
+src/seed
+.claude
+.vscode
+.idea
+
+# Uploaded data lives on the server, not in the image.
+media
+models
+textures
+images
+
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+next-env.d.ts
+coverage
+test-results
+playwright-report

@@ -20,7 +20,7 @@ import {
 } from '@/entities/configurator-session'
 
 import { cameraLimits } from '../lib/camera-limits'
-import { resistPan } from '../lib/pan-resistance'
+import { panSpeedFactor } from '../lib/pan-resistance'
 
 type Props = {
   building: BuildingScene
@@ -107,9 +107,11 @@ const OFFSET_SCRATCH = new Vector3()
 /** How far the view may slide off the subject, as a fraction of its radius. */
 const MAX_OFFSET_RATIO = 0.72
 
+/** camera-controls' own default; restated so the resistance has a fixed base. */
+const PAN_SPEED = 2
+
 export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
   const controlsRef = useRef<CameraControls>(null)
-  const panRef = useRef({ rawX: 0, rawY: 0, shownX: 0, shownY: 0 })
   const viewMode = useConfiguratorSession((s) => s.viewMode)
   const viewRequestId = useConfiguratorSession((s) => s.viewRequestId)
   const buildingBounds = useConfiguratorSession((s) => s.buildingBounds)
@@ -146,6 +148,7 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
     // the room centre, which is what both gestures are expected to mean.
     controls.mouseButtons.right = CameraControlsImpl.ACTION.OFFSET
     controls.touches.two = CameraControlsImpl.ACTION.TOUCH_DOLLY_OFFSET
+    controls.truckSpeed = PAN_SPEED
   }, [])
 
   const maxOffset = useMemo(() => {
@@ -156,43 +159,29 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
   }, [scope])
 
   // Nothing in camera-controls bounds the focal offset, so without this the view
-  // can be slid until the room leaves the frame.
+  // could be slid until the room left the frame.
   //
-  // Bound on the 'control' event, which fires synchronously after each drag
-  // delta has been applied and before anything renders — so the offset is never
-  // shown past the limit and the drag simply stops there. Clamping in a frame
-  // loop instead raced the incoming deltas and stuttered at the edge.
-  //
-  // Per axis, not by magnitude: projecting onto a circle divides both axes, so
-  // pushing sideways past the limit kept shrinking the vertical component and
-  // the view crept upwards while the drag was still going. Clamping each axis
-  // on its own stops the one being pushed and leaves the other alone.
+  // The bound is on the drag speed, never on the resulting offset. The library
+  // applies an offset drag through setFocalOffset with a transition, so it is
+  // damped; overwriting the value afterwards replaced that damping with a snap
+  // from the moment the bound engaged, and the changeover was felt as a jolt
+  // mid-travel. Slowing the drag leaves the library's own motion alone all the
+  // way out, and the offset approaches the limit without reaching it.
   useEffect(() => {
     const controls = controlsRef.current
     if (!controls || maxOffset <= 0) return
 
-    const pan = panRef.current
-
-    const bound = () => {
+    const resist = () => {
       const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
-
-      // The library adds a delta per pointermove, so the raw travel is tracked
-      // apart from what is shown: re-easing an already-eased value would keep
-      // compounding and the view would creep back on its own.
-      pan.rawX += offset.x - pan.shownX
-      pan.rawY += offset.y - pan.shownY
-
-      const x = resistPan(pan.rawX, maxOffset)
-      const y = resistPan(pan.rawY, maxOffset)
-      pan.shownX = x
-      pan.shownY = y
-
-      if (x === offset.x && y === offset.y) return
-      void controls.setFocalOffset(x, y, offset.z, false)
+      const reach = Math.hypot(offset.x, offset.y)
+      controls.truckSpeed = PAN_SPEED * panSpeedFactor(reach, maxOffset)
     }
 
-    controls.addEventListener('control', bound)
-    return () => controls.removeEventListener('control', bound)
+    controls.addEventListener('control', resist)
+    return () => {
+      controls.removeEventListener('control', resist)
+      controls.truckSpeed = PAN_SPEED
+    }
   }, [maxOffset])
 
   useEffect(() => {
@@ -217,10 +206,6 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
     controls.normalizeRotations()
     // setLookAt leaves the focal offset alone, so a view picked after panning
     // would arrive with the pan still applied and sit off-centre.
-    panRef.current.rawX = 0
-    panRef.current.rawY = 0
-    panRef.current.shownX = 0
-    panRef.current.shownY = 0
     void controls.setFocalOffset(0, 0, 0, true)
     void controls.setLookAt(px, py, pz, tx, ty, tz, true)
   }, [camera, scope, viewMode, viewRequestId, moveToTarget])

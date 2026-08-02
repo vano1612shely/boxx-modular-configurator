@@ -25,27 +25,147 @@ pnpm seed                       # demo catalog: 1 building, 2 packages
 - Admin panel: `http://localhost:3000/admin` (first visit prompts to create the admin user)
 - Tests: `pnpm test` · Types: `pnpm generate:types` after changing collections
 
-## Production
+## Deployment
+
+Pushing to `main` builds an image, pushes it to GHCR and releases it to the server
+(`.github/workflows/deploy.yml`). Everything below is the same thing done by hand,
+from a bare Ubuntu server — useful for a second environment, or when CI is not an
+option.
+
+The stack is two containers, `db` and `app`, on a private bridge network. The
+database publishes no port at all and the app is bound to `127.0.0.1`, so nginx is
+the only way in. Nothing that matters lives inside a container: uploads and the
+database directory are bind mounts from `/opt/boxx`.
+
+### 1. Install what the server needs
 
 ```bash
-pnpm build
-pnpm start          # serves on PORT (default 3000)
+apt-get update && apt-get install -y ca-certificates curl gnupg nginx
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
 ```
 
-Reverse-proxy `/configurator` (and `/admin`, `/api`) to this app. Example nginx location:
+### 2. Make the directories the data will live in
 
-```nginx
-location /configurator { proxy_pass http://127.0.0.1:3000; }
-location /admin        { proxy_pass http://127.0.0.1:3000; }
-location /api          { proxy_pass http://127.0.0.1:3000; }
-location /_next        { proxy_pass http://127.0.0.1:3000; }
+The uploads must be owned by uid 1000 (the `node` user inside the app image) and
+the database directory by uid 999 (`postgres` inside its image). Get this wrong and
+the containers start and then fail on the first write.
+
+```bash
+mkdir -p /opt/boxx/uploads/{models,textures,images,media} /opt/boxx/postgres
+chown -R 1000:1000 /opt/boxx/uploads
+chown -R 999:999 /opt/boxx/postgres
 ```
+
+### 3. Write the environment file
+
+`/opt/boxx/.env`, readable only by root (`chmod 600`). Generate the secrets, do not
+invent them:
+
+```bash
+cd /opt/boxx
+PGPASS=$(openssl rand -hex 24)
+cat > .env <<EOF
+POSTGRES_USER=boxx
+POSTGRES_PASSWORD=${PGPASS}
+POSTGRES_DB=configurator
+
+DATABASE_URL=postgres://boxx:${PGPASS}@db:5432/configurator
+PAYLOAD_SECRET=$(openssl rand -hex 32)
+NODE_ENV=production
+
+APP_IMAGE=ghcr.io/vano1612shely/boxx-modular-configurator:latest
+EOF
+chmod 600 .env
+```
+
+`DATABASE_URL` points at `db`, the service name — that is the hostname on the
+private network, not `localhost`.
+
+### 4. Put the stack definition in place
+
+Copy `deploy/docker-compose.yml` from this repository to
+`/opt/boxx/docker-compose.yml`, and `deploy/nginx.conf` to
+`/etc/nginx/sites-available/boxx`, then:
+
+```bash
+ln -sfn /etc/nginx/sites-available/boxx /etc/nginx/sites-enabled/boxx
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx
+```
+
+### 5. Get the image
+
+The image is **not** built on the server: `pnpm build` asks for 8 GB of heap, and a
+small VPS does not have it. Either pull one CI already published —
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USER --password-stdin
+docker compose pull
+```
+
+— or build it on a machine that can and push it:
+
+```bash
+docker build -t ghcr.io/vano1612shely/boxx-modular-configurator:latest .
+docker push ghcr.io/vano1612shely/boxx-modular-configurator:latest
+```
+
+### 6. Start it
+
+```bash
+cd /opt/boxx
+docker compose up -d db          # wait for it to report healthy
+docker compose run --rm app pnpm migrate
+docker compose up -d app
+```
+
+Migrations run **before** the app serves. If they fail, stop — do not start the new
+image against a schema it does not match.
+
+### 7. Check it
+
+```bash
+curl -I http://localhost/configurator     # expect 200
+docker compose ps                          # both services up, db healthy
+docker compose logs -f app
+```
+
+Then open `http://SERVER_IP/admin` and create the first admin user. The admin panel
+refuses to create a second one once any user exists, so do this yourself.
+
+### Updating later
+
+```bash
+cd /opt/boxx
+docker compose pull
+docker compose run --rm app pnpm migrate
+docker compose up -d app
+```
+
+To roll back, point `APP_IMAGE` in `/opt/boxx/.env` at an older tag — CI tags every
+image with its commit SHA — and run the same three commands.
+
+### TLS
+
+The server answers on plain HTTP. With a domain pointed at it:
+
+```bash
+apt-get install -y certbot python3-certbot-nginx
+certbot --nginx -d your-domain.example
+```
+
+Certbot rewrites the nginx site in place and sets up renewal.
 
 ### Uploads
 
 Models, textures and images are written to `./models`, `./textures` and `./images`
-next to the code, and served by the app. Those directories must survive a restart
-and a redeploy.
+relative to the working directory — `/app` in the container, which is where the
+bind mounts land. Those directories must survive a restart and a redeploy.
 
 ---
 

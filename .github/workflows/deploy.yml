@@ -130,12 +130,24 @@ jobs:
           docker compose up -d db
           # Migrations run before the new code serves. If they fail the old
           # container is still up and the deploy stops here.
-          docker compose run --rm app pnpm migrate
-          docker compose up -d app
+          #
+          # -T and </dev/null both matter: this whole script arrives on the
+          # remote shell's stdin, and `compose run` claims stdin by default —
+          # without them it swallows the rest of the script and the deploy ends
+          # quietly having never restarted anything.
+          docker compose run --rm -T app pnpm migrate </dev/null
+          docker compose up -d app </dev/null
 
           nginx -t && systemctl reload nginx
           docker logout ghcr.io
           docker image prune -f --filter 'until=168h'
+
+          # A deploy that changed nothing must not report success.
+          docker compose ps --status running --services | grep -qx app || {
+            echo 'app container is not running after the release'
+            docker compose logs --tail 50 app
+            exit 1
+          }
           REMOTE
 
       - name: Wait for it to answer

@@ -61,6 +61,7 @@ import {
 
 import { CompassProbe, CompassRose } from './canvas/Compass'
 import { FloorPlaneGizmo } from './canvas/FloorPlaneGizmo'
+import { RoofModelGizmo } from './canvas/RoofModelGizmo'
 import { SunMarker } from './canvas/SunMarker'
 import { OpeningGizmo, type OpeningGrip } from './canvas/OpeningGizmo'
 import {
@@ -74,16 +75,9 @@ import { blockMenuItems, nodeMenuItems } from './menu-items'
 
 type VmProps = { vm: SceneEditorVm }
 
-/** Roof volumes are the only blocks left, so one colour says it all. */
 const ROOF_COLOR = '#ef4444'
 
-/**
- * What the real building fades to while a room is open.
- *
- * Shared and module-level so swapping it in costs one assignment per mesh. It
- * stays raycastable on purpose: "take the floor level from this surface" needs
- * something to hit.
- */
+/** Stays raycastable: the floor-level pick needs a surface to hit. */
 const GHOST_MATERIAL = new MeshBasicMaterial({
   color: '#94a3b8',
   transparent: true,
@@ -93,15 +87,15 @@ const GHOST_MATERIAL = new MeshBasicMaterial({
   toneMapped: false,
 })
 
-/** Which box corner a handle controls: [xSide, zSide] as min/max keys. */
 type CornerId = 0 | 1 | 2 | 3
 
-/** The opening as it was when the drag started, so every frame is absolute. */
 type OpeningDragBase = { along: number; width: number; height: number; sill: number }
 
 type DragState =
   | { kind: 'create-block'; startX: number; startZ: number }
   | { kind: 'floor-plane'; cx: number; cz: number }
+  | { kind: 'roof-move'; grabDX: number; grabDZ: number; y: number }
+  | { kind: 'roof-height'; cx: number; cz: number; cy: number }
   | {
       kind: 'opening'
       id: string
@@ -126,18 +120,17 @@ function toZone(box: EditorBox) {
   }
 }
 
-/** Below this an opening is a slot, not an opening — and the shell drops it. */
+/** Metres; below this the shell drops the opening. */
 const MIN_OPENING = 0.1
 
 type RoomOpeningPatch = { along: number; width: number; height: number; sill: number }
 
-/** All editor drags land on a 5cm grid — precise enough, never "almost". */
+/** Snap grid, in metres. */
 const GRID = 0.05
 function snap(value: number): number {
   return Math.round(value / GRID) * GRID
 }
 
-/** Editor tools react to the left button only — middle/right always drive the camera. */
 function isPrimaryButton(event: ThreeEvent<PointerEvent>): boolean {
   return event.nativeEvent.button === 0
 }
@@ -152,7 +145,6 @@ function pointInPoly(x: number, z: number, poly: Array<{ x: number; z: number }>
   return inside
 }
 
-/** Intersection of a pointer ray with the horizontal plane y = h. */
 function rayAtY(ray: Ray, h: number): { x: number; z: number } | null {
   if (Math.abs(ray.direction.y) < 1e-6) return null
   const t = (h - ray.origin.y) / ray.direction.y
@@ -160,13 +152,7 @@ function rayAtY(ray: Ray, h: number): { x: number; z: number } | null {
   return { x: ray.origin.x + ray.direction.x * t, z: ray.origin.z + ray.direction.z * t }
 }
 
-/**
- * Where the pointer ray crosses the vertical plane of a wall.
- *
- * Unlike `rayAtVertical`, which uses a plane that always faces the camera,
- * this one uses the wall's own plane — an opening only slides within its wall,
- * so that is the surface the drag has to be measured on.
- */
+/** Uses the wall's own plane, unlike `rayAtVertical`, whose plane faces the camera. */
 function rayOnWall(
   ray: Ray,
   at: { x: number; z: number },
@@ -218,8 +204,6 @@ function BuildingGlb({
     }
   }, [scene])
 
-  // Node paths are plain child-index paths into the loaded glb — the model is
-  // never modified, so a path always resolves to the object it names.
   const resolveAny = useCallback(
     (path: string): Object3D | null => resolveNode(path),
     [resolveNode],
@@ -229,10 +213,6 @@ function BuildingGlb({
     resolveRef.current = resolveAny
   }, [resolveAny, resolveRef])
 
-  // Unmissable highlight of the selected model objects: glowing clones drawn
-  // on top of everything (a thin bbox alone was too easy to overlook). The
-  // primary (last-selected) object glows stronger than the rest. Depends on
-  // the outliner list so it re-resolves after cuts rebuild the parts.
   const selectedPathsKey = vm.selectedNodePaths.join('|')
   const modelNodes = vm.modelNodes
   const overlays = useMemo(() => {
@@ -274,10 +254,16 @@ function BuildingGlb({
 
   useEffect(() => {
     const bounds = new Box3().setFromObject(prepared)
-    vm.onModelHeight(Math.max(bounds.max.y, 2.5))
+    vm.onModelBounds({
+      height: Math.max(bounds.max.y, 2.5),
+      footprint: {
+        minX: bounds.min.x,
+        minZ: bounds.min.z,
+        maxX: bounds.max.x,
+        maxZ: bounds.max.z,
+      },
+    })
 
-    // 2) Flatten the glb scene graph for the outliner, with world-space AABBs
-    // computed bottom-up (one pass, no repeated subtree traversals).
     const boxes = new Map<Object3D, Box3>()
     const scratch = new Box3()
     const collect = (obj: Object3D): Box3 => {
@@ -300,8 +286,6 @@ function BuildingGlb({
     const nodes: ModelNode[] = []
     let nextId = 0
     const round = (v: number) => Math.round(v * 100) / 100
-    // Many exporters leave nodes unnamed — fall back to the material name
-    // (often meaningful) or a numbered label, never an empty row.
     const displayName = (obj: Object3D, id: number): string => {
       const own = obj.name?.trim()
       if (own) return own
@@ -338,14 +322,10 @@ function BuildingGlb({
     prepared.children.forEach((child, index) => walk(child, null, 0, `${index}`))
 
     vm.onModelNodes(nodes)
-    // Debug affordance: the flattened outliner (paths + world AABBs) is what
-    // room tracing works from — exposing it lets a headless session inspect
-    // exactly what the editor sees.
     ;(window as unknown as { __editorNodes?: ModelNode[] }).__editorNodes = nodes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prepared])
 
-  // Objects the admin removed from the scene are never rendered, in any mode.
   useEffect(() => {
     const removed: Object3D[] = []
     for (const path of vm.hiddenNodePaths) {
@@ -360,16 +340,10 @@ function BuildingGlb({
     }
   }, [vm.hiddenNodePaths, resolveAny])
 
-  // In room mode the generated room IS the scene and the glb is a backdrop, so
-  // the ghost effect below owns its appearance and the clipping shader steps
-  // out of the way entirely.
   const ghost = vm.roomMode && vm.ghostModel
   const hiddenInRoom = vm.roomMode && !vm.ghostModel
 
   useEffect(() => {
-    // Through the ref, not the memo: the scene object belongs to the loader
-    // cache, and the compiler is right that writing to it during render-time
-    // values is a trap. By effect time the primitive has attached it here.
     const root = preparedRef.current
     if (!root) return
 
@@ -394,8 +368,6 @@ function BuildingGlb({
     const draft = vm.draft
     if (!draft || vm.roomMode) return
 
-    // 2D plan: slice the building horizontally (classic floor-plan cut) so
-    // the room layout is visible from straight above.
     if (vm.planMode) {
       const cutY = Math.min(1.6, Math.max(1.2, vm.modelHeight * 0.5))
       controller.setHideBoxes([{ min: [-500, cutY, -500], max: [500, 500, 500] }])
@@ -409,8 +381,6 @@ function BuildingGlb({
 
   return (
     <>
-      {/* Clicks cycle through EVERYTHING under the cursor — zone blocks and
-          real model objects alike — via the unified pick handler. */}
       <primitive ref={preparedRef} object={prepared} onClick={onPick} />
       <For each={overlays} getKey={(_, i) => i}>
         {(object) => <primitive object={object} />}
@@ -419,28 +389,10 @@ function BuildingGlb({
   )
 }
 
-/**
- * The generated room, previewed from the UNSAVED draft.
- *
- * Rendered with the very same component the client uses, so what the admin
- * tunes here is literally what a visitor will see — the old preview mirrored
- * the client's logic by hand and drifted from it.
- *
- * It also doubles as the placement surface: a click reports back the wall and
- * the distance along it, which is exactly how openings are addressed.
- */
-/** How far off a wall a click may land and still count as hitting it. */
+/** How far off a wall a click may land and still count as hitting it, in metres. */
 const OPENING_PICK_SLACK = 0.2
 
-/**
- * Which opening a click on the shell landed in.
- *
- * All three axes of the wall's own frame are checked, including the one across
- * the wall. Leaving that one out looks like it works — the rectangle test still
- * passes — but the projection of a point onto SOME OTHER wall's tangent can land
- * inside that wall's opening, so clicking a door picks a door on the far side
- * of the room.
- */
+/** The across-wall axis must be checked too, or a click matches an opening on another wall. */
 function openingAt(
   placements: OpeningPlacement[],
   point: { x: number; y: number; z: number },
@@ -485,9 +437,6 @@ function ShellPreview({
           return
         }
 
-        // Selecting is the only other thing a click on the shell does. Sliding
-        // an opening used to be "hold the button down anywhere on the wall",
-        // which moved things nobody meant to touch; it has handles now.
         event.stopPropagation()
         onSelect(openingAt(placements, event.point)?.opening.id ?? null)
       }}
@@ -497,7 +446,6 @@ function ShellPreview({
   )
 }
 
-/** Outline edges paired with the wall each belongs to, for colour coding. */
 function wallEdgesOf(room: RoomDoc, y: number) {
   const vertices = roomVertices(room)
   return vertices.map((vertex, index) => {
@@ -512,7 +460,6 @@ function wallEdgesOf(room: RoomDoc, y: number) {
   })
 }
 
-/** The level a room is authored at — its own, or zero before it has one. */
 function floorYOf(room: { shell?: unknown } | null | undefined): number {
   const shell = room?.shell as { floorY?: number | null } | null | undefined
   return typeof shell?.floorY === 'number' ? shell.floorY : 0
@@ -571,8 +518,6 @@ function ZoneBlockMesh({
     (box.min.z + box.max.z) / 2,
   ]
 
-  // Edges-first look: bright wireframe + a whisper of fill so the volume
-  // reads without covering the model.
   return (
     <mesh position={center} userData={{ blockRef }} onClick={onPick}>
       <boxGeometry args={size} />
@@ -618,7 +563,6 @@ function BlockHandles({
 
   return (
     <group>
-      {/* move handle — bottom center puck */}
       <HandlePoint
         position={[cx, box.min.y + 0.02, cz]}
         hitRadius={0.2}
@@ -634,7 +578,6 @@ function BlockHandles({
         </mesh>
       </HandlePoint>
 
-      {/* corner handles on top and bottom rings — resize X/Z like any editor */}
       <For each={CORNERS} getKey={(c) => `t-${c.id}`}>
         {(corner) => (
           <HandlePoint
@@ -664,7 +607,6 @@ function BlockHandles({
         )}
       </For>
 
-      {/* height handles — arrows above/below the box center */}
       <HandlePoint
         position={[cx, box.max.y + 0.18, cz]}
         register={register}
@@ -690,12 +632,6 @@ function BlockHandles({
   )
 }
 
-/**
- * 2D plan camera: a true orthographic top-down view. Clicks land exactly on
- * the point you aim at — this is the mode for outlining room polygons.
- * Deliberately NOT camera-controls: pan (middle/right drag) and zoom (wheel)
- * are implemented directly, so the view can never tilt or hit gimbal quirks.
- */
 const PlanCamera = memo(function PlanCamera({
   rootRef,
 }: {
@@ -719,7 +655,6 @@ const PlanCamera = memo(function PlanCamera({
     }
   }, [rootRef])
 
-  // Initial placement: centered over the building, zoomed to fit.
   useEffect(() => {
     const camera = cameraRef.current
     if (!camera || !frame) return
@@ -729,7 +664,6 @@ const PlanCamera = memo(function PlanCamera({
     camera.updateProjectionMatrix()
   }, [frame, gl])
 
-  // Pan with middle/right drag, zoom with the wheel. Left stays with tools.
   useEffect(() => {
     const el = gl.domElement
     let panning = false
@@ -812,8 +746,6 @@ function EditorScene({
   const lastDragEndRef = useRef(0)
   const rightDownRef = useRef<{ x: number; y: number } | null>(null)
   const contextMenuRef = useRef<(event: MouseEvent) => void>(() => {})
-  // Click cycling remembers the last pick so repeated clicks on overlapping
-  // blocks/objects walk through all of them.
   const lastPickKeyRef = useRef<string | null>(null)
 
   const { camera, gl } = useThree()
@@ -843,8 +775,6 @@ function EditorScene({
   useEffect(() => {
     vm.onRegisterCameraGetter(() => {
       const controls = controlsRef.current
-      // In 2D plan mode there is no orbit camera — a snapshot from straight
-      // above would make a useless client preset, so refuse politely.
       if (!controls) return null
       const position = new Vector3()
       const target = new Vector3()
@@ -862,8 +792,6 @@ function EditorScene({
   const draft = vm.draft
   const rooms = draft?.rooms ?? []
 
-  // The open room, mapped once: the preview renders it, clicks are hit-tested
-  // against it, and the opening gizmo is positioned from it.
   const openRoom = vm.roomMode ? (rooms[vm.selectedRoomIndex as number] ?? null) : null
   const openZone = useMemo(
     () => (openRoom ? mapRoomZone(openRoom) : null),
@@ -878,17 +806,12 @@ function EditorScene({
   )
   const selectedPlacement =
     openingPlacements.find((p) => p.opening.id === vm.selectedOpeningId) ?? null
-  /** Roof volumes are drawn, dragged and previewed at roof height. */
   const [roofPlaneY, roofTopY] = defaultYRange(vm.modelHeight)
 
   const blockFor = (ref: BlockRef): EditorBox | null =>
     (draft?.sceneConfig?.roofBlocks ?? [])[ref.index] ?? null
 
-  // ---- pointer-down capture layer -----------------------------------------
-  // Runs before camera-controls and the R3F event layer. Gives gizmo handles
-  // absolute priority and starts block-creation drags; middle/right presses
-  // re-pivot the camera around whatever is under the cursor (Blender-style
-  // auto depth), which keeps orbit/pan/zoom speed consistent at any zoom.
+  // Capture phase: runs before camera-controls and the R3F event layer.
   const pointerDownRef = useRef<(event: PointerEvent) => void>(() => {})
   const handlePointerDownCapture = (event: PointerEvent) => {
     if (event.button === 2) rightDownRef.current = { x: event.clientX, y: event.clientY }
@@ -908,7 +831,6 @@ function EditorScene({
 
     const ray = rayFromEvent(event)
 
-    // 1) Handles always win — even inside another block's volume.
     const handles = [...handleMapRef.current.keys()]
     if (handles.length) {
       const hit = raycaster.intersectObjects(handles, false)[0]
@@ -920,8 +842,6 @@ function EditorScene({
       }
     }
 
-    // 2) Roof volumes are dragged out AT roof height. Dragging them at world
-    // zero meant the rectangle you drew was nowhere near the box you got.
     if (vm.mode === 'block-roof') {
       const ground = rayAtY(ray, roofPlaneY)
       if (!ground) return
@@ -944,10 +864,6 @@ function EditorScene({
     }
   }, [gl])
 
-  // ---- right-click context menu -------------------------------------------
-  // A right CLICK (release without dragging — right-drag stays pan) opens an
-  // editor menu for whatever is under the cursor: model objects (hide/show,
-  // attach) and the current block selection (group/ungroup/delete).
   const handleContextMenuCapture = (event: MouseEvent) => {
     event.preventDefault()
     const down = rightDownRef.current
@@ -966,10 +882,6 @@ function EditorScene({
     }
 
     if (nodePath) {
-      // Right-clicking an unselected object selects it; the shared builder
-      // reads the still-uncommitted selection, so it correctly scopes the
-      // menu to just this node in that case (and to the whole multi-selection
-      // when the node is already part of it).
       if (!vm.selectedNodePaths.includes(nodePath)) vm.onSelectNodeByPath(nodePath)
       items.push(...nodeMenuItems(vm, nodePath))
     }
@@ -978,8 +890,6 @@ function EditorScene({
 
     if (items.length) onOpenMenu({ x: event.clientX, y: event.clientY, items })
   }
-
-  // ---- dragging ------------------------------------------------------------
 
   const applyDragRef = useRef<(ray: Ray) => void>(() => {})
   const applyDrag = (ray: Ray) => {
@@ -1000,9 +910,26 @@ function EditorScene({
     if (drag.kind === 'floor-plane') {
       const y = rayAtVertical(ray, drag.cx, drag.cz)
       if (y === null) return
-      // patchDraft's 300 ms checkpoint throttle collapses the whole drag into
-      // a single undo step, so this can fire every frame.
+      // patchDraft's 300 ms checkpoint throttle collapses the drag into one undo step.
       vm.onSetFloorLevel(snap(y))
+      return
+    }
+
+    if (drag.kind === 'roof-move') {
+      const hit = rayAtY(ray, drag.y)
+      if (!hit) return
+      const { position } = vm.roofPlacement
+      vm.onMoveRoofModel(snap(hit.x - drag.grabDX), position.y, snap(hit.z - drag.grabDZ))
+      return
+    }
+
+    if (drag.kind === 'roof-height') {
+      const y = rayAtVertical(ray, drag.cx, drag.cz)
+      if (y === null) return
+      const { position } = vm.roofPlacement
+      // Relative to the grab: the grip sits above the roof, so moving TO the pointer would jump it.
+      vm.onMoveRoofModel(position.x, snap(position.y + (y - drag.cy)), position.z)
+      setDrag({ ...drag, cy: y })
       return
     }
 
@@ -1025,8 +952,7 @@ function EditorScene({
           patch.width = Math.max(snap(base.width + dAlong), MIN_OPENING)
           break
         case 'start': {
-          // The far jamb stays put: the near one moves, so the opening's start
-          // has to follow the width it just lost.
+          // The far jamb stays put, so `along` absorbs the width change.
           const width = Math.max(snap(base.width - dAlong), MIN_OPENING)
           patch.width = width
           patch.along = Math.max(base.along + (base.width - width), 0)
@@ -1036,8 +962,7 @@ function EditorScene({
           patch.height = Math.max(snap(base.height + dUp), MIN_OPENING)
           break
         case 'sill': {
-          // Raising the sill lowers the head by the same amount, so the top of
-          // the opening stays where it is.
+          // The head stays put, so height absorbs the sill change.
           const sill = Math.max(snap(base.sill + dUp), 0)
           patch.sill = sill
           patch.height = Math.max(base.height - (sill - base.sill), MIN_OPENING)
@@ -1050,9 +975,6 @@ function EditorScene({
     }
 
     if (drag.kind === 'room-point') {
-      // On the room's own level, not the world's: dragging a corner across a
-      // plane a metre below the floor makes the handle slide away from the
-      // cursor at any oblique angle.
       const hit = rayAtY(ray, vm.floorPlaneY)
       if (!hit) return
       vm.onUpdateRoomPoint(drag.roomIndex, drag.pointIndex, snap(hit.x), snap(hit.z))
@@ -1080,8 +1002,7 @@ function EditorScene({
       const next = { min: { ...drag.box.min }, max: { ...drag.box.max } }
       next[corner.xKey].x = snap(hit.x)
       next[corner.zKey].z = snap(hit.z)
-      // updateBlock normalizes min/max, so dragging a corner past the
-      // opposite one just flips the box instead of breaking it.
+      // updateBlock normalizes min/max, so a corner dragged past the opposite one flips the box.
       vm.onUpdateBlock(drag.ref, next)
       return
     }
@@ -1122,9 +1043,6 @@ function EditorScene({
     }
   }, [drag, rayFromEvent])
 
-  // ---- keyboard ------------------------------------------------------------
-  // Delete removes the selected block, Esc exits the tool/selection,
-  // Ctrl+Z undoes, F frames the selection (block → room → whole building).
   const keyDownRef = useRef<(event: KeyboardEvent) => void>(() => {})
   const handleEditorKeyDown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null
@@ -1145,8 +1063,7 @@ function EditorScene({
         event.preventDefault()
         vm.onRemoveBlock(selected)
       } else if (vm.selectedNodePaths.length) {
-        // Model objects can't be deleted from the glb — Delete hides them
-        // (persisted, applied in the client too).
+        // Model objects can't be removed from the glb, so Delete hides them instead.
         event.preventDefault()
         for (const path of vm.selectedNodePaths) vm.onHideNode(path)
       }
@@ -1197,8 +1114,7 @@ function EditorScene({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // Latest-handler refs, written after every commit (never during render):
-  // the stable DOM listeners above always see fresh state through them.
+  // No dep array: the stable DOM listeners above read fresh state through these refs.
   useEffect(() => {
     pointerDownRef.current = handlePointerDownCapture
     applyDragRef.current = applyDrag
@@ -1207,30 +1123,16 @@ function EditorScene({
     contextMenuRef.current = handleContextMenuCapture
   })
 
-  // ---- clicks (R3F layer) ---------------------------------------------------
-
-  /**
-   * Unified click selection with cycling over EVERYTHING under the cursor —
-   * zone blocks AND real model objects, nearest first. Clicking the same spot
-   * again walks to the next candidate, so overlapping volumes, wall shells
-   * and the doors behind them are all reachable by just clicking again.
-   * Shift+click toggles multi-selection; Ctrl+click cycles model objects only.
-   */
   const handleScenePick = (event: ThreeEvent<MouseEvent>) => {
     if (event.delta > 4) return
     if (performance.now() - lastDragEndRef.current < 200) return
 
-    // Picking the floor level is a question about the model, not about the
-    // editor's own overlays: whatever surface you clicked, its height IS the
-    // answer. That is the whole mechanism — no measuring, no typing.
-    if (vm.mode === 'pick-floor-y') {
+    if (vm.mode === 'floor-level') {
       event.stopPropagation()
-      vm.onPickFloorY(event.point.y)
+      vm.onSnapFloorLevel(event.point.y)
       return
     }
 
-    // The ghost is raycastable so the floor-level pick can hit it — but it
-    // must not answer ordinary selection clicks inside a room.
     if (vm.roomMode || vm.mode !== 'select') return
     event.stopPropagation()
 
@@ -1300,19 +1202,14 @@ function EditorScene({
   const handleGroundPointerUp = (event: ThreeEvent<PointerEvent>) => {
     if (drag || event.delta > 4 || !isPrimaryButton(event)) return
     if (performance.now() - lastDragEndRef.current < 200) return
-    // Empty ground carries no floor level worth taking.
-    if (vm.mode === 'pick-floor-y') return
+    if (vm.mode === 'floor-level') return
     if (vm.mode === 'select') {
-      // Inside a room, empty floor is just empty floor: the only way out is
-      // the Back button, so a misplaced click cannot throw the work away.
       if (vm.roomMode) {
         vm.onSelectBlock(null)
         lastPickKeyRef.current = null
         return
       }
 
-      // In the building, a floor click opens the room under the cursor —
-      // no need to aim at the small centre puck.
       const hitIndex = rooms.findIndex((room) =>
         pointInPoly(
           event.point.x,
@@ -1334,37 +1231,12 @@ function EditorScene({
 
   const nodeBox = vm.selectedNode?.box ?? null
 
-  const showFloorPlane =
-    vm.roomMode || vm.mode === 'draw-room' || vm.mode === 'pick-floor-y'
-
-
-  // Whatever is being worked on: this room's outline, the one being traced,
-  // or — with nothing drawn yet — a patch around the building itself.
-  const activeRoom = vm.selectedRoomIndex === null ? null : rooms[vm.selectedRoomIndex]
-  const planePoints = vm.roomMode
-    ? ((activeRoom?.floorPolygon ?? []) as Array<{ x: number; z: number }>)
-    : vm.drawingPoints
-  const floorPlane = floorPlaneBounds(planePoints, vm.roomMode ? 0.6 : 1.5, {
-    minX: -6,
-    minZ: -6,
-    maxX: 6,
-    maxZ: 6,
-  })
+  const floorPlane = floorPlaneBounds(vm.modelFootprint)
 
   return (
     <>
       <color attach="background" args={['#1c1e22']} />
-      {/* The client's rig, turned up. The room half is lit for mood — dim
-          enough that a shaft of daylight is the brightest thing in frame —
-          which is right for a visitor and far too dark to author against.
-          Shadows are off on this Canvas, so the sun lights without dropping any. */}
-      {/* The client's rig at the client's strength, so a finish judged here is
-          the finish the visitor gets. It used to run at 2.2x to claw back a
-          room rig that was too dim to author against; the rig is evenly lit
-          now, so turning it up would only mean the two disagree. */}
       <SceneLighting bounds={null} focusedRoom={openZone} />
-      {/* Ground reference for the building. Inside a room the floor plane is
-          the reference, and this one only shows through the ghost as noise. */}
       <Show when={!vm.roomMode}>
         <Grid
           args={[80, 80]}
@@ -1386,10 +1258,6 @@ function EditorScene({
         </Suspense>
       </Show>
 
-      {/* Ground interaction plane (clicks + draw-room cursor preview only —
-          drags are handled at the window level). It rides at the room's own
-          floor level so a drawn point lands where the cursor is even when the
-          view is oblique. */}
       <mesh
         position={[0, vm.floorPlaneY, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -1400,7 +1268,6 @@ function EditorScene({
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      {/* Selected glb node highlight */}
       <Show when={nodeBox}>
         {(b) => (
           <mesh
@@ -1427,9 +1294,6 @@ function EditorScene({
       </Show>
 
 
-      {/* The generated room, straight from the draft. Shown in the room
-          preview and whenever an opening is being placed, since it is the
-          surface those clicks land on. */}
       <Show when={!vm.planMode && openZone && openZone.floorPolygon.length >= 3 ? openZone : null}>
         {(zone) => (
           <ShellPreview
@@ -1449,7 +1313,6 @@ function EditorScene({
         )}
       </Show>
 
-      {/* The selected opening, with a handle on every edge. */}
       <Show when={!vm.planMode && vm.mode === 'select' ? selectedPlacement : null}>
         {(placement) => (
           <OpeningGizmo
@@ -1481,8 +1344,6 @@ function EditorScene({
         )}
       </Show>
 
-      {/* Rooms. In the building every outline is drawn, so you can see the
-          plan; inside a room only that room, so nothing else is in the way. */}
       <For each={rooms} getKey={(_, i) => i}>
         {(room, roomIndex) => {
           if (vm.roomMode && roomIndex !== vm.selectedRoomIndex) return null
@@ -1499,9 +1360,6 @@ function EditorScene({
                 opacity={isSelected ? 0.22 : 0.1}
                 y={baseY + 0.03}
               />
-              {/* Edges are coloured by the wall they belong to, so the
-                  four-wall grouping is visible while drawing rather than
-                  something you discover in the client. */}
               <Show
                 when={isSelected}
                 fallback={
@@ -1520,8 +1378,6 @@ function EditorScene({
                   )}
                 </For>
               </Show>
-              {/* Way into the room. Gone once you are inside it — there it
-                  would only swallow clicks meant for the floor. */}
               <Show when={!vm.roomMode}>
               <ScreenScaled
                 position={[
@@ -1548,7 +1404,6 @@ function EditorScene({
               </ScreenScaled>
               </Show>
 
-              {/* point + midpoint handles for the selected room */}
               <Show when={isSelected && vm.mode === 'select'}>
                 <For each={polygon} getKey={(_, i) => i}>
                   {(point, pointIndex) => (
@@ -1594,10 +1449,6 @@ function EditorScene({
         }}
       </For>
 
-      {/* Roof volumes, and only while you are working on the building. They
-          belong to the storey above the room you have open — nothing you can
-          edit from in here — so in room mode they are just a red cage drawn
-          around what you are trying to look at. */}
       <For
         each={vm.roomMode ? [] : (draft?.sceneConfig?.roofBlocks ?? [])}
         getKey={(_, i) => `r-${i}`}
@@ -1615,7 +1466,6 @@ function EditorScene({
         }}
       </For>
 
-      {/* Handles for the selected block */}
       <Show when={vm.selectedBlock ? blockFor(vm.selectedBlock) : null}>
         {(box) => (
           <BlockHandles
@@ -1634,17 +1484,33 @@ function EditorScene({
         )}
       </Show>
 
-      {/* In-progress room drawing */}
       <Show when={vm.mode === 'draw-room' && vm.drawingPoints.length > 0}>
         <For each={vm.drawingPoints} getKey={(_, i) => i}>
-          {(point, i) => (
-            <ScreenScaled position={[point.x, vm.floorPlaneY + 0.08, point.z]}>
+          {(point, i) => {
+            const dot = (
               <mesh>
                 <sphereGeometry args={[i === 0 ? 0.12 : 0.08, 16, 16]} />
                 <meshBasicMaterial color={i === 0 ? '#fb923c' : '#fde047'} />
               </mesh>
-            </ScreenScaled>
-          )}
+            )
+            const at: [number, number, number] = [point.x, vm.floorPlaneY + 0.08, point.z]
+
+            // Closing goes through the handle layer, which wins the press over the
+            // floor plane underneath; hitRadius is 1.25x the dot it wraps.
+            if (i === 0 && vm.drawingPoints.length >= 3) {
+              return (
+                <HandlePoint
+                  position={at}
+                  hitRadius={0.15}
+                  register={registerHandle}
+                  begin={() => vm.onFinishRoom()}
+                >
+                  {dot}
+                </HandlePoint>
+              )
+            }
+            return <ScreenScaled position={at}>{dot}</ScreenScaled>
+          }}
         </For>
         <Show when={vm.drawingPoints.length > 1}>
           <Line
@@ -1674,13 +1540,36 @@ function EditorScene({
         </Show>
       </Show>
 
-      {/* The floor level, as something you can see and grab. Visible while a
-          room is open and while one is being traced — the two moments where
-          "how high is this?" is the question being answered. */}
-      {/* Which side the daylight is coming from, while you are setting it. */}
+      <Show when={vm.roofModelUrl}>
+        {(url) => (
+          <Suspense fallback={null}>
+            <RoofModelGizmo
+              url={url}
+              placement={vm.roofPlacement}
+              visible={!vm.roomMode && !vm.roofHidden}
+              register={registerHandle}
+              onMeasured={vm.onRoofModelBounds}
+              onStartMove={(grabDX, grabDZ) =>
+                setDrag({ kind: 'roof-move', grabDX, grabDZ, y: vm.roofPlacement.position.y })
+              }
+              onStartHeight={() => {
+                const { position } = vm.roofPlacement
+                const y = rayAtVertical(raycaster.ray, position.x, position.z)
+                setDrag({
+                  kind: 'roof-height',
+                  cx: position.x,
+                  cz: position.z,
+                  cy: y ?? position.y,
+                })
+              }}
+            />
+          </Suspense>
+        )}
+      </Show>
+
       <Show when={openZone}>{(zone) => <SunMarker room={zone} />}</Show>
 
-      <Show when={showFloorPlane}>
+      <Show when={vm.mode === 'floor-level'}>
         <FloorPlaneGizmo
           y={vm.floorPlaneY}
           bounds={floorPlane}
@@ -1690,7 +1579,6 @@ function EditorScene({
         />
       </Show>
 
-      {/* Block creation ghost */}
       <Show when={ghostRect}>
         {(rect) => (
           <mesh
@@ -1718,9 +1606,6 @@ function EditorScene({
         )}
       </Show>
 
-      {/* 2D plan: fixed top-down orthographic camera. 3D: free orbit camera —
-          middle mouse orbits (with Blender-style auto depth), right pans,
-          wheel zooms toward the cursor and never stalls (infinityDolly). */}
       <Show
         when={vm.planMode}
         fallback={
@@ -1750,9 +1635,7 @@ function EditorScene({
 export function EditorCanvas({ vm }: VmProps) {
   const [menu, setMenu] = useState<EditorMenuState>(null)
   const compassDial = useRef<HTMLDivElement>(null)
-  // Turn the dial against the camera, so north stays north on screen. Written
-  // straight to the style: this runs every frame, and a re-render per frame to
-  // move a needle is not a trade worth making.
+  // Written straight to style: this runs every frame.
   const onHeading = useCallback((bearingDeg: number) => {
     const node = compassDial.current
     if (node) node.style.transform = `rotate(${-bearingDeg}deg)`
@@ -1762,8 +1645,7 @@ export function EditorCanvas({ vm }: VmProps) {
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <Canvas
         camera={{ position: [14, 12, 16], fov: 50 }}
-        // Matches the client: the environment carries the soft light, and
-        // without it the glb's pure metals render black here too.
+        // Without it the glb's pure metals render black.
         scene={{ environmentIntensity: 0.35 }}
         dpr={[1, 2]}
         className="touch-none"

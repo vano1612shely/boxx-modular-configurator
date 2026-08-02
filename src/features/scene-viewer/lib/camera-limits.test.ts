@@ -1,0 +1,97 @@
+import { describe, expect, it } from 'vitest'
+
+import { fitDistance } from '@/entities/building'
+
+import { cameraLimits, LIMITS, type AuthoredCamera, type LimitScope } from './camera-limits'
+
+/** building-models/4 as stored, every field at its schema default. */
+const AUTHORED: AuthoredCamera = {
+  minDistance: 2,
+  maxDistance: 30,
+  position: [23.69, 19.32, 17.66],
+  target: [-5.51, 1.97, 0.94],
+}
+
+/** The same document's building, measured off the glb without the site. */
+const BUILDING: LimitScope = {
+  min: [-9.1, -0.06, -8.94],
+  max: [3.25, 3.91, 8.92],
+  dollhouse: { position: AUTHORED.position, target: AUTHORED.target },
+  fov: 50,
+}
+
+const RADIUS = Math.hypot(12.35, 3.97, 17.86) / 2
+const ORBIT = Math.hypot(29.2, 17.35, 16.72)
+
+describe('cameraLimits, building scope', () => {
+  it('never clamps closer than the view it opens on', () => {
+    const { max } = cameraLimits(BUILDING, AUTHORED, false)
+
+    expect(ORBIT).toBeGreaterThan(AUTHORED.maxDistance)
+    expect(max).toBeGreaterThan(ORBIT)
+  })
+
+  it('leaves real room to pull back, unlike a room', () => {
+    const building = cameraLimits(BUILDING, AUTHORED, false)
+    expect(building.max / ORBIT).toBeGreaterThan(1.25)
+    expect(LIMITS.building.zoomOut).toBeGreaterThan(LIMITS.room.zoomOut)
+    expect(LIMITS.building.panSlack).toBeGreaterThan(LIMITS.room.panSlack)
+  })
+
+  it('lets the FIT decide the ceiling, not the untouched schema default', () => {
+    const { max } = cameraLimits(BUILDING, AUTHORED, false)
+    const fitted = fitDistance(RADIUS, BUILDING.fov) * LIMITS.building.zoomOut
+
+    expect(max).toBeCloseTo(fitted, 6)
+    expect(fitted).toBeLessThan(Math.max(AUTHORED.maxDistance, ORBIT) * 1.4)
+  })
+
+  it('keeps the pan target inside the frame, not merely inside the site', () => {
+    const { boundary } = cameraLimits(BUILDING, AUTHORED, false)!
+    const slack = RADIUS * LIMITS.building.panSlack
+    const halfWidth = (BUILDING.max[0] - BUILDING.min[0]) / 2
+
+    expect(slack).toBeLessThan(halfWidth)
+    expect(boundary!.max[0]).toBeCloseTo(BUILDING.max[0] + slack, 6)
+  })
+
+  it('barely gives downward, whatever the subject measures', () => {
+    const { boundary } = cameraLimits(BUILDING, AUTHORED, false)
+
+    expect(BUILDING.min[1] - boundary!.min[1]).toBeCloseTo(0.5, 6)
+    expect(boundary!.max[1]).toBeGreaterThan(BUILDING.max[1] + 4)
+  })
+
+  it('admits the authored view while the model is still downloading', () => {
+    const { min, max, boundary } = cameraLimits(null, AUTHORED, false)
+
+    expect(boundary).toBeNull()
+    expect(min).toBe(AUTHORED.minDistance)
+    expect(max).toBeGreaterThan(ORBIT)
+  })
+})
+
+describe('cameraLimits, room scope', () => {
+  const ROOM: LimitScope = {
+    min: [-7.25, 0.75, -8.2],
+    max: [-3.85, 3.25, -4.5],
+    dollhouse: { position: [-5.24, 6.75, -2.88], target: [-5.24, 1.35, -6.88] },
+    fov: 50,
+  }
+
+  it('is unchanged by any of this: fitted at the room’s own scale', () => {
+    const { min, max } = cameraLimits(ROOM, AUTHORED, true)
+    const radius = Math.hypot(3.4, 2.5, 3.7) / 2
+
+    expect(max).toBeCloseTo(fitDistance(radius, ROOM.fov) * LIMITS.room.zoomOut, 6)
+    expect(min).toBe(0.4)
+  })
+
+  it('holds the target close, so a room cannot be panned away from', () => {
+    const { boundary } = cameraLimits(ROOM, AUTHORED, true)
+    const slack = (Math.hypot(3.4, 2.5, 3.7) / 2) * LIMITS.room.panSlack
+
+    expect(boundary!.max[0]).toBeCloseTo(ROOM.max[0] + slack, 6)
+    expect(slack).toBeLessThan(1)
+  })
+})

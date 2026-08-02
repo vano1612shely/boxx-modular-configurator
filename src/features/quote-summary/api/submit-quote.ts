@@ -9,10 +9,6 @@ import { err, ok, type Result } from '@/shared/lib'
 
 type SubmitOutcome = { quoteId: number; forwarded: boolean }
 
-/**
- * Stores the quote request and forwards it to the host site's webhook when
- * one is configured in Integration Settings.
- */
 export async function submitQuote(input: unknown): Promise<Result<SubmitOutcome>> {
   const parsed = quoteRequestSchema.safeParse(input)
 

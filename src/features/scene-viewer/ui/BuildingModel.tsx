@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, type Mesh, type Object3D } from 'three'
 
-import type { BuildingScene } from '@/entities/building'
+import { extentWithoutSite, type BuildingScene, type PartExtent } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 
 import { createNodeResolver } from '@/shared/three/node-path'
@@ -35,19 +35,49 @@ export function BuildingModel({ building }: Props) {
     }
   }, [scene])
 
+  const hiddenNodePaths = building.hiddenNodePaths
   useEffect(() => {
-    const bounds = new Box3().setFromObject(preparedScene)
+    // Box3 never consults `visible`, so hidden nodes must be dropped explicitly.
+    const dropped = new Set<Object3D>()
+    for (const path of hiddenNodePaths) {
+      resolveNode(path)?.traverse((object) => dropped.add(object))
+    }
 
-    useConfiguratorSession.getState().setBuildingBounds({
-      min: [bounds.min.x, bounds.min.y, bounds.min.z],
-      max: [bounds.max.x, bounds.max.y, bounds.max.z],
+    const parts: PartExtent[] = []
+    const scratch = new Box3()
+
+    preparedScene.updateMatrixWorld(true)
+    preparedScene.traverse((object) => {
+      const mesh = object as Mesh
+      if (!mesh.isMesh || !mesh.geometry || dropped.has(object)) return
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+      const box = mesh.geometry.boundingBox
+      if (!box) return
+      scratch.copy(box).applyMatrix4(mesh.matrixWorld)
+      parts.push({
+        min: [scratch.min.x, scratch.min.y, scratch.min.z],
+        max: [scratch.max.x, scratch.max.y, scratch.max.z],
+      })
     })
-  }, [preparedScene])
 
-  // Objects the admin removed from the scene are never rendered, in any mode.
+    const measured = extentWithoutSite(parts)
+    if (!measured) return
+
+    // Publish only on a real change: the camera scope is memoised on this
+    // object's identity, so equal-but-new bounds refly the camera.
+    const current = useConfiguratorSession.getState().buildingBounds
+    const same =
+      current !== null &&
+      current.min.every((value, axis) => value === measured.min[axis]) &&
+      current.max.every((value, axis) => value === measured.max[axis])
+    if (same) return
+
+    useConfiguratorSession.getState().setBuildingBounds(measured)
+  }, [preparedScene, hiddenNodePaths, resolveNode])
+
   useEffect(() => {
     const removed: Object3D[] = []
-    for (const path of building.hiddenNodePaths) {
+    for (const path of hiddenNodePaths) {
       const object = resolveNode(path)
       if (object) {
         object.visible = false
@@ -57,16 +87,8 @@ export function BuildingModel({ building }: Props) {
     return () => {
       for (const object of removed) object.visible = true
     }
-  }, [building.hiddenNodePaths, resolveNode])
+  }, [hiddenNodePaths, resolveNode])
 
-  /**
-   * The overview is unchanged: the whole building, with the roof and the room
-   * ceilings hidden by volume unless the visitor toggles them on.
-   *
-   * A focused room is a different scene entirely — generated geometry rendered
-   * by RoomShell — so the real model simply steps aside. That is what removes
-   * the cut-geometry artefacts: in room mode there is nothing left to cut.
-   */
   const rootRef = useRef<Object3D>(null)
 
   useFrame(() => {

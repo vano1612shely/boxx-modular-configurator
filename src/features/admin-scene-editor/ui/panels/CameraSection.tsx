@@ -3,7 +3,6 @@
 import type { SceneEditorVm } from '../../model/use-scene-editor-model'
 import { button, s } from '../editor-styles'
 
-/** The camera the client opens the building with. */
 export function CameraSection({ vm }: { vm: SceneEditorVm }) {
   const camera = vm.draft?.sceneConfig?.camera
 

@@ -18,7 +18,6 @@ function room(points: Array<[number, number]>, sides?: WallSide[]): RoomVertex[]
   return points.map(([x, z], i) => ({ x, z, side: sides?.[i] ?? auto[i] }))
 }
 
-/** 6 x 4 rectangle, corner at the origin. */
 const RECT = room([
   [0, 0],
   [6, 0],
@@ -26,7 +25,7 @@ const RECT = room([
   [0, 4],
 ])
 
-/** L-shape: the "north" wall is a bent run of two edges. */
+/** L-shape whose "north" wall is a bent run of two edges. */
 const L_SHAPE = room([
   [0, 0],
   [6, 0],
@@ -120,8 +119,7 @@ describe('autoAssignSides', () => {
 
   it('puts both arms of an L-shaped wall on the side they actually face', () => {
     const sides = autoAssignSides(L_SHAPE)
-    // Edges 0 (z=0, faces -Z) and 2..3 are distinct walls; the two +X-facing
-    // edges (1 and 3) must land on the same side.
+    // Edges 1 and 3 both face +X.
     expect(sides[1]).toBe(sides[3])
   })
 })
@@ -135,9 +133,7 @@ describe('computeSideAxes', () => {
   })
 
   it('keeps a recessed wall facing outward, not back across the room', () => {
-    // A "north" wall (facing -Z) with a deep notch: two short flanking
-    // segments face -Z, the 3m recess back face points +Z. A length-weighted
-    // mean would come out pointing +Z and hide this wall from the south.
+    // Two short flanking segments face -Z; the 3 m recess back face points +Z.
     const notched = room(
       [
         [0, 0],
@@ -157,8 +153,7 @@ describe('computeSideAxes', () => {
 
 describe('buildTopology', () => {
   it('keeps a wall that wraps the polygon start as one run', () => {
-    // Same rectangle, but the outline starts mid-wall: the first and last
-    // edges belong to the same side and must not become two runs.
+    // Outline starts mid-wall: the first and last edges belong to the same side.
     const wrapped: RoomVertex[] = [
       { x: 3, z: 0, side: 'w1' },
       { x: 6, z: 0, side: 'w2' },
@@ -185,8 +180,6 @@ describe('buildTopology', () => {
     const t = 0.2
     for (const run of buildTopology(RECT, t).runs) {
       const first = run.edges[0]
-      // The mitre would put this on the bisector — the 45° bevel the user saw
-      // as soon as the neighbouring wall stepped aside.
       expect(first.outerA.x).toBeCloseTo(first.innerA.x + first.normal.x * t, 12)
       expect(first.outerA.z).toBeCloseTo(first.innerA.z + first.normal.z * t, 12)
     }
@@ -198,8 +191,6 @@ describe('buildTopology', () => {
       const last = run.edges[run.edges.length - 1]
       expect(last.outerB.x).toBeCloseTo(last.innerB.x + last.normal.x * t, 12)
       expect(last.outerB.z).toBeCloseTo(last.innerB.z + last.normal.z * t, 12)
-      // Square cuts at both ends leave a hole at every convex turn — that
-      // hole is what the corner piece is for.
       expect(run.corner).not.toBeNull()
     }
   })
@@ -216,9 +207,7 @@ describe('buildTopology', () => {
   })
 
   it('leaves a reflex corner alone — both walls already cover it', () => {
-    // L-plan with the wall boundary deliberately landing on the concave
-    // corner. There the two wall strips overlap rather than leaving a gap, so
-    // a filler would only fight them for the depth buffer.
+    // The wall boundary lands on the concave corner, where the strips overlap.
     const t = 0.2
     const inner: RoomVertex[] = [
       { x: 0, z: 0, side: 'w1' },
@@ -374,7 +363,6 @@ describe('planRoomShell', () => {
       opening({ side, along: 5.8, width: 1.2 }),
     ])
     expect(warnings).toContainEqual({ code: 'opening-clamped', openingId: 'o1' })
-    // Still carved, just moved — never a silently solid wall.
     expect(surfaceArea(parts, 'wallInner', side)).toBeCloseTo(6 * 2.5 - 1.2 * 1.2, 6)
   })
 
@@ -394,10 +382,6 @@ describe('planRoomShell', () => {
   })
 
   it('cuts every wall end square — no diagonal face anywhere on a box room', () => {
-    // The regression: a bisector cut leaves a vertical face that runs at 45°
-    // in plan, and that face is exactly what shows the moment its neighbour
-    // hides. On an axis-aligned room every vertical face must be flat against
-    // one axis.
     const { parts } = planRoomShell(RECT, shellConfig(RECT, { wallThickness: 0.2 }), [])
 
     for (const part of parts) {
@@ -416,20 +400,15 @@ describe('planRoomShell', () => {
   it('stops each wall face exactly on its own outline', () => {
     const { parts } = planRoomShell(RECT, shellConfig(RECT), [])
 
-    // 4 digits, not 6: positions live in a Float32Array, and at 50 m² the
-    // mantissa runs out before the assertion does.
+    // 4 digits, not 6: positions are Float32, and 50 m² exhausts the mantissa.
     expect(surfaceArea(parts, 'wallInner')).toBeCloseTo(20 * 2.5, 4)
   })
 
   it('puts the corner in BOTH walls, so it stands when either one hides', () => {
-    // The regression: with the corner owned by one wall, hiding that wall
-    // bit a notch out of the outside of the room and left its neighbour
-    // ending a thickness short of the corner.
     const t = 0.12
     const { parts } = planRoomShell(RECT, shellConfig(RECT, { wallThickness: t }), [])
 
-    // Outside corner of the room above the (6,0) vertex — a point only the
-    // corner piece ever reaches.
+    // Outside corner above the (6,0) vertex — only the corner piece reaches it.
     const holders = new Set<string>()
     for (const part of parts) {
       if (part.side === null) continue
@@ -448,8 +427,7 @@ describe('planRoomShell', () => {
     const t = 0.12
     const { parts } = planRoomShell(RECT, shellConfig(RECT, { wallThickness: t }), [])
 
-    /** Triangles reaching the outside point of the (6,0) corner — only the
-     * corner piece does, so this isolates it from either wall's own cap. */
+    /** Triangles reaching the outside point of the (6,0) corner. */
     const cornerTriangles = (group: string) => {
       const found: string[] = []
       for (const part of parts.filter((p) => p.group === group)) {
@@ -465,9 +443,7 @@ describe('planRoomShell', () => {
     }
 
     const ending = cornerTriangles(RECT[0].side)
-    // Equal vertices rasterise to equal depth, and the depth test passes on
-    // equality — so the two coincident copies draw the same pixels twice
-    // rather than flickering between them.
+    // Equal vertices rasterise to equal depth, and the depth test passes on equality.
     expect(ending.length).toBeGreaterThan(0)
     expect(ending).toEqual(cornerTriangles(RECT[1].side))
   })
@@ -476,8 +452,7 @@ describe('planRoomShell', () => {
     const floor = planRoomShell(RECT, shellConfig(RECT), []).parts.find(
       (p) => p.group === 'floor' && p.surface === 'floor',
     )!
-    // The room itself — 6 x 4. The slab reaches 12 cm further on every side to
-    // get under the walls, but that band is not floor you can stand on.
+    // The slab itself reaches 12 cm further on every side, under the walls.
     expect(partArea(floor)).toBeCloseTo(6 * 4, 4)
   })
 
@@ -499,8 +474,6 @@ describe('planRoomShell', () => {
     const { parts } = planRoomShell(RECT, shellConfig(RECT), [])
     const trims = parts.filter((p) => p.surface === 'wallEdge' && p.side === null)
 
-    // Grouped by what hides, not by what it is made of: a wallEdge part that
-    // followed the floor would leave the ceiling's rim hanging in mid-air.
     expect(trims.map((p) => p.group).sort()).toEqual(['ceiling', 'floor'])
   })
 
@@ -521,7 +494,6 @@ describe('reanchorOpenings', () => {
   it('keeps an opening at the same world position when a vertex moves', () => {
     const side = RECT[0].side
     const before = RECT
-    // Stretch the room eastward: the w1 wall gets longer.
     const after: RoomVertex[] = [
       { x: 0, z: 0, side: before[0].side },
       { x: 9, z: 0, side: before[1].side },
@@ -551,10 +523,7 @@ describe('reanchorOpenings', () => {
 
 describe('autoAssignSides — recesses stay part of their wall', () => {
   it('keeps a small notch on the wall it is cut into', () => {
-    // 6x6 room with a 1x1 notch bitten out of the bottom-right corner. The
-    // notch's two returns face ±X, so a pure nearest-axis rule files them
-    // under the side walls — and hiding the bottom wall then leaves them
-    // standing in mid-air as floating posts.
+    // 6x6 room with a 1x1 notch in the bottom-right corner; its returns face ±X.
     const notched = [
       { x: 0, z: 0 },
       { x: 5, z: 0 },
@@ -577,7 +546,6 @@ describe('autoAssignSides — recesses stay part of their wall', () => {
   })
 
   it('never emits more than four walls', () => {
-    // Stepped outline: every step would otherwise start its own wall.
     const stepped = [
       { x: 0, z: 0 },
       { x: 2, z: 0 },
@@ -603,8 +571,6 @@ describe('autoAssignSides — recesses stay part of their wall', () => {
     const polygon = notched.map((p, i) => ({ ...p, side: autoAssignSides(notched)[i] }))
     const { runs } = buildTopology(polygon, 0.12)
 
-    // One run per wall: a wall split into two runs is what produces a
-    // free-standing fragment when that wall hides.
     expect(runs).toHaveLength(4)
   })
 })
@@ -618,8 +584,7 @@ describe('planOpeningPlacements', () => {
       opening({ side, along: 2, width: 1.2, height: 1.2, sill: 0.9 }),
     ])
 
-    // Half a width along from `along`, half a height up from the sill, and
-    // half a thickness into the wall.
+    // Half a width along, half a height up from the sill, half a thickness in.
     expect(placement.center.x).toBeCloseTo(2.6, 6)
     expect(placement.center.y).toBeCloseTo(1.5, 6)
     expect(placement.center.z).toBeCloseTo(-0.06, 6)
@@ -635,8 +600,6 @@ describe('planOpeningPlacements', () => {
   })
 
   it('follows an opening that was slid back onto its wall', () => {
-    // The hole moves when it overhangs; a model placed from the authored
-    // `along` instead would end up hanging out past the corner.
     const [placement] = planOpeningPlacements(RECT, config, [
       opening({ side, along: 5.5, width: 1.2 }),
     ])
@@ -645,8 +608,6 @@ describe('planOpeningPlacements', () => {
   })
 
   it('places nothing where the shell placed no hole', () => {
-    // Too wide for its wall — the shell drops it, so a model here would be a
-    // door standing in a solid wall.
     expect(planOpeningPlacements(RECT, config, [opening({ side, width: 99 })])).toEqual([])
     expect(planOpeningPlacements(RECT.slice(0, 2), config, [opening({ side })])).toEqual([])
   })
@@ -689,7 +650,6 @@ describe('planRoomShell — openings backed by a model', () => {
     })
 
     expect(parts.some((part) => part.surface === 'door')).toBe(false)
-    // The other kind is untouched — one model must not blank the other.
     expect(parts.some((part) => part.surface === 'window')).toBe(true)
   })
 

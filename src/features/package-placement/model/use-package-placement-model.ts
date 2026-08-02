@@ -52,8 +52,6 @@ export function usePackagePlacementModel({ building, packages }: Args) {
       }))
   }, [packages, focusedRoom])
 
-  // Warm the loader cache for everything offered in this room, so adding a
-  // package doesn't wait on the network.
   useEffect(() => {
     for (const offer of offers) {
       useGLTF.preload(offer.pkg.modelUrl, false, true)
@@ -71,8 +69,6 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   const addToFocusedRoom = (pkg: FurniturePackageEntity): boolean => {
     if (!focusedRoom) return false
 
-    // Aim for the middle of the room; findFreeSpot walks outward from there
-    // until it lands somewhere that fits.
     const centroid = polygonCentroid(focusedRoom.floorPolygon)
     const preferred = { x: centroid.x, z: centroid.z }
     const rotationYDeg = 0

@@ -17,7 +17,6 @@ import { button, s } from '../../editor-styles'
 
 type OpeningKindValue = (typeof OPENING_KIND_OPTIONS)[number]['value']
 
-/** Short enough for a 340px sidebar; the long wording lives on the field. */
 const FIT_OPTIONS = [
   { value: 'stretch', label: 'Fill', title: 'Stretch to meet the reveal exactly' },
   { value: 'contain', label: 'Fit', title: 'Keep the proportions, fit inside the opening' },
@@ -68,7 +67,6 @@ function ModelSlot({
         }
       />
 
-      {/* Nothing below this means anything without something to place. */}
       <Show when={model !== null}>
         <SegmentedControl
           label="Size"
@@ -117,14 +115,6 @@ function ModelSlot({
   )
 }
 
-/**
- * Real doors and windows.
- *
- * A flat leaf is convincing from one angle and every room view is seen from
- * another, so a model with a frame, a handle and recessed glass replaces it.
- * Assigned per kind: one door serves every doorway in the room, and individual
- * swings are set on the openings themselves.
- */
 export function RoomOpeningModelsSection({
   vm,
   roomIndex,

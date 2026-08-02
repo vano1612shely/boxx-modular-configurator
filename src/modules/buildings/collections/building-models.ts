@@ -141,8 +141,26 @@ export const BuildingModels: CollectionConfig = {
                   fields: zoneBoxFields(),
                 },
                 {
-                  // Model objects the admin removed from the scene (node paths like
-                  // "2/0/5") — never rendered, in the editor or the client.
+                  name: 'roofModel',
+                  type: 'group',
+                  admin: {
+                    description:
+                      'A roof supplied as its own model. Placed visually in the Scene Editor.',
+                  },
+                  fields: [
+                    { name: 'model', type: 'relationship', relationTo: 'models' },
+                    vec3Field('position'),
+                    {
+                      type: 'row',
+                      fields: [
+                        { name: 'yawDeg', type: 'number', defaultValue: 0 },
+                        { name: 'scale', type: 'number', defaultValue: 1 },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  // Node paths like "2/0/5".
                   name: 'hiddenNodePaths',
                   type: 'json',
                   admin: {
@@ -187,9 +205,6 @@ export const BuildingModels: CollectionConfig = {
                         { name: 'x', type: 'number', required: true },
                         { name: 'z', type: 'number', required: true },
                         {
-                          // On the vertex row, not a parallel array: inserting a point
-                          // mid-outline would shift every index in a parallel list and
-                          // silently scramble the wall assignments.
                           name: 'side',
                           type: 'select',
                           defaultValue: 'w1',
@@ -255,8 +270,7 @@ export const BuildingModels: CollectionConfig = {
                       },
                     },
                     {
-                      // { w1: {x,z}, ... } — the outward direction of each wall, which
-                      // decides what the dollhouse hides.
+                      // Shape: { w1: {x,z}, ... }.
                       name: 'sideAxes',
                       type: 'json',
                       admin: { description: 'Outward direction per wall. Set from the editor.' },
@@ -264,10 +278,8 @@ export const BuildingModels: CollectionConfig = {
                   ],
                 },
                 {
-                  // JSON rather than an array field: Payload deletes and re-inserts
-                  // array rows on every update, so row ids cannot serve as the stable
-                  // identity that drag and undo need. Entries are
-                  // { id, side, kind, along, width, height, sill }.
+                  // JSON, not an array field: Payload re-inserts array rows on update, so row ids are not stable.
+                  // Entries are { id, side, kind, along, width, height, sill }.
                   name: 'openings',
                   type: 'json',
                   admin: {

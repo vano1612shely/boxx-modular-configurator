@@ -17,10 +17,6 @@ export const quotePackageSchema = z.object({
   rotationYDeg: z.number(),
 })
 
-/**
- * The single source of truth for what a finished configuration looks like —
- * used for the Quotes collection, the outgoing webhook and postMessage.
- */
 export const quoteConfigurationSchema = z.object({
   buildingModelId: z.number().nullable(),
   buildingTitle: z.string(),

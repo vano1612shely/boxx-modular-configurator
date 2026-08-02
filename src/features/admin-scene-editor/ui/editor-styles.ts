@@ -2,16 +2,7 @@ import type { CSSProperties } from 'react'
 
 import type { WallSide } from '@/entities/building'
 
-/**
- * One style vocabulary for the whole editor.
- *
- * The sidebar, the room panel and the canvas each grew their own palette, so
- * the same idea (a card, a muted hint, a danger action) looked different
- * depending on which file drew it. Everything reads from here now.
- */
-
 export const tone = {
-  /** Backgrounds, darkest to lightest. */
   shell: '#0f1012',
   panel: '#141518',
   card: '#1b1d21',
@@ -29,12 +20,10 @@ export const tone = {
 
   accent: '#3b82f6',
   danger: '#f87171',
-  /** Roof volumes — the only zone volumes left. */
   roof: '#ef4444',
   node: '#a78bfa',
 } as const
 
-/** Distinct colour per wall, matching the viewport edge highlight. */
 export const SIDE_COLORS: Record<WallSide, string> = {
   w1: '#f97316',
   w2: '#38bdf8',
@@ -258,7 +247,6 @@ export function segmentItem(active: boolean): CSSProperties {
   }
 }
 
-/** Zone volumes and model nodes share one compact mono list language. */
 export function blockRowStyle(selected: boolean): CSSProperties {
   return {
     background: selected ? '#1e2f4d' : 'transparent',
@@ -305,9 +293,8 @@ export function nodeRow(depth: number, selected: boolean, hidden: boolean): CSSP
     textOverflow: 'ellipsis',
     fontFamily: 'ui-monospace, monospace',
     textDecoration: hidden ? 'line-through' : 'none',
-    // Buttons in a size-capped flex column get crushed to their padding (form
-    // elements have no automatic min-content protection) — every row must keep
-    // its natural height and let the list scroll instead.
+    // Form elements have no automatic min-content protection: in a height-capped
+    // flex column the buttons would be crushed to their padding.
     flexShrink: 0,
   }
 }

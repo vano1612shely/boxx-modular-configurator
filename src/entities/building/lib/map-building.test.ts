@@ -17,7 +17,6 @@ const LINE = {
 
 const MODEL = { id: 2, url: '/api/models/file/demo.glb' }
 
-/** A room with only the required fields — no shell, no sides authored. */
 function legacyRoom(overrides: Partial<Room> = {}): Room {
   return {
     key: 'office-1',
@@ -50,8 +49,6 @@ describe('mapBuildingScene — generated room parameters', () => {
   it('falls back to a renderable shell when none is authored', () => {
     const [room] = mapBuildingScene(doc([legacyRoom()])).rooms
 
-    // Against the constant, not a copy of it: what matters is that an
-    // unauthored room lands on the defaults, whatever they are today.
     expect(room.shell.floorY).toBe(0)
     expect(room.shell.wallHeight).toBe(SHELL_DEFAULTS.wallHeight)
     expect(room.shell.wallThickness).toBe(SHELL_DEFAULTS.wallThickness)
@@ -138,9 +135,6 @@ describe('mapBuildingScene — generated room parameters', () => {
 
 describe('mapBuildingScene — wall assignment', () => {
   it('re-derives sides when every vertex carries the schema default', () => {
-    // Adding the column stamps 'w1' on every existing row, which would claim
-    // the whole outline is one wall and leave the dollhouse with nothing to
-    // hide. A uniform assignment means "nobody has set this yet".
     const stamped = legacyRoom({
       floorPolygon: [
         { x: 0, z: 0, side: 'w1' },

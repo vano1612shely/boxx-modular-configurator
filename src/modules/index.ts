@@ -9,11 +9,7 @@ import { quotesModule } from './quotes'
 import { regionsModule } from './regions'
 import { usersModule } from './users'
 
-/**
- * Order matters: Payload groups the nav by first appearance, so this list is
- * what an admin sees top to bottom. Catalog is the work; Media and System are
- * plumbing and belong at the bottom.
- */
+// Order matters: Payload groups the admin nav by first appearance.
 const modules: PayloadModule[] = [
   regionsModule,
   buildingsModule,

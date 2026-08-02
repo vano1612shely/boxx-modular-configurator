@@ -11,9 +11,7 @@ import {
 type Query = {
   /** Building line slug, e.g. "boxxplex". */
   building?: string
-  /** Requested unit (office/classroom) count. */
   units?: number
-  /** Requested restroom sets. */
   restrooms?: number
 }
 
@@ -22,11 +20,6 @@ export type BuildingResolution =
   | { status: 'over-capacity'; lineName: string; requestedUnits: number }
   | { status: 'not-found' }
 
-/**
- * Resolves the building to show. With a unit count present, the line's sizing
- * rules pick the closest-fitting model; otherwise the smallest model of the
- * requested (or first) line is used as the entry view.
- */
 export async function getBuildingScene(query: Query): Promise<BuildingResolution> {
   const payload = await getPayload({ config })
 

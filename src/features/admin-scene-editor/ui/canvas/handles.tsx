@@ -12,12 +12,8 @@ import {
   type Ray,
 } from 'three'
 
-/**
- * Gizmo primitives shared by every draggable thing in the editor.
- *
- * Handles win pointer-down in a capture-phase layer above R3F, so they must be
- * registered rather than relying on event bubbling — hence `register`.
- */
+// Handles are hit-tested in a capture-phase layer above R3F, so they must be
+// registered rather than rely on event bubbling.
 
 export const handleHoverProps = {
   onPointerOver: () => {
@@ -28,11 +24,9 @@ export const handleHoverProps = {
   },
 }
 
-/** Distance at which handles render at their authored size; they keep that
- * apparent size at every zoom level (like gizmos in any 3D editor). */
+/** Camera distance at which handles render at their authored size. */
 const HANDLE_REF_DIST = 11
-/** Ortho-camera zoom at which handles render at authored size (matches the
- * apparent size of HANDLE_REF_DIST in the perspective view). */
+/** Ortho zoom matching the apparent size HANDLE_REF_DIST gives in perspective. */
 const HANDLE_REF_ZOOM = 72
 const HANDLE_SCRATCH = new Vector3()
 
@@ -55,8 +49,6 @@ export function ScreenScaled({
   useFrame(({ camera }) => {
     const group = localRef.current
     if (!group) return
-    // Perspective: scale by distance. Ortho (2D plan): scale by zoom —
-    // either way the gizmo keeps a constant size on screen.
     const ortho = camera as ThreeOrthographicCamera
     let scale: number
     if (ortho.isOrthographicCamera) {
@@ -86,11 +78,7 @@ export function ScreenScaled({
   )
 }
 
-/**
- * A draggable gizmo point. The visible geometry stays small at every zoom; an
- * invisible, slightly larger sphere is registered in the priority raycast
- * layer, so grabbing it always wins over volumes/model behind it.
- */
+/** Draggable gizmo point; an oversized invisible sphere wins the raycast over anything behind it. */
 export function HandlePoint({
   position,
   rotation,

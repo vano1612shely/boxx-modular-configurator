@@ -1,10 +1,6 @@
 import type { PackageFootprint } from '@/entities/furniture-package'
 
-/**
- * Real footprints measured from loaded glb bounding boxes (meters).
- * More accurate than the admin-entered estimate; used for clamping,
- * collisions and wall snapping once the model is on the scene.
- */
+// Measured from loaded glb bounding boxes, in metres; overrides the admin estimate.
 const measured = new Map<number, PackageFootprint>()
 
 export function setMeasuredFootprint(packageId: number, footprint: PackageFootprint) {

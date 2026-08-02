@@ -14,12 +14,7 @@ function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
-/**
- * Restroom sets asked for.
- *
- * This used to be a yes/no, and links carrying the old "true"/"yes" are still
- * out there — they mean "at least one".
- */
+// Legacy links still carry the old boolean "true"/"yes", meaning one set.
 function parseRestrooms(value: string | undefined): number {
   if (value === undefined) return 0
   if (value === 'true' || value === 'yes') return 1

@@ -2,17 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-/** The two upload collections the scene editor writes to. */
 export type AssetCollection = 'textures' | 'models'
 
 export type AssetRef = { id: number; url: string | null; title: string }
 
-/**
- * Everything already uploaded to one collection.
- *
- * Called once per section and passed down, not once per slot: seven surfaces
- * would otherwise open seven identical requests.
- */
 export function useAssetLibrary(collection: AssetCollection) {
   const [assets, setAssets] = useState<AssetRef[]>([])
   const [version, setVersion] = useState(0)
@@ -56,13 +49,7 @@ export function useAssetLibrary(collection: AssetCollection) {
   return { assets, refresh }
 }
 
-/**
- * Reads a stored relationship, whichever shape it is in.
- *
- * The loaded document carries a populated object; a value the editor has just
- * written carries whatever it wrote. Both have to render the same, and a bare
- * id still has to find its URL — hence the library lookup.
- */
+/** Normalizes a stored relationship — a bare id or a populated doc — to an AssetRef. */
 export function assetRefOf(value: unknown, library: AssetRef[]): AssetRef | null {
   if (typeof value === 'number') return library.find((item) => item.id === value) ?? null
   if (!value || typeof value !== 'object') return null

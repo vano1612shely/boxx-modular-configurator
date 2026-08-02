@@ -4,14 +4,6 @@ import { For } from '@/shared/ui/control-flow'
 
 import { s, segmentItem } from '../editor-styles'
 
-/**
- * A labelled two-or-three-way switch.
- *
- * The editor used to show "View 3D | 2D plan  Preview Off | Building | Room"
- * as one undifferentiated row of buttons, which read as six unrelated tools.
- * A named track per question makes each one answerable at a glance.
- */
-
 export type SegmentOption<T extends string> = {
   value: T
   label: string

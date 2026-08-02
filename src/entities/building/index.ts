@@ -8,6 +8,7 @@ export type {
   OpeningKind,
   OpeningModelStyle,
   Point2,
+  RoofConfig,
   RoomOpening,
   RoomShellConfig,
   RoomType,
@@ -33,13 +34,16 @@ export {
 } from './lib/map-building'
 export { roomFloorTopY } from './lib/floor'
 export {
-  buildingExtent,
+  extentWithoutSite,
   fitDistance,
   frameBuilding,
   frameRoom,
+  orbitable,
+  orbitRadius,
   roomFeatureSide,
   roomFocusTarget,
   type Extent,
+  type PartExtent,
 } from './lib/room-framing'
 export {
   autoAssignSides,
@@ -60,6 +64,8 @@ export { setTreeOpacity } from './lib/fade'
 export { bearingOf, facesSun, roomSunBearing, sunHeading, sunRay } from './lib/sun-patch'
 export { preloadRoomTextures, useSurfaceTextures } from './lib/use-surface-textures'
 export { preloadOpeningModels } from './ui/OpeningModel'
+export { fitRoofToBuilding, type RoofPlacement } from './lib/roof-placement'
+export { RoofModel } from './ui/RoofModel'
 export { RoomShell } from './ui/RoomShell'
 export { SceneLighting } from './ui/SceneLighting'
 export {

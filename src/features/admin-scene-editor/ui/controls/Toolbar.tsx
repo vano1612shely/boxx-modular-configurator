@@ -5,14 +5,6 @@ import { For, Show } from '@/shared/ui/control-flow'
 import type { EditorMode } from '../../model/use-scene-editor-model'
 import { s, toolButton } from '../editor-styles'
 
-/**
- * The tools available right now.
- *
- * Every entry here is usable the moment it is drawn — there are no
- * disabled-with-a-tooltip buttons any more. A tool that needs a room simply
- * lives in the room panel.
- */
-
 export type Tool = {
   label: string
   title?: string
@@ -22,7 +14,6 @@ export type Tool = {
 
 type Props = {
   tools: readonly Tool[]
-  /** Shown only while a tool is armed — the select hint was pure noise. */
   hint?: string
 }
 
@@ -50,10 +41,10 @@ export function Toolbar({ tools, hint }: Props) {
 
 export const MODE_HINTS: Partial<Record<EditorMode, string>> = {
   'draw-room':
-    'The 2D plan turns on automatically. Click the floor corners as you see them from above; click the first point (orange) or press Finish to close the outline.',
+    'The 2D plan turns on automatically. Click the floor corners as you see them from above. To close the outline, click the orange first point itself — or press Finish.',
   'block-roof':
     'Drag a rectangle over the roof area. The volume is created at roof height — drag its arrows to adjust.',
   'place-opening': 'Click a wall of the generated room to drop the opening there.',
-  'pick-floor-y':
-    'Click any surface of the model at the level people walk on. Its height becomes this room’s floor.',
+  'floor-level':
+    'Drag the blue plane to the level people walk on, or click a surface of the model to take its height. Press Done when it sits right.',
 }

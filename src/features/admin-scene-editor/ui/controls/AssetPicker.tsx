@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 
+import { uploadModelFolder } from '@/shared/lib'
 import { For, Show } from '@/shared/ui/control-flow'
 
 import { button, s, tone } from '../editor-styles'
@@ -11,18 +12,6 @@ import type { AssetCollection, AssetRef } from './asset-library'
 
 export { assetRefOf, useAssetLibrary, type AssetCollection, type AssetRef } from './asset-library'
 
-/**
- * Choosing an uploaded file, for the two collections the editor writes to.
- *
- * A `<select>` was the obvious control and the wrong one: a dropdown of
- * filenames makes you pick a wall finish by reading "adskMatBasic_Wall_
- * Interior_baseColor.jpeg". Hovering a row here shows the texture, or renders
- * the model, before the choice is made.
- *
- * The list is a portal for the same reason the preview is — the sidebar
- * scrolls, and a panel inside a scroll box is clipped by it.
- */
-
 type Props = {
   collection: AssetCollection
   accept: string
@@ -30,7 +19,6 @@ type Props = {
   onLibraryChange: () => void
   value: AssetRef | null
   onChange: (asset: AssetRef | null) => void
-  /** Textures get an image swatch; models only have a name to show. */
   swatch?: boolean
   emptyLabel?: string
 }
@@ -46,10 +34,10 @@ export function AssetPicker({
   emptyLabel = 'None',
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const folderRef = useRef<HTMLInputElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
   const [busy, setBusy] = useState(false)
-  // The trigger's position, captured when it was clicked. Held as state rather
-  // than read off the ref at render time, which is a thing React forbids.
   const [panel, setPanel] = useState<DOMRect | null>(null)
   const [hovered, setHovered] = useState<{ asset: AssetRef; anchor: DOMRect } | null>(null)
   const open = panel !== null
@@ -59,8 +47,11 @@ export function AssetPicker({
 
     const close = (event: Event) => {
       const target = event.target as Node | null
-      // A click on the trigger toggles; the trigger's own handler owns that.
       if (target && triggerRef.current?.contains(target)) return
+      // Rows are portalled out of this tree; pointerdown is discrete, so React
+      // unmounts the row before the click lands. Also keeps a scroll inside the
+      // list from closing it — same handler runs for both events below.
+      if (target && listRef.current?.contains(target)) return
       setPanel(null)
     }
     const onKey = (event: KeyboardEvent) => {
@@ -69,7 +60,6 @@ export function AssetPicker({
 
     window.addEventListener('pointerdown', close)
     window.addEventListener('keydown', onKey)
-    // Any scroll moves the anchor out from under the panel.
     window.addEventListener('scroll', close, true)
     return () => {
       window.removeEventListener('pointerdown', close)
@@ -94,8 +84,6 @@ export function AssetPicker({
       const created = (await response.json()) as {
         doc: { id: number; url?: string | null; title?: string | null; filename?: string | null }
       }
-      // The populated shape, not the id: the viewport previews the draft, and
-      // an id alone has no URL to load from.
       onChange({
         id: created.doc.id,
         url: created.doc.url ?? null,
@@ -104,6 +92,20 @@ export function AssetPicker({
       onLibraryChange()
     } catch (error) {
       console.error(`Upload to ${collection} failed`, error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const uploadFolder = async (files: FileList) => {
+    setBusy(true)
+    try {
+      const model = await uploadModelFolder(files)
+      onChange(model)
+      onLibraryChange()
+    } catch (error) {
+      console.error('Folder upload failed', error)
+      window.alert(error instanceof Error ? error.message : 'Folder upload failed.')
     } finally {
       setBusy(false)
     }
@@ -129,9 +131,8 @@ export function AssetPicker({
           textAlign: 'left',
         }}
         onClick={(event) => {
-          // Measured HERE, not inside the updater. React clears
-          // `currentTarget` once the handler returns, and a state updater runs
-          // later — reading it there threw "Cannot read properties of null".
+          // React nulls `currentTarget` once the handler returns, so measure
+          // here rather than inside the updater.
           const rect = event.currentTarget.getBoundingClientRect()
           setPanel((current) => (current ? null : rect))
         }}
@@ -159,6 +160,16 @@ export function AssetPicker({
       >
         ↑
       </button>
+      <Show when={collection === 'models'}>
+        <button
+          type="button"
+          style={{ ...button(), padding: '6px 9px', fontSize: 12 }}
+          title="Upload a model folder — a .gltf is packed into one .glb, an .fbx is converted"
+          onClick={() => folderRef.current?.click()}
+        >
+          🗀
+        </button>
+      </Show>
       <Show when={value !== null}>
         <button type="button" style={s.danger} title="Clear" onClick={() => onChange(null)}>
           ✕
@@ -177,10 +188,25 @@ export function AssetPicker({
         }}
       />
 
+      <input
+        ref={folderRef}
+        type="file"
+        multiple
+        // Not in the React DOM typings; both are needed for a directory picker.
+        {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+        style={{ display: 'none' }}
+        onChange={(event) => {
+          const files = event.target.files
+          if (files?.length) void uploadFolder(files)
+          event.target.value = ''
+        }}
+      />
+
       <Show when={panel}>
         {(rect) => (
           <AssetList
             rect={rect}
+            panelRef={listRef}
             library={library}
             collection={collection}
             value={value}
@@ -195,8 +221,6 @@ export function AssetPicker({
         )}
       </Show>
 
-      {/* Gated on the list being open rather than cleared when it closes —
-          a stale hover cannot outlive the panel it came from. */}
       <Show when={open ? hovered : null}>
         {(item) => (
           <AssetPreview asset={item.asset} collection={collection} anchor={item.anchor} />
@@ -223,6 +247,7 @@ function Swatch({ url, size }: { url: string | null; size: number }) {
 
 type ListProps = {
   rect: DOMRect
+  panelRef: RefObject<HTMLDivElement | null>
   library: AssetRef[]
   collection: AssetCollection
   value: AssetRef | null
@@ -234,6 +259,7 @@ type ListProps = {
 
 function AssetList({
   rect,
+  panelRef,
   library,
   collection,
   value,
@@ -250,6 +276,7 @@ function AssetList({
 
   return createPortal(
     <div
+      ref={panelRef}
       onMouseLeave={() => onHover(null)}
       style={{
         position: 'fixed',

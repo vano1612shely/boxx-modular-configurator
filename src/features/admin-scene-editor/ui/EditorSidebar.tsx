@@ -19,17 +19,7 @@ const SAVE_LABEL: Record<string, string> = {
   error: 'Save failed — retry',
 }
 
-/**
- * The sidebar is two panels, not one.
- *
- * Opening a room swaps the entire contents: the building's tools, roof volumes
- * and object outliner have nothing to say about a room, and leaving them on
- * screen was most of why the editor felt like a control panel rather than a
- * tool.
- */
 export function EditorSidebar({ vm }: Props) {
-  // Hook before the early return: the sidebar shares the viewport's popup, so
-  // right-clicking a list row offers the same actions as right-clicking in 3D.
   const [menu, setMenu] = useState<EditorMenuState>(null)
 
   const openMenu: OpenMenu = (event, items) => {

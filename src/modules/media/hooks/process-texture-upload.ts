@@ -1,7 +1,6 @@
 import { APIError, type CollectionBeforeOperationHook } from 'payload'
 import sharp from 'sharp'
 
-/** Anything larger is downscaled — a wall tile never needs more. */
 const MAX_SIDE = 2048
 
 const SUPPORTED = ['.png', '.jpg', '.jpeg', '.webp', '.avif', '.tif', '.tiff']
@@ -13,15 +12,6 @@ export type TextureMeta = {
   sizeAfter: number
 }
 
-/**
- * Normalizes an uploaded texture to webp, capped at MAX_SIDE.
- *
- * Textures are tiled across generated wall surfaces, so unlike a product photo
- * they must keep their full frame (no cropping) and their aspect ratio. The
- * collection therefore generates no derivative sizes, and this hook is the
- * only thing standing between a 6000px source PNG and every visitor's
- * download budget.
- */
 export const processTextureUpload: CollectionBeforeOperationHook = async ({
   args,
   operation,

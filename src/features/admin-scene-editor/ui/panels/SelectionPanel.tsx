@@ -8,12 +8,6 @@ import type { EditorBox, SceneEditorVm } from '../../model/use-scene-editor-mode
 import { button, s } from '../editor-styles'
 import { round3 } from './shared'
 
-/**
- * Full numeric control of the selected roof volume, Figma-style: x/z move the
- * box (size preserved), width/depth resize it from its min corner, bottom/top
- * Y set the vertical range. Three decimals, because a few millimeters decide
- * whether a wall face is covered.
- */
 function BlockNumericFields({
   box,
   onChange,
@@ -26,7 +20,7 @@ function BlockNumericFields({
   const width = box.max.x - box.min.x
   const depth = box.max.z - box.min.z
 
-  /** Ignore intermediate keystrokes ("3.", "-", empty) instead of jumping to 0. */
+  // Intermediate keystrokes ("3.", "-", empty) read as NaN; ignore, don't jump to 0.
   const parse = (e: ChangeEvent<HTMLInputElement>): number | null => {
     const value = e.target.valueAsNumber
     return Number.isNaN(value) ? null : value
@@ -81,7 +75,6 @@ function BlockNumericFields({
   )
 }
 
-/** Contextual panel for the current selection — building scope only. */
 export function SelectionPanel({ vm }: { vm: SceneEditorVm }) {
   const draft = vm.draft
   if (!draft) return null

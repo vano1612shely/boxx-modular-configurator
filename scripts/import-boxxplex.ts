@@ -1,17 +1,3 @@
-/**
- * Prepares the client-provided BOXXPlex 4-office gltf for the configurator and
- * imports it through the regular upload pipeline:
- *
- * 1. drops the oversized ground slab;
- * 2. splits perimeter meshes (walls / windows / doors / trim) into the four
- *    facades so runtime wall auto-hide works (Wall_Exterior_<Side>_*);
- * 3. renames roof/parapet and ceiling nodes so hide patterns match;
- * 4. re-centers the building: interior floor at y=0, plan center at (0,0);
- * 5. uploads the glb (auto-optimization runs) and creates the building-model
- *    document with rooms, camera and default placements.
- *
- * Usage: npx tsx scripts/import-boxxplex.ts <path-to-scene.gltf>
- */
 import 'dotenv/config'
 
 import {
@@ -29,7 +15,6 @@ import config from '../src/payload.config'
 
 type Side = 'North' | 'South' | 'East' | 'West'
 
-/** Node names (from the source file) that form the building perimeter. */
 const PERIMETER_NODES = [
   'Object_120', // Basic_Wall_exterior_01 — main exterior walls
   'Object_114', // Wall_Sweep_Trim — corner/edge trim
@@ -43,7 +28,6 @@ const PERIMETER_NODES = [
   'Object_89', // exterior door frames
 ]
 
-/** Parapet / roof-level elements (always hidden via the "roof" pattern). */
 const ROOF_NODES = ['Object_65', 'Object_117', 'Object_44', 'Object_71', 'Object_26', 'Object_32']
 
 /** Suspended-ceiling elements (tiles, grid, lamps, diffusers) at y≈3.2. */
@@ -99,7 +83,6 @@ function readIndices(primitive: Primitive): number[] {
   return Array.from({ length: count }, (_, i) => i)
 }
 
-/** Splits a perimeter node into up to four side nodes (same parent/transform). */
 function splitNodeBySide(document: Document, node: Node, perimeter: Perimeter) {
   const mesh = node.getMesh()
   if (!mesh) return
@@ -314,10 +297,8 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
           minPolarDeg: 10,
           maxPolarDeg: 85,
         },
-        // Everything above the suspended ceiling: roof slab, parapet, logos.
-        // One volume for roof AND ceilings: the six per-room ceiling slabs all
-        // sat inside this footprint at y 2.35–2.6, so dropping the floor of
-        // this box to 2.35 swallows them whole.
+        // Floor at 2.35 so this one volume covers the roof and the per-room
+        // ceiling slabs, which sit inside this footprint at y 2.35–2.6.
         roofBlocks: [
           { min: { x: -3.95, y: 2.35, z: -8.85 }, max: { x: 3.95, y: 3.4, z: 8.85 } },
         ],
@@ -333,8 +314,6 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
             { x: -0.05, z: -4.75, side: 'w3' },
             { x: -3.45, z: -4.75, side: 'w4' },
           ],
-          // The room a visitor walks into is generated from these numbers —
-          // the glb is only ever the exterior they see from outside.
           shell: {
             floorY: 0.03,
             wallHeight: 2.47,
@@ -356,8 +335,6 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
             { x: 3.45, z: -4.75, side: 'w3' },
             { x: 0.05, z: -4.75, side: 'w4' },
           ],
-          // The room a visitor walks into is generated from these numbers —
-          // the glb is only ever the exterior they see from outside.
           shell: {
             floorY: 0.03,
             wallHeight: 2.47,
@@ -379,8 +356,6 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
             { x: -0.05, z: 8.2, side: 'w3' },
             { x: -3.45, z: 8.2, side: 'w4' },
           ],
-          // The room a visitor walks into is generated from these numbers —
-          // the glb is only ever the exterior they see from outside.
           shell: {
             floorY: 0.03,
             wallHeight: 2.47,
@@ -402,8 +377,6 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
             { x: 3.45, z: 8.2, side: 'w3' },
             { x: 0.05, z: 8.2, side: 'w4' },
           ],
-          // The room a visitor walks into is generated from these numbers —
-          // the glb is only ever the exterior they see from outside.
           shell: {
             floorY: 0.03,
             wallHeight: 2.47,
@@ -419,16 +392,13 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
           key: 'restroom',
           name: 'Restroom',
           roomType: 'restroom',
-          // Traced from the glb rather than typed out: this is the one room
-          // whose walls are not on the building's own grid.
+          // Traced from the glb — the only room whose walls are off the grid.
           floorPolygon: [
             { x: restroom.minX, z: restroom.minZ, side: 'w1' },
             { x: restroom.maxX, z: restroom.minZ, side: 'w2' },
             { x: restroom.maxX, z: restroom.maxZ, side: 'w3' },
             { x: restroom.minX, z: restroom.maxZ, side: 'w4' },
           ],
-          // The room a visitor walks into is generated from these numbers —
-          // the glb is only ever the exterior they see from outside.
           shell: {
             floorY: 0.03,
             wallHeight: 2.47,
@@ -450,8 +420,6 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
             { x: 3.45, z: 4.3, side: 'w3' },
             { x: -1.2, z: 4.3, side: 'w4' },
           ],
-          // The room a visitor walks into is generated from these numbers —
-          // the glb is only ever the exterior they see from outside.
           shell: {
             floorY: 0.03,
             wallHeight: 2.47,

@@ -24,7 +24,6 @@ function Field({
   )
 }
 
-/** How tall and how thick — the numbers the room is generated from. */
 export function RoomDimensionsCard({
   vm,
   roomIndex,

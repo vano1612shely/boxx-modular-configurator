@@ -13,6 +13,7 @@ import type {
   OpeningFit,
   OpeningKind,
   OpeningModelStyle,
+  RoofConfig,
   RoomOpening,
   RoomShellConfig,
   RoomVertex,
@@ -49,6 +50,22 @@ function toZoneBox(value: ZoneBoxGroup): ZoneBox {
   }
 }
 
+function mapRoofModel(
+  value: NonNullable<BuildingModel['sceneConfig']>['roofModel'],
+): RoofConfig | null {
+  const url = optionalModelUrl(value?.model)
+  if (!url) return null
+
+  const scale = numberOr(value?.scale, 1)
+
+  return {
+    url,
+    position: toTuple(value?.position),
+    yawDeg: numberOr(value?.yawDeg, 0),
+    scale: scale > 0 ? scale : 1,
+  }
+}
+
 export type RoomDoc = NonNullable<BuildingModel['rooms']>[number]
 
 function numberOr(value: unknown, fallback: number): number {
@@ -63,16 +80,8 @@ function isSunDirection(value: unknown): value is SunDirection {
   return typeof value === 'string' && value in SUN_BEARINGS
 }
 
-/**
- * Floor outline with a wall assigned to every edge.
- *
- * Rooms authored before walls existed carry no `side` — or, once the column
- * exists, carry the schema default on every vertex, which claims the whole
- * outline is one wall. Both mean "nobody has assigned these yet", so the
- * grouping is derived from the geometry instead. That keeps the client working
- * on legacy data without waiting on a backfill; the editor writes real values
- * on first save.
- */
+// Legacy rows carry no `side`, or the schema default on every vertex; both mean
+// unassigned, so the grouping is derived from geometry instead.
 export function roomVertices(doc: RoomDoc): RoomVertex[] {
   const points = (doc.floorPolygon ?? []).map((p) => ({ x: p.x, z: p.z }))
   if (points.length < 3) return []
@@ -124,12 +133,6 @@ function isOpeningFit(value: unknown): value is OpeningFit {
   return value === 'stretch' || value === 'contain' || value === 'none'
 }
 
-/**
- * URL of an optional model relationship.
- *
- * Same reasoning as textures: a room with no door model is the normal state on
- * day one, so this reports "none" rather than throwing the page away.
- */
 function optionalModelUrl(value: unknown): string | null {
   if (!value || typeof value !== 'object') return null
   const url = (value as { url?: unknown }).url
@@ -155,7 +158,6 @@ function roomOpeningModels(doc: RoomDoc): Record<OpeningKind, OpeningModelStyle>
   ) as Record<OpeningKind, OpeningModelStyle>
 }
 
-/** Outward axis per wall, falling back to the outline's own geometry. */
 function roomSideAxes(value: unknown, polygon: RoomVertex[]): RoomShellConfig['sideAxes'] {
   const derived = computeSideAxes(polygon)
   if (!value || typeof value !== 'object') return derived
@@ -170,7 +172,6 @@ function roomSideAxes(value: unknown, polygon: RoomVertex[]): RoomShellConfig['s
   return derived
 }
 
-/** Shell parameters, with every value clamped to something renderable. */
 function roomShell(doc: RoomDoc, polygon: RoomVertex[]): RoomShellConfig {
   const shell = doc.shell as Record<string, unknown> | null | undefined
 
@@ -188,25 +189,14 @@ function roomShell(doc: RoomDoc, polygon: RoomVertex[]): RoomShellConfig {
   }
 }
 
-/**
- * URL of an optional texture relationship.
- *
- * Deliberately not `assertDoc`: an unset texture slot is normal, and throwing
- * would take the whole configurator page down over a missing wall finish.
- */
 function optionalTextureUrl(value: unknown): string | null {
   if (!value || typeof value !== 'object') return null
   const url = (value as { url?: unknown }).url
   return typeof url === 'string' && url.length > 0 ? url : null
 }
 
-/**
- * Every surface the generator draws, but only three of them are stored.
- *
- * The rest keep their built-in look on purpose — see `TEXTURED_SURFACE_OPTIONS`
- * — and still need an entry here, because the geometry planner asks for a tile
- * size per surface whether or not anyone can set one.
- */
+// Only TEXTURED_SURFACES are stored, but the planner needs a tile size for every
+// surface, so untextured ones still get an entry.
 function roomSurfaces(doc: RoomDoc): Record<ShellSurface, SurfaceStyle> {
   const group = (doc.surfaces ?? {}) as Record<string, unknown>
   const textured = new Set<string>(TEXTURED_SURFACES)
@@ -230,13 +220,6 @@ function roomSurfaces(doc: RoomDoc): Record<ShellSurface, SurfaceStyle> {
   ) as Record<ShellSurface, SurfaceStyle>
 }
 
-/**
- * One room document → the runtime room entity.
- *
- * Exported on its own because the admin Scene Editor previews a room straight
- * from its unsaved draft: sharing this mapping is what stops the preview and
- * the client from drifting apart.
- */
 export function mapRoomZone(room: RoomDoc): RoomZone {
   const floorPolygon = roomVertices(room)
 
@@ -263,7 +246,6 @@ function assertDoc<T>(value: number | T | null | undefined, label: string): T {
   return value
 }
 
-/** Maps a populated Payload building-models doc into the client-safe scene entity. */
 export function mapBuildingScene(doc: BuildingModel): BuildingScene {
   const line = assertDoc<BuildingLine>(doc.line, 'line')
   const model = assertDoc<Model>(doc.model, 'model')
@@ -306,6 +288,7 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
       maxPolarDeg: camera?.maxPolarDeg ?? 85,
     },
     roofBlocks: (doc.sceneConfig?.roofBlocks ?? []).map(toZoneBox),
+    roofModel: mapRoofModel(doc.sceneConfig?.roofModel),
     hiddenNodePaths,
     rooms,
   }

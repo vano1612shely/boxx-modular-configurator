@@ -1,7 +1,4 @@
-/**
- * 2D polygon math for room zones (floor outlines drawn point-by-point in the
- * admin editor). All coordinates are model-space meters on the XZ plane.
- */
+/** All coordinates are model-space meters on the XZ plane. */
 
 export type Point2 = { x: number; z: number }
 
@@ -9,21 +6,11 @@ export type Footprint = { width: number; depth: number }
 
 const RAD = Math.PI / 180
 
-/** Millimetre rounding — keeps generated coordinates deterministic. */
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000
 }
 
-/**
- * Snaps a hand-drawn, almost-rectilinear outline onto exact axis-aligned
- * edges. Modular rooms ARE rectangular — a 5–15cm wobble is drawing noise,
- * yet it makes every edge "diagonal" downstream and puts wall math a few
- * centimetres off the real building. Genuinely diagonal edges (beyond the
- * tolerance) are left untouched. Two passes let shared corner points settle.
- *
- * Generic over the vertex type so per-vertex metadata (e.g. the wall side an
- * edge belongs to) survives the snap.
- */
+/** Snaps almost-rectilinear edges onto exact axis alignment; diagonals are left alone. */
 export function rectifyPolygon<T extends Point2>(polygon: T[]): T[] {
   if (polygon.length < 3) return polygon
   const points = polygon.map((p) => ({ ...p }))
@@ -87,14 +74,7 @@ export function polygonWindingSign(poly: Point2[]): 1 | -1 {
   return polygonSignedArea(poly) >= 0 ? 1 : -1
 }
 
-/**
- * Unit outward normal of the edge a → b.
- *
- * Derived from the winding sign, never from "which way is away from the
- * centroid": for a concave outline the centroid can sit outside the polygon
- * entirely, and the heuristic then points the normal into the wall. Pass the
- * sign from `polygonWindingSign` once and reuse it for every edge.
- */
+/** Unit outward normal of the edge a → b. */
 export function outwardEdgeNormal(a: Point2, b: Point2, windingSign: 1 | -1): Point2 {
   const dx = b.x - a.x
   const dz = b.z - a.z
@@ -103,7 +83,6 @@ export function outwardEdgeNormal(a: Point2, b: Point2, windingSign: 1 | -1): Po
   return { x: (windingSign * dz) / len, z: (-windingSign * dx) / len }
 }
 
-/** Smallest miter cosine before the joint is treated as too sharp to close. */
 const MIN_MITER_COS = 0.35
 
 export type OffsetPolygonResult = {
@@ -112,13 +91,6 @@ export type OffsetPolygonResult = {
   clampedIndexes: number[]
 }
 
-/**
- * Offsets an outline outward by `distance`, mitring at the corners so adjacent
- * wall segments meet on the bisector with no gap and no overlap.
- *
- * At a very sharp corner an exact miter shoots off to infinity; those vertices
- * are clamped and reported instead of being allowed to invert the geometry.
- */
 export function offsetPolygonMitered(poly: Point2[], distance: number): OffsetPolygonResult {
   const n = poly.length
   if (n < 3) return { points: poly.map((p) => ({ x: p.x, z: p.z })), clampedIndexes: [] }
@@ -130,7 +102,7 @@ export function offsetPolygonMitered(poly: Point2[], distance: number): OffsetPo
   const clampedIndexes: number[] = []
 
   for (let i = 0; i < n; i++) {
-    // Vertex i joins the edge that ENDS here (i-1) and the one that starts here.
+    // Vertex i joins the edge ending here (i-1) and the one starting here.
     const prev = normals[(i - 1 + n) % n]
     const next = normals[i]
     let mx = prev.x + next.x
@@ -138,7 +110,7 @@ export function offsetPolygonMitered(poly: Point2[], distance: number): OffsetPo
     const mLen = Math.hypot(mx, mz)
 
     if (mLen < 1e-9) {
-      // 180° reversal — a degenerate spike. Fall back to the outgoing normal.
+      // 180° reversal — a degenerate spike.
       points.push({ x: poly[i].x + next.x * distance, z: poly[i].z + next.z * distance })
       clampedIndexes.push(i)
       continue
@@ -211,7 +183,6 @@ export function closestPointOnPolygon(p: Point2, poly: Point2[]): Point2 {
   return best
 }
 
-/** Corners of a rotated footprint rectangle centered at (x, z). */
 export function footprintCorners(
   x: number,
   z: number,
@@ -256,12 +227,7 @@ export function poseInsidePolygon(
   )
 }
 
-/**
- * Pushes a pose inside the polygon: iteratively moves the center by the
- * deepest outside-sample correction. Exact containment of a rotated rect in a
- * concave polygon is a hard problem — this converges well for room-like
- * shapes and falls back to the centroid when the footprint can't fit locally.
- */
+/** Approximate: falls back to the centroid when the footprint cannot fit locally. */
 export function clampPoseToPolygon(
   x: number,
   z: number,
@@ -330,12 +296,7 @@ export type EdgeSnapResult = {
   snapped: boolean
 }
 
-/**
- * Progressive edge alignment (IKEA-style), generalized to polygon edges of any
- * orientation: touching an edge does nothing, pushing the pointer past contact
- * gradually rotates the footprint toward the edge direction — fully aligned
- * after `ramp` meters of push. Pulling back returns toward the free rotation.
- */
+/** `ramp` is the push past contact, in meters, for full alignment with the edge. */
 export function progressiveEdgeSnap(
   rawX: number,
   rawZ: number,
@@ -357,7 +318,6 @@ export function progressiveEdgeSnap(
 
     const dirX = abx / len
     const dirZ = abz / len
-    // Outward normal — away from the polygon centroid.
     let nx = abz / len
     let nz = -abx / len
     const midX = (a.x + b.x) / 2
@@ -367,7 +327,7 @@ export function progressiveEdgeSnap(
       nz = -nz
     }
 
-    // Only edges the center actually faces (projected within the segment span).
+    // Only edges the center faces, i.e. projecting within the segment span.
     const along = (rawX - a.x) * dirX + (rawZ - a.z) * dirZ
     const margin = Math.max(footprint.width, footprint.depth) / 2
     if (along < -margin || along > len + margin) continue
@@ -397,7 +357,6 @@ export function progressiveEdgeSnap(
   return { ...clamped, rotationYDeg, snapped: true }
 }
 
-/** Can the footprint fit anywhere reasonable in the polygon (tried at 0°/90°)? */
 export function footprintFitsPolygon(footprint: Footprint, poly: Point2[]): boolean {
   const centroid = polygonCentroid(poly)
   return [0, 90].some((rotation) => {

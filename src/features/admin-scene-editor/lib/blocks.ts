@@ -1,23 +1,19 @@
-/**
- * Roof volumes, as plain data.
- *
- * Kept out of the model hook so it can be tested: importing that file drags in
- * `@payloadcms/ui`, which drags in CSS, which vitest cannot load.
- */
+// Kept out of the model hook so vitest can import it: that file pulls in
+// `@payloadcms/ui`, and with it CSS vitest cannot load.
 
 export type EditorBox = {
   min: { x: number; y: number; z: number }
   max: { x: number; y: number; z: number }
 }
 
-/** Index into `sceneConfig.roofBlocks` — the only block list there is. */
+/** Index into `sceneConfig.roofBlocks`. */
 export type BlockRef = { index: number }
 
 export function sameBlockRef(a: BlockRef, b: BlockRef): boolean {
   return a.index === b.index
 }
 
-/** min <= max on every axis, however the corners were dragged. */
+/** Orders every axis so min <= max, however the corners were dragged. */
 export function normalizeBox(box: EditorBox): EditorBox {
   return {
     min: {
@@ -33,7 +29,6 @@ export function normalizeBox(box: EditorBox): EditorBox {
   }
 }
 
-/** Default vertical range for a freshly drawn roof volume, from model height. */
 export function defaultYRange(modelHeight: number): [number, number] {
   const h = Math.max(modelHeight, 2.5)
   return [h * 0.82, h + 0.6]

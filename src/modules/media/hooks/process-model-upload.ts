@@ -1,39 +1,33 @@
 import { APIError, type CollectionBeforeOperationHook } from 'payload'
 
-import { optimizeGlb, type ModelMeta } from '../lib/optimize-model'
+import { externalReferences, optimizeGlb, type ModelMeta } from '../lib/optimize-model'
 
 const GLB_EXTENSIONS = ['.glb', '.gltf']
 
 export type ProcessedModel = { meta: ModelMeta }
 
-/**
- * Optimizes a model on its way in — when the file comes through us at all.
- *
- * It usually does not. Uploads are signed and sent from the browser straight to
- * the bucket (`clientUploads` in payload.config.ts), because a serverless
- * function cannot receive a file bigger than a few megabytes and models here
- * run to a hundred. In that case there is nothing to read and this steps aside.
- *
- * That leaves this doing real work only in local development, where files still
- * pass through the server. Optimizing a large model is minutes of CPU and a
- * lot of memory, which is a fine thing to spend on a workstation and an
- * impossible thing to spend inside a request — so the pipeline lives in
- * `pnpm optimize:model` and this is a convenience, not the guarantee.
- *
- * A failure here therefore warns and lets the original through. It used to
- * throw a 400, which turned "the optimizer ran out of memory" into "your upload
- * is invalid" — the same rejection an unsupported file gets, and no way to tell
- * them apart from the browser.
- */
 export const processModelUpload: CollectionBeforeOperationHook = async ({ args, operation, req }) => {
   if (operation !== 'create' && operation !== 'update') return args
   if (!req.file?.data) return args
 
   const name = req.file.name.toLowerCase()
 
-  // Still fatal: this one is a real answer to "why was my file refused".
   if (!GLB_EXTENSIONS.some((ext) => name.endsWith(ext))) {
     throw new APIError('Only .glb / self-contained .gltf files are supported.', 400)
+  }
+
+  if (name.endsWith('.gltf')) {
+    const missing = externalReferences(req.file.data.toString('utf8'))
+    if (missing.length) {
+      const sample = missing.slice(0, 3).join(', ')
+      throw new APIError(
+        `This .gltf keeps its data in ${missing.length} separate file(s) — ${sample}` +
+          `${missing.length > 3 ? ', …' : ''} — and a file input sends only the file you picked. ` +
+          'Pack it into one first: run `pnpm optimize:model ' +
+          `"${req.file.name}"\` in the folder that holds them, then upload the .glb it writes.`,
+        400,
+      )
+    }
   }
 
   try {

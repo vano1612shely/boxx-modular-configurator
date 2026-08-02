@@ -2,13 +2,6 @@ import type { CollectionConfig } from 'payload'
 
 import { processTextureUpload, type TextureMeta } from '../hooks/process-texture-upload'
 
-/**
- * Seamless surface textures for generated rooms.
- *
- * Deliberately NOT the `images` collection: that one centre-crops a 400x300
- * thumbnail and a 768-wide card, which is meaningless for a tile and wastes
- * storage, and it forces alt text that no 3D surface will ever announce.
- */
 export const Textures: CollectionConfig = {
   slug: 'textures',
   labels: { singular: 'Texture', plural: 'Textures' },

@@ -14,7 +14,6 @@ function thumbnailUrl(value: number | Image | null | undefined): string | null {
   return value.url ?? null
 }
 
-/** Maps a populated Payload furniture-packages doc into the client-safe entity. */
 export function mapFurniturePackage(doc: FurniturePackage): FurniturePackageEntity {
   return {
     id: doc.id,

@@ -75,19 +75,8 @@ function obstaclesFor(
     })
 }
 
-/**
- * Where on the floor you took hold of the model, relative to its own origin.
- *
- * Without this the drag plane treats the cursor as the model's centre, so the
- * first pointer move teleports the model under the cursor — you grab a sofa by
- * its arm and it jumps half a metre to meet you.
- *
- * Measured on the FIRST MOVE, not on the press. The press lands on the model's
- * own surface, which is metres above the floor for anything tall, and the same
- * pointer ray crosses the floor somewhere else entirely — an offset taken there
- * throws the target outside the room, where the polygon clamp pins it and the
- * drag dies after one jump.
- */
+// Grab point on the floor relative to the model origin. Measured on the first
+// move, not the press: the press ray hits the model's surface, not the floor.
 type GrabOffset = { instanceId: string | null; x: number; z: number }
 
 export function PlacedPackages({ building, packages }: Props) {
@@ -108,7 +97,6 @@ export function PlacedPackages({ building, packages }: Props) {
           const room = roomsByKey.get(placement.roomKey)
           if (!pkg || !room) return null
 
-          // Dollhouse isolation: only the focused room's furniture is shown.
           if (focusedRoomKey && placement.roomKey !== focusedRoomKey) return null
 
           return (
@@ -139,11 +127,6 @@ type GhostProps = {
   floorY?: number
 }
 
-/**
- * Shown while a package glb is streaming in: a softly pulsing volume of the
- * package footprint, so the scene stays put and the user sees where the
- * furniture will appear.
- */
 function PlacementGhost({ placement, pkg, floorY = 0 }: GhostProps) {
   const materialRef = useRef<MeshStandardMaterial>(null)
 
@@ -182,22 +165,13 @@ type ItemProps = {
 const OUTLINE_VALID = new Color('#ffdb00')
 const OUTLINE_INVALID = new Color('#ef4444')
 
-/**
- * The stored angle as the slider shows it: −180…180, zero in the middle.
- *
- * Rotation is stored 0…360 because that is what the maths wants, but a control
- * where "straight ahead" sits at one end and again at the other is a control
- * you cannot aim. Zero belongs in the middle, with a quarter turn either way.
- */
+/** Stored 0…360 rotation expressed as −180…180. */
 function signedDegrees(rotationYDeg: number): number {
   const wrapped = ((Math.round(rotationYDeg) % 360) + 360) % 360
   return wrapped > 180 ? wrapped - 360 : wrapped
 }
 
-/**
- * Inverted-hull silhouette: a slightly inflated clone rendered back-face only,
- * so a contour appears around the model itself (no plane underneath).
- */
+/** Inverted-hull silhouette: a clone rendered back-face only, to be scaled up by the caller. */
 function buildOutlineShell(source: Object3D): { shell: Object3D; material: MeshBasicMaterial } {
   const material = new MeshBasicMaterial({
     color: OUTLINE_VALID.clone(),
@@ -229,6 +203,13 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
     const bounds = new Box3().setFromObject(clone)
     const size = bounds.getSize(new Vector3())
+    const centre = bounds.getCenter(new Vector3())
+
+    // Clamping and collision assume a footprint centred on the placement point.
+    // Y is left alone: the model stands on the floor, so its base sits there.
+    clone.position.x -= centre.x
+    clone.position.z -= centre.z
+
     setMeasuredFootprint(pkg.id, { width: size.x, depth: size.z })
 
     return { object: clone, outline: buildOutlineShell(clone) }
@@ -249,16 +230,12 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const isDragging = draggingInstanceId === placement.instanceId
   const isInvalid = isDragging && !dragValid
 
-  // Furniture stands on the room's floor volume, not on world y=0.
   const floorY = roomFloorTopY(room)
 
   outline.material.color.copy(isInvalid ? OUTLINE_INVALID : OUTLINE_VALID)
 
   const introPlayedRef = useRef(false)
 
-  // Smoothly damp the visual transform toward the stored pose so wall
-  // snapping and slider rotation land with an animation instead of a jump.
-  // A short scale-in plays when the freshly loaded model replaces its ghost.
   useFrame((_, delta) => {
     const group = groupRef.current
     const rotation = rotationRef.current
@@ -280,25 +257,17 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
   const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
-    // Camera controls listen on the same canvas element; without this the
-    // camera would orbit together with the package drag.
+    // Camera controls listen on the same canvas element and would orbit too.
     event.nativeEvent.stopImmediatePropagation()
-    // Cleared, not measured: the drag plane takes the offset on its own plane
-    // the first time the pointer moves.
     grabOffsetRef.current = { instanceId: null, x: 0, z: 0 }
     startDrag(placement.instanceId)
     setInteractionLock(true)
     setSceneCursor('moving')
-
-    // Releasing is the drag tracker's business now: it listens on the window
-    // for as long as a drag is running, so a plain click ends as cleanly as a
-    // real move and there is nothing left here to get stuck.
   }
 
   const footprint = footprintOf(pkg.id, pkg.footprint)
 
   const applyRotation = (nextDeg: number) => {
-    // Detent near right angles for a crisp feel on the slider.
     const detented =
       Math.abs(nextDeg - Math.round(nextDeg / 90) * 90) <= 5
         ? (Math.round(nextDeg / 90) * 90 + 360) % 360
@@ -339,29 +308,31 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
           <primitive object={object} />
         </group>
         <Show when={isSelected}>
-          <primitive object={outline.shell} scale={1.035} />
+          {/* Scaled by a group: the shell carries the recentring offset in its
+              own transform, which scaling it directly would multiply too. */}
+          <group scale={1.035}>
+            <primitive object={outline.shell} />
+          </group>
         </Show>
       </group>
 
       <Show when={isSelected && !isDragging}>
         <Html position={[0, 2, 0]} center zIndexRange={[20, 0]}>
-          {/* The toolbar overlays the canvas — keep its pointer input away from
-              camera controls and the R3F event layer. */}
           <div
             className="flex flex-col items-center gap-2"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => {
               event.stopPropagation()
               setInteractionLock(true)
-              // The pointer may be released anywhere (slider drags leave the bar).
+              // Slider drags leave the bar, so the release lands anywhere.
               window.addEventListener('pointerup', () => setInteractionLock(false), {
                 once: true,
               })
             }}
           >
             <Show when={rotateOpen}>
-              <div className="flex items-center gap-3 rounded-full bg-neutral-900/95 py-2 pr-4 pl-4 shadow-xl backdrop-blur">
-                <div className="relative flex h-5 w-44 items-center">
+              <div className="flex items-center gap-2 rounded-full bg-neutral-900/95 px-3 py-1.5 shadow-xl backdrop-blur desktop:gap-3 desktop:px-4 desktop:py-2">
+                <div className="relative flex h-5 w-32 items-center desktop:w-44">
                   <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-between px-0.5">
                     {[-180, -90, 0, 90, 180].map((tick) => (
                       <span key={tick} className="h-2.5 w-0.5 rounded bg-white/40" />
@@ -383,25 +354,27 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
               </div>
             </Show>
 
-            <div className="flex items-center overflow-hidden rounded-2xl bg-neutral-900/95 shadow-xl backdrop-blur">
+            <div className="flex items-center overflow-hidden rounded-full bg-neutral-900/95 shadow-xl backdrop-blur desktop:rounded-2xl">
               <button
                 type="button"
+                aria-label="Rotate"
                 onClick={() => setRotateOpen((v) => !v)}
-                className={`flex flex-col items-center gap-1 px-4 py-2.5 text-[11px] font-medium transition-colors ${
+                className={`flex size-10 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors desktop:size-auto desktop:px-4 desktop:py-2.5 ${
                   rotateOpen ? 'bg-neutral-700 text-white' : 'text-neutral-200 hover:bg-neutral-800'
                 }`}
               >
                 <RotateCw size={16} />
-                Rotate
+                <span className="hidden desktop:inline">Rotate</span>
               </button>
-              <span className="h-8 w-px bg-neutral-700" />
+              <span className="h-6 w-px bg-neutral-700 desktop:h-8" />
               <button
                 type="button"
+                aria-label="Remove"
                 onClick={() => removePackage(placement.instanceId)}
-                className="flex flex-col items-center gap-1 px-4 py-2.5 text-[11px] font-medium text-neutral-200 transition-colors hover:bg-neutral-800"
+                className="flex size-10 flex-col items-center justify-center gap-1 text-[11px] font-medium text-neutral-200 transition-colors hover:bg-neutral-800 desktop:size-auto desktop:px-4 desktop:py-2.5"
               >
                 <Trash2 size={16} />
-                Remove
+                <span className="hidden desktop:inline">Remove</span>
               </button>
             </div>
           </div>
@@ -422,9 +395,6 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
   const camera = useThree((state) => state.camera)
   const gl = useThree((state) => state.gl)
 
-  // The drag plane sits at the dragged package's floor level so pointer
-  // rays land where the furniture actually stands. The room can't change
-  // mid-drag, so this only recomputes when a drag starts.
   const dragFloorY = useMemo(() => {
     if (!draggingInstanceId) return 0
     const placement = useConfiguration
@@ -435,8 +405,7 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
   }, [draggingInstanceId, building])
 
   const lastValidRef = useRef<{ x: number; z: number; rotationYDeg: number } | null>(null)
-  // Rotation the package had when this drag started — the progressive wall
-  // blend always interpolates from it, so alignment is reversible.
+  // Rotation at drag start; the progressive snap always blends from it.
   const freeRotationRef = useRef<{ instanceId: string; rotationYDeg: number } | null>(null)
 
   const endDrag = () => {
@@ -472,8 +441,6 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
 
     const footprint = footprintOf(pkg.id, pkg.footprint)
 
-    // First move of this drag: whatever is under the cursor right now IS the
-    // grab point, so the model does not shift at all until the pointer does.
     if (grabOffsetRef.current.instanceId !== dragging) {
       grabOffsetRef.current = {
         instanceId: dragging,
@@ -513,8 +480,7 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
     state.setDragValid(valid)
   }
 
-  // The window listeners below are attached once per drag, so they need a
-  // stable way to reach this render's closures rather than the first one's.
+  // Listeners attach once per drag; the refs keep them on the latest closures.
   const moveToRef = useRef(moveTo)
   const endDragRef = useRef(endDrag)
   useEffect(() => {
@@ -525,11 +491,8 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
   useEffect(() => {
     if (!draggingInstanceId) return
 
-    // A mathematical plane and window listeners, NOT an invisible mesh with
-    // R3F pointer events. A mesh has to win the raycast to hear anything, so
-    // the moment a wall or another package came between the cursor and it, the
-    // move stopped — and its `pointerleave` ended the drag outright, which is
-    // why you had to press again to carry on.
+    // A maths plane, not a mesh: a mesh would need to win the raycast, so a
+    // wall between cursor and floor would stall the drag.
     const plane = new Plane(new Vector3(0, 1, 0), -dragFloorY)
     const hit = new Vector3()
     const ndc = new Vector2()
@@ -542,8 +505,6 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
         -((event.clientY - rect.top) / rect.height) * 2 + 1,
       )
       raycaster.setFromCamera(ndc, camera)
-      // Misses only when the camera looks along the floor — then there is no
-      // sensible answer, so leave the package where it is.
       if (raycaster.ray.intersectPlane(plane, hit)) moveToRef.current(hit.x, hit.z)
     }
     const onUp = () => endDragRef.current()

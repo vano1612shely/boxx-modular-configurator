@@ -1,5 +1,6 @@
 'use client'
 
+import { FileText } from 'lucide-react'
 import { useState } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
@@ -31,9 +32,11 @@ export function QuoteDialog({ building, packages, integration }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="absolute bottom-4 left-4 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
+        aria-label="Request a quote"
+        className="absolute top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-40 flex items-center gap-2 rounded-full bg-neutral-900 p-3 text-sm font-semibold text-white shadow-xl ring-1 ring-white/10 transition-transform hover:scale-[1.02] active:scale-[0.98] desktop:py-3 desktop:pr-5 desktop:pl-4"
       >
-        Request a quote
+        <FileText size={16} strokeWidth={2.5} />
+        <span className="hidden desktop:inline">Request a quote</span>
       </button>
 
       <Show when={open}>

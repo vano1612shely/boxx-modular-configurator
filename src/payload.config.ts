@@ -13,18 +13,7 @@ const dirname = path.dirname(filename)
 
 const useS3 = Boolean(process.env.S3_BUCKET)
 
-/**
- * Public base URL of the bucket — an R2 public domain, or a CDN in front of it.
- *
- * Optional, and worth setting. Without it Payload serves every upload through
- * itself: a request for a 5 MB building model wakes a serverless function,
- * which streams the object out of the bucket and back to the browser. That is
- * an invocation, its wall-clock time and its bandwidth for a file that never
- * changes. Point this at the bucket and the browser fetches it straight from
- * the CDN instead, and the function is not involved at all.
- *
- * Trailing slash tolerated; the bucket must allow public reads.
- */
+/** Public bucket/CDN base URL; the bucket must allow public reads. */
 const publicBucketUrl = process.env.S3_PUBLIC_URL?.replace(/\/+$/, '')
 
 const servedDirectly = publicBucketUrl
@@ -37,23 +26,10 @@ const servedDirectly = publicBucketUrl
 const plugins: Plugin[] = useS3
   ? [
       s3Storage({
-        /**
-         * The browser PUTs files straight to the bucket, never through us.
-         *
-         * Not an optimisation — the only way this works at all. A serverless
-         * function receives its request body through the platform, and that
-         * body is capped: on Lambda it is 6 MB of BASE64, so a binary file over
-         * roughly 4.4 MB is rejected before any of our code runs. A 5 MB
-         * building model already fails; a 100 MB one is not close.
-         *
-         * With this on, the server only signs a URL and the upload goes
-         * browser -> Supabase directly, so the size ceiling is the bucket's.
-         */
-        clientUploads: true,
         collections: {
           images: servedDirectly,
           models: servedDirectly,
-          // Miss this and textures silently stay on the local disk in prod.
+          // Miss one and that collection silently keeps writing to local disk.
           textures: servedDirectly,
         },
         bucket: process.env.S3_BUCKET ?? '',
@@ -87,19 +63,8 @@ export default buildConfig({
     pool: {
       connectionString: process.env.DATABASE_URL || '',
     },
-    /**
-     * Schema changes are applied by MIGRATIONS outside development.
-     *
-     * Push mode diffs the schema against the live database on boot and alters
-     * it in place. That is a good trade while you are drawing collections and a
-     * bad one anywhere else: it can decide a rename is a drop, it runs before
-     * anyone has looked at what it intends to do, and when it wants consent for
-     * data loss it asks on stdin — which a server does not have, so every
-     * query simply hangs forever waiting for an answer nobody can give.
-     *
-     * `pnpm migrate` applies the files in `src/migrations` instead, which are
-     * reviewed, ordered and committed.
-     */
+    // Push mode asks for consent to data loss on stdin, which a server does not have,
+    // and hangs; outside development schema changes go through `pnpm migrate`.
     push: process.env.NODE_ENV === 'development',
     migrationDir: path.resolve(dirname, 'migrations'),
   }),

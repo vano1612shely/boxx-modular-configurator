@@ -5,20 +5,11 @@ import { CameraControls, useGLTF } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 
-import { FitOnce, ModelStage } from '@/shared/three/ModelStage'
-
-/**
- * Inline 3D viewer on a document page — orbit to inspect the asset.
- *
- * Works from either end of the relationship. On a model's own page the file is
- * right there in `filename`; on a furniture package or a building it is an id
- * in `model`, which has to be resolved before there is anything to load. Both
- * are worth previewing: a list of names tells you nothing about what you are
- * actually about to place in someone's room.
- */
+import { FitOnce, ModelStage, previewUrl } from '@/shared/three/ModelStage'
 
 function Preview({ url }: { url: string }) {
-  const { scene } = useGLTF(url, false, true)
+  // Separate cache key from the Scene Editor's copy of the same building.
+  const { scene } = useGLTF(previewUrl(url), false, true)
   const object = useMemo(() => scene.clone(true), [scene])
 
   return (
@@ -29,10 +20,7 @@ function Preview({ url }: { url: string }) {
   )
 }
 
-/** The related model's file, once Payload gives us something to resolve. */
 function useRelatedModelUrl(value: unknown): string | null {
-  // Keyed by the id it was fetched for, so switching the relationship shows
-  // nothing rather than the previous model until the new one arrives.
   const [resolved, setResolved] = useState<{ id: number; url: string | null } | null>(null)
 
   const id =
@@ -80,8 +68,6 @@ export function ModelPreviewField() {
 
   return (
     <div
-      // Orbiting only while the pointer is actually over the viewer, so
-      // scrolling past this field scrolls the page instead of zooming a model.
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       style={{

@@ -8,6 +8,10 @@ import { useConfiguratorSession, type ViewMode } from '@/entities/configurator-s
 import { cn } from '@/shared/lib'
 import { For, Show } from '@/shared/ui/control-flow'
 
+function Label({ children }: { children: string }) {
+  return <span className="hidden desktop:inline">{children}</span>
+}
+
 const SIDE_VIEWS: Array<{ mode: ViewMode; label: string }> = [
   { mode: 'side-front', label: 'Front' },
   { mode: 'side-right', label: 'Right' },
@@ -47,13 +51,20 @@ export function ViewModeBar() {
 
   const itemClass = (active: boolean, disabled = false) =>
     cn(
-      'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors',
+      'flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors sm:px-4',
       active ? 'bg-neutral-900 text-white' : 'text-neutral-800 hover:bg-neutral-100',
       disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent',
     )
 
   return (
-    <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+    <div
+      className={cn(
+        'absolute z-10 -translate-x-1/2 transition-all duration-300',
+        isRoomFocused
+          ? 'bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 desktop:bottom-4 desktop:left-[calc(50%-11rem)] lg:left-[calc(50%-13rem)]'
+          : 'bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2',
+      )}
+    >
       <Show when={sideOpen}>
         <div className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-1 rounded-2xl bg-white p-1.5 shadow-xl ring-1 ring-black/5">
           <For each={SIDE_VIEWS} getKey={(v) => v.mode}>
@@ -78,11 +89,11 @@ export function ViewModeBar() {
       <div className="flex items-center gap-1 rounded-full bg-white p-1.5 shadow-xl ring-1 ring-black/5">
         <button type="button" onClick={() => pick('dollhouse')} className={itemClass(viewMode === 'dollhouse')}>
           {isRoomFocused ? <Box size={16} /> : <Home size={16} />}
-          {isRoomFocused ? 'Dollhouse' : 'Overview'}
+          <Label>{isRoomFocused ? 'Dollhouse' : 'Overview'}</Label>
         </button>
         <button type="button" onClick={() => pick('top')} className={itemClass(viewMode === 'top')}>
           <LayoutGrid size={16} />
-          Top view
+          <Label>Top view</Label>
         </button>
         <button
           type="button"
@@ -90,7 +101,7 @@ export function ViewModeBar() {
           className={itemClass(isSideView)}
         >
           <Eye size={16} />
-          Side views
+          <Label>Side views</Label>
           <ChevronUp size={14} className={cn('transition-transform', sideOpen && 'rotate-180')} />
         </button>
         <span className="h-6 w-px bg-neutral-200" />
@@ -101,7 +112,7 @@ export function ViewModeBar() {
           className={itemClass(false, !selected)}
         >
           <Footprints size={16} />
-          Move to
+          <Label>Move to</Label>
         </button>
         <Show when={!isRoomFocused}>
           <span className="h-6 w-px bg-neutral-200" />
@@ -112,7 +123,7 @@ export function ViewModeBar() {
             className={itemClass(showCeiling)}
           >
             <Layers size={16} />
-            Ceiling
+            <Label>Ceiling</Label>
           </button>
         </Show>
       </div>

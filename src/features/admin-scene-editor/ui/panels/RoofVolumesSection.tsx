@@ -7,12 +7,6 @@ import { blockRowStyle, rowActionStyle, s, tone } from '../editor-styles'
 import { blockMenuItems } from '../menu-items'
 import type { PanelProps } from './shared'
 
-/**
- * The volumes the client's Ceiling toggle takes away.
- *
- * There used to be a second, per-room list for ceilings. Same job, same
- * behaviour, two places to look — now there is one.
- */
 export function RoofVolumesSection({ vm, onOpenMenu }: PanelProps) {
   const blocks = vm.draft?.sceneConfig?.roofBlocks ?? []
 

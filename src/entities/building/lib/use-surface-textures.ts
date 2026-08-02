@@ -6,23 +6,8 @@ import { RepeatWrapping, SRGBColorSpace, type Texture } from 'three'
 
 import type { ShellSurface, SurfaceStyle } from '../model/types'
 
-/**
- * Loads the room's surface textures.
- *
- * Wrapping drei's `useTexture` rather than calling it directly, for two
- * reasons that both bite late and look like unrelated bugs:
- *
- * - the loader leaves `colorSpace` at its default, while every texture baked
- *   into the glb arrives tagged sRGB, so raw base-color maps render washed out
- *   next to the building they are meant to match;
- * - the loader cache is global and keyed by URL, so every consumer of a URL
- *   gets the SAME Texture instance. Mutating wrap or repeat on it would reach
- *   into other walls and other rooms, in mount order. Each consumer therefore
- *   gets its own clone.
- *
- * Tiling itself is baked into the generated UVs, so `repeat` is never touched
- * here — this only has to make the texture legal to sample.
- */
+// drei's texture cache is keyed by URL and shared, so consumers must clone before
+// mutating; the loader also leaves colorSpace default while glb textures are sRGB.
 export function useSurfaceTextures(
   surfaces: Record<ShellSurface, SurfaceStyle>,
 ): Partial<Record<ShellSurface, Texture>> {
@@ -39,8 +24,7 @@ export function useSurfaceTextures(
   // an empty array trips its record/array overloads.
   const loaded = useTexture(urls.length > 0 ? urls : PLACEHOLDER) as Texture[]
 
-  // `loaded` is a fresh array on every render, so the URL list is the real
-  // input to memoize on.
+  // `loaded` is a fresh array each render, so memoize on the URL list instead.
   const key = urls.join('|')
 
   const textures = useMemo(() => {
@@ -75,10 +59,6 @@ const PLACEHOLDER = [
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
 ]
 
-/**
- * Warms the loader cache for every room at scene mount, so stepping into a
- * room does not suspend on a network round trip.
- */
 export function preloadRoomTextures(surfaceSets: Array<Record<ShellSurface, SurfaceStyle>>) {
   for (const surfaces of surfaceSets) {
     for (const style of Object.values(surfaces)) {

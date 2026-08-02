@@ -6,28 +6,9 @@ import { Vector3 } from 'three'
 
 import { bearingOf } from '@/entities/building'
 
-/**
- * Which way is north, in a scene with nothing else to tell you.
- *
- * The building sits at whatever angle it was exported at and the camera orbits
- * freely, so "the sun is in the south-west" means nothing on its own. This is
- * the reference that makes it mean something.
- *
- * Split in two because it straddles the canvas boundary: the dial is ordinary
- * DOM sitting over the viewport, and only the probe can see the camera. They
- * meet at a ref, so the needle is a style write per frame rather than a React
- * render per frame.
- */
-
 export type CompassHandle = RefObject<HTMLDivElement | null>
 
-/**
- * Inside the Canvas: reports where the camera is looking, every frame.
- *
- * It reports rather than writes, because the dial belongs to the component
- * that owns the ref — reaching through a ref handed down as a prop is a
- * mutation of somebody else's state, and the compiler is right to say so.
- */
+/** Inside the Canvas: reports the camera bearing every frame. */
 export function CompassProbe({ onHeading }: { onHeading: (bearingDeg: number) => void }) {
   const direction = useRef(new Vector3())
 
@@ -74,8 +55,6 @@ export function CompassRose({ dial }: { dial: CompassHandle }) {
               inset: 0,
               display: 'flex',
               justifyContent: 'center',
-              // Each letter is pushed to the rim along its own bearing, then
-              // spun back upright so the dial can rotate as one piece.
               transform: `rotate(${angle}deg)`,
               fontSize: 9.5,
               fontWeight: strong ? 700 : 500,
@@ -87,7 +66,6 @@ export function CompassRose({ dial }: { dial: CompassHandle }) {
             <span style={{ transform: `rotate(${-angle}deg)` }}>{label}</span>
           </span>
         ))}
-        {/* Needle: red half points north, like every compass ever made. */}
         <span
           style={{
             position: 'absolute',

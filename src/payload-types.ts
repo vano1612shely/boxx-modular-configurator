@@ -256,6 +256,19 @@ export interface BuildingModel {
         }[]
       | null;
     /**
+     * A roof supplied as its own model. Placed visually in the Scene Editor.
+     */
+    roofModel?: {
+      model?: (number | null) | Model;
+      position?: {
+        x?: number | null;
+        y?: number | null;
+        z?: number | null;
+      };
+      yawDeg?: number | null;
+      scale?: number | null;
+    };
+    /**
      * Objects hidden in the Scene Editor. Edited visually.
      */
     hiddenNodePaths?:
@@ -423,7 +436,7 @@ export interface BuildingModel {
   createdAt: string;
 }
 /**
- * Source 3D models (.glb / self-contained .gltf). Files are optimized for web delivery automatically on upload.
+ * Source 3D models, optimized for web delivery automatically on upload. One file only: a .glb, or a .gltf with nothing outside it. A .gltf that keeps its .bin and textures/ as separate files has to be packed first — run `pnpm optimize:model <file.gltf>` and upload the .glb it writes.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "models".
@@ -564,11 +577,11 @@ export interface FurniturePackage {
   price?: number | null;
   description?: string | null;
   /**
-   * Occupied floor rectangle (meters) — used for fit/collision checks.
+   * Occupied floor rectangle (meters) — used for fit and collision checks. Measured from the model on save; leave blank unless the model needs a smaller or larger one than its bounding box.
    */
-  footprint: {
-    width: number;
-    depth: number;
+  footprint?: {
+    width?: number | null;
+    depth?: number | null;
   };
   compatibleRoomTypes?:
     ('office' | 'classroom' | 'conference' | 'kitchen' | 'restroom' | 'lounge' | 'hallway' | 'other')[] | null;
@@ -824,6 +837,20 @@ export interface BuildingModelsSelect<T extends boolean = true> {
                     z?: T;
                   };
               id?: T;
+            };
+        roofModel?:
+          | T
+          | {
+              model?: T;
+              position?:
+                | T
+                | {
+                    x?: T;
+                    y?: T;
+                    z?: T;
+                  };
+              yawDeg?: T;
+              scale?: T;
             };
         hiddenNodePaths?: T;
       };

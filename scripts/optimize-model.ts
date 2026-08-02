@@ -1,24 +1,7 @@
-/**
- * Crunches a .glb before it is uploaded.
- *
- * This used to happen on the server, inside the upload request. That worked
- * only while models were small: the pipeline re-encodes every texture and
- * recompresses all the geometry, which on a large model is minutes of CPU and
- * hundreds of megabytes of memory — neither of which a serverless function
- * has. Uploads now go from the browser straight to the bucket and never reach
- * our code, so the crunching moved here, where it can take as long as it needs.
- *
- * Usage:
- *   pnpm optimize:model <input.glb> [output.glb]
- *
- * With no output path it writes <input>.optimized.glb and leaves the original
- * alone — overwriting the only copy of an asset because a flag was forgotten is
- * not a thing this should be able to do.
- */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { statSync, writeFileSync } from 'node:fs'
 import { basename, extname, resolve } from 'node:path'
 
-import { optimizeGlb } from '../src/modules/media/lib/optimize-model'
+import { optimizeModelFile } from '../src/modules/media/lib/optimize-model'
 
 function mb(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
@@ -28,7 +11,7 @@ async function main() {
   const [inputArg, outputArg] = process.argv.slice(2)
 
   if (!inputArg) {
-    console.error('Usage: pnpm optimize:model <input.glb> [output.glb]')
+    console.error('Usage: pnpm optimize:model <input.gltf|input.glb> [output.glb]')
     process.exit(1)
   }
 
@@ -37,18 +20,20 @@ async function main() {
     ? resolve(outputArg)
     : resolve(input.replace(new RegExp(`${extname(input)}$`), '.optimized.glb'))
 
-  const source = readFileSync(input)
-  console.log(`${basename(input)} — ${mb(source.byteLength)}`)
+  console.log(`${basename(input)} — ${mb(statSync(input).size)}`)
 
   const started = Date.now()
-  const { output: optimized, meta } = await optimizeGlb(source)
+  const { output: optimized, meta } = await optimizeModelFile(input)
   const seconds = ((Date.now() - started) / 1000).toFixed(1)
 
   writeFileSync(output, optimized)
 
+  // A .gltf's own size is only its JSON, so a percentage against it is meaningless.
+  const packed = extname(input).toLowerCase() === '.gltf'
   const saved = 1 - meta.sizeAfter / meta.sizeBefore
   console.log(
-    `${basename(output)} — ${mb(meta.sizeAfter)} (${(saved * 100).toFixed(0)}% smaller, ${seconds}s)`,
+    `${basename(output)} — ${mb(meta.sizeAfter)} ` +
+      `(${packed ? 'everything embedded' : `${(saved * 100).toFixed(0)}% smaller`}, ${seconds}s)`,
   )
   console.log(
     `  ${meta.triangles.toLocaleString()} triangles · ${meta.meshes} meshes · ` +

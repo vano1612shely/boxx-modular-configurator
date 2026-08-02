@@ -9,8 +9,7 @@ export const Quotes: CollectionConfig = {
     description: 'Quote requests submitted from the configurator.',
   },
   hooks: {
-    // `useAsTitle` cannot reach into a group, and titling every row by its
-    // numeric id makes the list and every relationship picker unreadable.
+    // `useAsTitle` cannot reach into a group.
     beforeChange: [
       ({ data }) => ({
         ...data,

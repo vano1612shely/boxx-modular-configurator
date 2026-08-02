@@ -33,12 +33,9 @@ type Props = {
   room: RoomZone
 }
 
-/** Fallback tone per surface when the admin has not assigned a texture. */
 const SURFACE_COLORS: Record<ShellSurface, string> = {
   wallOuter: '#d9d5cd',
   wallInner: '#f2f0ec',
-  // Every cut face in the room — wall tops, jambs, the lip of the floor slab.
-  // White on purpose: it is the outline that reads the section as a section.
   wallEdge: '#ffffff',
   floor: '#c9b79c',
   ceiling: '#f6f5f3',
@@ -46,25 +43,9 @@ const SURFACE_COLORS: Record<ShellSurface, string> = {
   window: '#9fb6c4',
 }
 
-/**
- * What reads as the edge of the cut rather than as a surface of the room.
- *
- * `wallEdge` is every sawn face — wall tops, jambs, the lip of the floor slab.
- * `wallOuter` joins it because in a focused room the outside of a wall is only
- * ever glimpsed edge-on at the ends of the section, where it belongs to the
- * white frame and not to the building's cladding.
- */
 const FRAME_SURFACES = new Set<ShellSurface>(['wallEdge', 'wallOuter'])
 
-/**
- * Roughly how long a wall takes to get out of the way (maath smoothTime).
- *
- * This is the knob to turn if the fade ever feels wrong: it is a critically
- * damped approach, so the tail is long relative to the number — 0.22 read as
- * "the wall is taking ages". Small enough that the wall is out of the way
- * before you look for what was behind it, big enough to read as movement
- * rather than a cut.
- */
+/** maath smoothTime, in seconds: critically damped, so the tail is long. */
 const FADE_TIME = 0.055
 
 type BuiltPart = {
@@ -76,31 +57,17 @@ type BuiltPart = {
 
 type GroupContent = { parts: BuiltPart[]; openings: OpeningPlacement[] }
 
-/** Where a group's opacity is heading this frame. */
 function targetOpacity(group: ShellGroup, visibility: RoomVisibility): number {
-  // The floor never steps aside: it is what the room stands on, and what
-  // furniture is placed against.
   if (group === 'floor') return 1
   if (group === 'ceiling') return visibility.ceilingHidden ? 0 : 1
   return visibility.hiddenSides.includes(group) ? 0 : 1
 }
 
-/**
- * The focused room, generated rather than carved.
- *
- * Every wall side is its own group, so "get the walls between the camera and
- * the room out of the way" is one opacity per group instead of a fragment
- * shader — and because each side is a closed solid with square-cut ends, taking
- * one away exposes a finished edge rather than the inside of a hollow shell.
- *
- * A side's doors and windows live INSIDE its group, so they leave with the wall
- * they are set into instead of hanging in the gap it left.
- */
 export function RoomShell({ room }: Props) {
   const textures = useSurfaceTextures(room.surfaces)
 
-  // A kind with a model gets no flat leaf: the glb brings its own frame and
-  // glazing, and both in the same 12 cm would fight for depth.
+  // A kind with a model gets no flat leaf: both in the same 12 cm would fight
+  // for depth.
   const modelledKinds = useMemo(
     () => new Set(OPENING_KINDS.filter((kind) => room.openingModels[kind]?.url)),
     [room.openingModels],
@@ -139,24 +106,17 @@ export function RoomShell({ room }: Props) {
     })
   }, [room.floorPolygon, room.shell, room.openings, room.surfaces, modelledKinds])
 
-  // Frees the GPU buffers when the room changes or the view closes. StrictMode
-  // double-invokes the factory above and keeps only the first result, but the
-  // discarded set is never rendered — so it never allocates anything to free.
   useEffect(() => {
     return () => {
       for (const part of parts) part.geometry.dispose()
     }
   }, [parts])
 
-  // Owned rather than declared as JSX, because fading needs to reach them from
-  // a frame loop and R3F would re-apply the props over anything set there.
+  // Owned rather than declared as JSX: the frame loop writes to these, and R3F
+  // would re-apply the props over anything set there.
   const materials = useMemo(() => {
     const map = new Map<string, Material>()
     for (const part of parts) {
-      // The frame of the cutaway is UNLIT white, all the way round. A lit white
-      // surface is only white where the light happens to be strong, which is
-      // how the top and bottom of the section came out crisp and the two sides
-      // — lit at a grazing angle — came out grey.
       map.set(
         part.key,
         FRAME_SURFACES.has(part.surface)
@@ -224,13 +184,11 @@ export function RoomShell({ room }: Props) {
 
       let state = fade.current.get(group)
       if (!state) {
-        // First frame of a room: land on the answer. Fading in from nothing
-        // would make every room open with its near walls swimming into place.
         state = { value: target, applied: Number.NaN }
         fade.current.set(group, state)
       } else {
-        // Snaps to the target once inside its own epsilon, so a settled group
-        // reaches exactly 0 or 1 and stops paying for transparency.
+        // damp snaps to the target inside its epsilon, so a settled group
+        // reaches exactly 0 or 1.
         damp(state, 'value', target, FADE_TIME, delta)
       }
 
@@ -247,26 +205,19 @@ export function RoomShell({ room }: Props) {
           <group
             ref={(node) => {
               nodes.current.set(key, node)
-              // A group that remounts (a model assigned, a wall regenerated)
-              // arrives with fresh, fully opaque materials. Forgetting what was
-              // last applied is what makes the next frame fade it back down
-              // instead of leaving a hidden wall standing.
+              // A remounted group arrives with fresh, fully opaque materials,
+              // so what was last applied has to be forgotten.
               const state = fade.current.get(key)
               if (state) state.applied = Number.NaN
             }}
           >
             <For each={content.parts} getKey={(part) => part.key}>
               {(part) => (
-                // No shadows anywhere in a room: a wall stepping aside would
-                // take its shadow with it, and the light would swing across
-                // the floor every time the camera passed a corner.
                 <mesh geometry={part.geometry} material={materials.get(part.key)} />
               )}
             </For>
             <For each={content.openings} getKey={(placement) => placement.opening.id}>
               {(placement) => (
-                // One boundary each: a door still streaming in must not blank
-                // the wall it belongs to, let alone the room.
                 <Suspense fallback={null}>
                   <OpeningModel
                     placement={placement}

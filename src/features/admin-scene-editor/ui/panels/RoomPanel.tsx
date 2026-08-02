@@ -8,9 +8,9 @@ import { Accordion } from '../controls/Accordion'
 import { SegmentedControl } from '../controls/SegmentedControl'
 import { MODE_HINTS, Toolbar } from '../controls/Toolbar'
 import { button, s } from '../editor-styles'
+import { FloorLevelCard } from './FloorLevelCard'
 import { RoomDaylightCard } from './room/RoomDaylightCard'
 import { RoomDimensionsCard } from './room/RoomDimensionsCard'
-import { RoomFloorLevelCard } from './room/RoomFloorLevelCard'
 import { RoomOpeningModelsSection } from './room/RoomOpeningModelsSection'
 import { RoomOpeningsSection } from './room/RoomOpeningsSection'
 import { RoomSurfacesSection } from './room/RoomSurfacesSection'
@@ -27,14 +27,6 @@ const MODEL_OPTIONS = [
   { value: 'hidden', label: 'Hidden' },
 ] as const
 
-/**
- * One room, and nothing else.
- *
- * No roof, no outliner, no building camera — this panel is the generated room
- * and the handful of numbers it is made from. The only way back out is the
- * button at the top, so a stray Esc or a misplaced click cannot lose your
- * place mid-edit.
- */
 export function RoomPanel({ vm }: PanelProps) {
   const roomIndex = vm.selectedRoomIndex
   const room = roomIndex === null ? undefined : vm.draft?.rooms?.[roomIndex]
@@ -121,7 +113,7 @@ export function RoomPanel({ vm }: PanelProps) {
       </div>
 
       <div style={{ padding: '10px 12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <RoomFloorLevelCard vm={vm} />
+        <FloorLevelCard vm={vm} hint="The height this room's floor sits at." />
         <RoomDaylightCard vm={vm} roomIndex={roomIndex} room={room} />
         <RoomDimensionsCard vm={vm} roomIndex={roomIndex} room={room} />
       </div>

@@ -64,7 +64,6 @@ describe('nodePathOf', () => {
     const virtualPathOf = (object: unknown) => (object === a ? '7@a' : null)
 
     expect(nodePathOf(root, b, virtualPathOf)).toBe('7@a')
-    // Without the callback the same object still resolves structurally.
     expect(nodePathOf(root, b)).toBe('0/0')
   })
 })

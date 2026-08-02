@@ -38,11 +38,7 @@ export function collidesWithAny(
   return others.some((other) => overlaps(candidate, other))
 }
 
-/**
- * Finds a free position for a new package inside the room polygon: the
- * preferred spot first, then a spiral of offsets around it. Returns null when
- * nothing fits.
- */
+/** Preferred spot, else a spiral of offsets around it; null when nothing fits. */
 export function findFreeSpot(
   preferred: { x: number; z: number },
   footprint: PackageFootprint,

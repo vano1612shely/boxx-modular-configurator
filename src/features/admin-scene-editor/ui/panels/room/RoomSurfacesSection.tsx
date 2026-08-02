@@ -79,7 +79,6 @@ function TextureSlot({
   )
 }
 
-/** The seven textured surfaces of the generated room. */
 export function RoomSurfacesSection({
   vm,
   roomIndex,

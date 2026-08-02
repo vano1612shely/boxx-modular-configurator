@@ -1,33 +1,24 @@
 export type PlaneBounds = { minX: number; minZ: number; maxX: number; maxZ: number }
 
-/**
- * Footprint of the floor-level plane gizmo.
- *
- * The plane has to be big enough to read as a plane and small enough not to
- * swallow the model. It follows whatever the admin is actually working on:
- * the room's own outline, the outline being traced, or — with nothing drawn
- * yet — the building itself.
- */
+export const DEFAULT_PLANE_BOUNDS: PlaneBounds = { minX: -6, minZ: -6, maxX: 6, maxZ: 6 }
+
+/** Metres; anything smaller is too small a target to drag. */
+const MIN_SPAN = 4
+
+function expand(min: number, max: number): [number, number] {
+  const short = MIN_SPAN - (max - min)
+  if (short <= 0) return [min, max]
+  return [min - short / 2, max + short / 2]
+}
+
 export function floorPlaneBounds(
-  points: ReadonlyArray<{ x: number; z: number }>,
-  pad: number,
-  fallback: PlaneBounds,
+  footprint: PlaneBounds | null,
+  fallback: PlaneBounds = DEFAULT_PLANE_BOUNDS,
 ): PlaneBounds {
-  if (points.length === 0) return fallback
+  if (!footprint) return fallback
 
-  let minX = Infinity
-  let minZ = Infinity
-  let maxX = -Infinity
-  let maxZ = -Infinity
+  const [minX, maxX] = expand(footprint.minX, footprint.maxX)
+  const [minZ, maxZ] = expand(footprint.minZ, footprint.maxZ)
 
-  for (const point of points) {
-    minX = Math.min(minX, point.x)
-    minZ = Math.min(minZ, point.z)
-    maxX = Math.max(maxX, point.x)
-    maxZ = Math.max(maxZ, point.z)
-  }
-
-  // A single point (the first click of a new outline) has no extent of its
-  // own, so the padding alone has to carry it.
-  return { minX: minX - pad, minZ: minZ - pad, maxX: maxX + pad, maxZ: maxZ + pad }
+  return { minX, minZ, maxX, maxZ }
 }

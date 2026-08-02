@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 
+import { uniqueId } from '@/shared/lib'
+
 import type { PlacedPackage } from './types'
 
 type ConfigurationState = {
@@ -26,7 +28,7 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
   dragValid: true,
 
   addPackage: (placement) => {
-    const instanceId = crypto.randomUUID()
+    const instanceId = uniqueId()
     set((state) => ({
       placed: [...state.placed, { ...placement, instanceId }],
       selectedInstanceId: instanceId,

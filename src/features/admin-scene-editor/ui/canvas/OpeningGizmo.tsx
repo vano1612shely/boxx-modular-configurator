@@ -19,15 +19,6 @@ type Props = {
   onStart: (grip: OpeningGrip, ray: Ray) => void
 }
 
-/**
- * The selected door or window, as something you can grab.
- *
- * Openings were four number fields and a "drag anywhere on the wall" gesture
- * that only ever slid them sideways — you could not see what was selected, and
- * resizing meant typing. This draws the hole where it actually is and puts a
- * handle on each edge: the middle slides it along the wall, the sides set the
- * width, the top and bottom set the head and the sill.
- */
 export function OpeningGizmo({ placement, register, onStart }: Props) {
   const { center, tangent, normal, opening } = placement
   const halfWidth = opening.width / 2
@@ -40,9 +31,7 @@ export function OpeningGizmo({ placement, register, onStart }: Props) {
     center.z + tangent.z * along,
   ]
 
-  // Local +Z along the wall's outward normal, so the flat grips lie in the
-  // wall rather than across it. Each grip is symmetric, so which way round the
-  // remaining axis points does not matter.
+  // Local +Z along the wall's outward normal, so flat grips lie in the wall.
   const yaw = Math.atan2(normal.x, normal.z)
   const facing: [number, number, number] = [0, yaw, 0]
 
@@ -75,7 +64,6 @@ export function OpeningGizmo({ placement, register, onStart }: Props) {
         </mesh>
       </HandlePoint>
 
-      {/* Width: the two jambs. */}
       <EdgeGrip
         position={at(-halfWidth, 0)}
         rotation={facing}
@@ -91,7 +79,6 @@ export function OpeningGizmo({ placement, register, onStart }: Props) {
         begin={(ray) => onStart('end', ray)}
       />
 
-      {/* Head and sill. */}
       <EdgeGrip
         position={at(0, halfHeight)}
         rotation={facing}
@@ -117,7 +104,6 @@ function EdgeGrip({
 }: {
   position: [number, number, number]
   rotation: [number, number, number]
-  /** A jamb grip stands on end; a head or sill grip lies flat. */
   upright?: boolean
   register: RegisterHandle
   begin: (ray: Ray) => void

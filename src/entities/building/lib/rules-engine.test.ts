@@ -13,7 +13,6 @@ const catalog = [
   { id: 6, unitCount: 18, restroomCount: 4 },
 ]
 
-/** No mandates, so the restroom rule can be tested on its own. */
 const open = { restroomsRequiredAt: null, secondRestroomSetAt: null, maxUnits: null }
 
 describe('resolveBuildingSize — size', () => {
@@ -23,7 +22,6 @@ describe('resolveBuildingSize — size', () => {
   })
 
   it('takes the nearest size that covers the request, not the next one up', () => {
-    // 17 offices: a 19 holds them and a 24 also would. The 19 wins.
     const sizes = [
       { id: 10, unitCount: 12, restroomCount: 2 },
       { id: 11, unitCount: 19, restroomCount: 2 },
@@ -59,7 +57,6 @@ describe('resolveBuildingSize — size', () => {
 })
 
 describe('resolveBuildingSize — restrooms', () => {
-  /** Same size, two restroom variants — the shape the reported bug lived in. */
   const variants = [
     { id: 20, unitCount: 19, restroomCount: 2 },
     { id: 21, unitCount: 19, restroomCount: 5 },
@@ -97,8 +94,6 @@ describe('resolveBuildingSize — restrooms', () => {
   })
 
   it('gives no restrooms to someone who asked for none', () => {
-    // The bug as reported: two models of the same size, one with a restroom
-    // and one without, and asking for none handed back the one with.
     const pair = [
       { id: 30, unitCount: 2, restroomCount: 1 },
       { id: 31, unitCount: 2, restroomCount: 0 },
@@ -129,7 +124,6 @@ describe('resolveBuildingSize — the line can insist', () => {
     const result = resolveBuildingSize({ requestedUnits: 4, restroomsRequested: 0 }, rules, catalog)
     expect(result).toEqual({ status: 'ok', modelId: 1, restroomSetsRequired: 0 })
 
-    // One unit further and the line makes restrooms mandatory.
     const mandated = resolveBuildingSize(
       { requestedUnits: 5, restroomsRequested: 0 },
       rules,

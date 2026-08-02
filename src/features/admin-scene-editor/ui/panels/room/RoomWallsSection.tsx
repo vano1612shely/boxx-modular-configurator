@@ -7,13 +7,6 @@ import { For } from '@/shared/ui/control-flow'
 import type { SceneEditorVm } from '../../../model/use-scene-editor-model'
 import { button, s, SIDE_COLORS } from '../../editor-styles'
 
-/**
- * Which outline edge belongs to which of the four walls.
- *
- * The colours live here rather than in a global legend: they only mean
- * anything next to the thing they colour, and the legend was still claiming
- * three colours that no longer existed.
- */
 export function RoomWallsSection({
   vm,
   roomIndex,

@@ -5,10 +5,6 @@ type Props = {
   requestedUnits: number
 }
 
-/**
- * Requests beyond the largest standard unit don't generate a configuration —
- * they are routed to an individual quote instead.
- */
 export function OverCapacityScreen({ lineName, requestedUnits }: Props) {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-secondary/40 p-4">

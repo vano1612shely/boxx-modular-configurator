@@ -106,7 +106,6 @@ describe('progressiveEdgeSnap', () => {
     ]
     const deep = progressiveEdgeSnap(0, -3.5, 10, footprint, slanted)
     expect(deep.snapped).toBe(true)
-    // edge angle = atan2(-(6), 2)? — assert alignment relative to edge direction instead:
     const edgeAngle = (Math.atan2(-(3 - -3), -1 - -3) * 180) / Math.PI
     const aligned = nearestEdgeAlignedRotation(10, edgeAngle)
     expect(deep.rotationYDeg).toBeCloseTo(((aligned % 360) + 360) % 360, 0)
@@ -143,7 +142,6 @@ describe('rectifyPolygon', () => {
       { x: 4, z: 0 },
       { x: 4, z: 3 },
       { x: 1.5, z: 3 },
-      // 1.5m x 3m ramp corner — far beyond the snap tolerance.
       { x: 0, z: 1.5 },
     ]
     const rectified = rectifyPolygon(diagonal)
@@ -175,7 +173,6 @@ describe('rectifyPolygon', () => {
 describe('outwardEdgeNormal', () => {
   it('points away from the interior on a simple square', () => {
     const sign = polygonWindingSign(square)
-    // Edge (-3,-3) -> (3,-3) is the -Z wall.
     const n = outwardEdgeNormal(square[0], square[1], sign)
     expect(n.x).toBeCloseTo(0, 9)
     expect(n.z).toBeCloseTo(-1, 9)
@@ -195,9 +192,7 @@ describe('outwardEdgeNormal', () => {
   })
 
   it('stays outward inside a deep notch, where a centroid test inverts', () => {
-    // U-shape: the area centroid sits at roughly (5, 3.7), which is on the
-    // WRONG side of the notch's right-hand wall. A "flip away from centroid"
-    // heuristic points that edge's normal into the wall.
+    // The area centroid of this U sits at ~(5, 3.7), outside the notch wall.
     const u = [
       { x: 0, z: 0 },
       { x: 10, z: 0 },
@@ -214,7 +209,6 @@ describe('outwardEdgeNormal', () => {
 
     const centroid = polygonCentroid(u)
     const mid = { x: 9, z: 5.5 }
-    // Proof the naive test would have flipped it.
     expect(n.x * (mid.x - centroid.x) + n.z * (mid.z - centroid.z)).toBeLessThan(0)
   })
 })
@@ -230,9 +224,7 @@ describe('offsetPolygonMitered', () => {
   })
 
   it('closes a reflex corner where the two offset walls actually meet', () => {
-    // The L's inner corner (3,3) is reflex. Its offset lands where the two
-    // offset faces cross — z = 3.2 and x = 3.2 — so the wall fills the notch
-    // instead of the runs overlapping or leaving a gap.
+    // The L's reflex corner (3,3): the two offset faces cross at (3.2, 3.2).
     const { points, clampedIndexes } = offsetPolygonMitered(lShape, 0.2)
     expect(points[3].x).toBeCloseTo(3.2, 9)
     expect(points[3].z).toBeCloseTo(3.2, 9)

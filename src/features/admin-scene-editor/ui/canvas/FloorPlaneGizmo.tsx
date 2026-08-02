@@ -18,13 +18,6 @@ type Props = {
   onStartDrag: (cx: number, cz: number) => void
 }
 
-/**
- * The room's floor level, as an object you can grab.
- *
- * It used to be a number in a field plus a one-shot "click something" mode,
- * which gave no feedback about what was being changed. A plane you can see and
- * drag answers "where does this room start?" without reading anything.
- */
 export function FloorPlaneGizmo({ y, bounds, planMode, register, onStartDrag }: Props) {
   const width = Math.max(bounds.maxX - bounds.minX, 0.5)
   const depth = Math.max(bounds.maxZ - bounds.minZ, 0.5)
@@ -41,7 +34,6 @@ export function FloorPlaneGizmo({ y, bounds, planMode, register, onStartDrag }: 
 
   return (
     <>
-      {/* raycast off: the full-size interaction plane underneath owns clicks. */}
       <mesh position={[cx, y, cz]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
         <planeGeometry args={[width, depth]} />
         <meshBasicMaterial
@@ -53,7 +45,6 @@ export function FloorPlaneGizmo({ y, bounds, planMode, register, onStartDrag }: 
         />
       </mesh>
 
-      {/* The grid is what makes this read as a plane rather than a tint. */}
       <Grid
         position={[cx, y + 0.002, cz]}
         args={[width, depth]}
@@ -67,13 +58,9 @@ export function FloorPlaneGizmo({ y, bounds, planMode, register, onStartDrag }: 
 
       <Line points={outline} color={COLOR} lineWidth={2} />
 
-      {/* Looking straight down, `rayAtVertical` has no horizontal component to
-          work with and the drag would silently do nothing — so hide the grab
-          rather than offer one that does not respond. */}
+      {/* Looking straight down, `rayAtVertical` has no horizontal component and the drag cannot resolve. */}
       <Show when={!planMode}>
-        {/* No ScreenScaled in here: HandlePoint already IS one, and nesting a
-            second applied the distance scale twice — at 40 m out the arrow came
-            out ~13x oversized and dwarfed the building. */}
+        {/* No ScreenScaled here: HandlePoint already is one, and nesting applies the scale twice. */}
         <HandlePoint
           position={[cx, y, cz]}
           hitRadius={0.22}

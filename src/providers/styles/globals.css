@@ -1,5 +1,14 @@
 @import 'tailwindcss';
 
+/* Both dimensions: a phone in landscape is 926px wide but only 428px tall, so
+   width alone reads it as a desktop. 34rem of height excludes it and still
+   includes tablets. */
+@custom-variant desktop {
+  @media (min-width: 48rem) and (min-height: 34rem) {
+    @slot;
+  }
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

@@ -2,11 +2,6 @@ import { sameBlockRef, type BlockRef, type SceneEditorVm } from '../model/use-sc
 
 import type { EditorMenuItem } from './EditorMenu'
 
-/**
- * Context-menu item builders shared by the 3D viewport and the sidebar lists,
- * so the same element offers the same actions no matter where it is clicked.
- */
-
 export function nodeMenuItems(
   vm: SceneEditorVm,
   path: string,
@@ -15,8 +10,6 @@ export function nodeMenuItems(
   const items: EditorMenuItem[] = []
   const node = vm.modelNodes.find((n) => n.path === path)
   const name = node?.name ?? 'object'
-  // Acting on a node that is part of the multi-selection applies to the whole
-  // selection — matching every other editor.
   const inSelection = vm.selectedNodePaths.includes(path)
   const paths =
     inSelection && vm.selectedNodePaths.length > 1 ? [...vm.selectedNodePaths] : [path]

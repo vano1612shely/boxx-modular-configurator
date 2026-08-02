@@ -10,21 +10,6 @@ import {
 
 import type { ZoneBox } from '@/entities/building'
 
-/**
- * Volume-based hiding for the building overview.
- *
- * The roof/ceiling toggle cannot be done by flipping `object.visible`: in real
- * assets the roof volume is a horizontal slab that slices THROUGH mesh nodes
- * — the same node carries the parapet coping above the cut and 3m of facade
- * trim below it — and node visibility is all-or-nothing. So the overview keeps
- * a fragment-level test, reduced to the one thing it still has to do: discard
- * fragments inside a list of boxes.
- *
- * Everything the old dollhouse needed on top of this (keep-boxes, the room
- * prism, mode switching, backface repainting, object-level hiding) is gone:
- * a focused room is now generated geometry, not a slice of the building.
- */
-
 export const MAX_HIDE_BOXES = 24
 
 type SharedUniforms = {
@@ -38,9 +23,7 @@ type SharedUniforms = {
 export const CAP_COLOR = '#e8e5df'
 
 export type OverviewClippingController = {
-  /** Hide the given volumes; pass an empty list to show everything. */
   setHideBoxes: (boxes: ZoneBox[]) => void
-  /** Patches one extra material with the same chunk. Idempotent per material. */
   patchMaterial: (material: Material) => void
   readonly materialCount: number
 }
@@ -54,15 +37,8 @@ const FRAGMENT_SNIPPET = /* glsl */ `
   }
 `
 
-/**
- * Patches every material under `root`. All patched materials share one
- * uniforms object, so an update is a single write regardless of material count.
- *
- * Idempotent per root: repeated calls return the SAME controller. This is
- * load-bearing — React StrictMode double-invokes useMemo factories, and a
- * second patch pass would rebind materials to fresh uniforms while the caller
- * still holds the first controller, silently disconnecting every update.
- */
+// Must stay idempotent per root: a second pass would rebind materials to fresh
+// uniforms while the caller still holds the first controller.
 export function applyOverviewClipping(root: Object3D): OverviewClippingController {
   const existing = root.userData[CONTROLLER_KEY] as OverviewClippingController | undefined
   if (existing) return existing
@@ -80,9 +56,8 @@ export function applyOverviewClipping(root: Object3D): OverviewClippingControlle
     if (!material || patched.has(material)) return
     patched.add(material)
 
-    // Building shells are hollow; where a box cuts one open the visible inside
-    // is painted flat so the opening reads as solid material, not a void.
-    // Transparent materials (glass) keep their look and stay single-sided.
+    // Shells are hollow: cut openings show backfaces, painted flat so they read
+    // as solid. Transparent materials (glass) stay single-sided.
     const capBackfaces = material.transparent !== true
     if (capBackfaces) material.side = DoubleSide
 
@@ -109,8 +84,7 @@ uniform vec3 uCapColor;`,
         .replace('void main() {', `void main() {\n${FRAGMENT_SNIPPET}`)
 
       if (capBackfaces) {
-        // Push painted backfaces a hair deeper so they can never z-fight their
-        // own nearly coplanar textured front layer.
+        // Depth bias keeps painted backfaces from z-fighting the coplanar front layer.
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <opaque_fragment>',
           `#include <opaque_fragment>

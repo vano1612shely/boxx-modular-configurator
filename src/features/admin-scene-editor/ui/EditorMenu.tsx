@@ -4,12 +4,6 @@ import { useEffect } from 'react'
 
 import { For, Show } from '@/shared/ui/control-flow'
 
-/**
- * One shared context-menu popup for the whole editor: the 3D viewport and
- * every sidebar list open the same dark fixed-position menu, so right-click
- * behaves identically everywhere.
- */
-
 export type EditorMenuItem = {
   label: string
   danger?: boolean
@@ -45,7 +39,6 @@ export function EditorMenuPopup({
         <div
           style={{
             position: 'fixed',
-            // Keep the menu on-screen when opened near the bottom/right edge.
             left: Math.min(m.x, typeof window === 'undefined' ? m.x : window.innerWidth - 260),
             top: Math.min(
               m.y,

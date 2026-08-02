@@ -2,6 +2,7 @@ import { NodeIO, getBounds, type Document } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, meshopt, prune, textureCompress, weld } from '@gltf-transform/functions'
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer'
+import { stat } from 'node:fs/promises'
 import sharp from 'sharp'
 
 export type ModelMeta = {
@@ -19,7 +20,7 @@ const MAX_TEXTURE_SIZE = 2048
 
 let io: NodeIO | null = null
 
-async function getIO(): Promise<NodeIO> {
+export async function getModelIO(): Promise<NodeIO> {
   if (io) return io
 
   await Promise.all([MeshoptEncoder.ready, MeshoptDecoder.ready])
@@ -58,14 +59,46 @@ function readBbox(document: Document): Pick<ModelMeta, 'bboxMin' | 'bboxMax'> {
   return { bboxMin: min as ModelMeta['bboxMin'], bboxMax: max as ModelMeta['bboxMax'] }
 }
 
-/**
- * Optimizes a self-contained glTF/GLB buffer for web delivery:
- * dedup + prune + weld, textures re-encoded to capped-size WebP,
- * geometry compressed with EXT_meshopt_compression.
- */
+/** Every external URI a glTF file expects to find beside itself. */
+export function externalReferences(gltfJson: string): string[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(gltfJson)
+  } catch {
+    return []
+  }
+
+  const doc = parsed as { buffers?: Array<{ uri?: string }>; images?: Array<{ uri?: string }> }
+  const uris = [...(doc.buffers ?? []), ...(doc.images ?? [])]
+    .map((resource) => resource.uri)
+    .filter((uri): uri is string => typeof uri === 'string' && !uri.startsWith('data:'))
+
+  return [...new Set(uris)]
+}
+
 export async function optimizeGlb(input: Buffer): Promise<{ output: Buffer; meta: ModelMeta }> {
-  const nodeIO = await getIO()
+  const nodeIO = await getModelIO()
   const document = await nodeIO.readBinary(new Uint8Array(input))
+
+  return run(document, input.byteLength)
+}
+
+/** Reads from disk so a glTF's relative .bin/texture paths resolve; emits one embedded GLB. */
+export async function optimizeModelFile(
+  path: string,
+): Promise<{ output: Buffer; meta: ModelMeta }> {
+  const nodeIO = await getModelIO()
+  const document = await nodeIO.read(path)
+  const { size } = await stat(path)
+
+  return run(document, size)
+}
+
+async function run(
+  document: Document,
+  sizeBefore: number,
+): Promise<{ output: Buffer; meta: ModelMeta }> {
+  const nodeIO = await getModelIO()
 
   await document.transform(
     dedup(),
@@ -85,7 +118,7 @@ export async function optimizeGlb(input: Buffer): Promise<{ output: Buffer; meta
   return {
     output,
     meta: {
-      sizeBefore: input.byteLength,
+      sizeBefore,
       sizeAfter: output.byteLength,
       triangles: countTriangles(document),
       meshes: root.listMeshes().length,

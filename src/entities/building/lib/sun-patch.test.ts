@@ -12,7 +12,6 @@ import {
 
 describe('sunRay', () => {
   it('travels into the room and downward', () => {
-    // Sun in the north (-Z): light travels towards +Z, and downward.
     const [x, y, z] = sunRay(0)
 
     expect(y).toBeLessThan(0)
@@ -64,7 +63,6 @@ describe('windowBeamCone', () => {
   it('puts the window inside the cone, with room for the soft edge', () => {
     const { halfU, halfV } = windowBeamCone(0.6, 0.7)
 
-    // Comfortably inside the mask, never spilling past its edge.
     expect(halfU).toBeGreaterThan(0)
     expect(halfU).toBeLessThan(0.5)
     expect(halfV).toBeLessThan(0.5)
@@ -76,8 +74,6 @@ describe('windowBeamCone', () => {
   })
 
   it('agrees with the cone it reports', () => {
-    // The mask fraction and the cone angle are only meaningful together: at the
-    // stated distance the window must span exactly `2 * halfU` of the cone.
     const halfWidth = 0.45
     const { angle, halfU } = windowBeamCone(halfWidth, 0.7)
     const span = SUN_DISTANCE * Math.tan(angle)
@@ -109,8 +105,6 @@ describe('compass bearings', () => {
   })
 
   it('lights only the walls turned towards the sun', () => {
-    // Sun in the south: the wall facing south catches it, the north one is in
-    // its own shade and the two flanks are edge-on.
     expect(facesSun({ x: 0, z: 1 }, 180)).toBe(true)
     expect(facesSun({ x: 0, z: -1 }, 180)).toBe(false)
     expect(facesSun({ x: 1, z: 0 }, 180)).toBe(false)

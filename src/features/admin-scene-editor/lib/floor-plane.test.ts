@@ -6,37 +6,23 @@ import { floorPlaneBounds } from './floor-plane'
 const FALLBACK = { minX: -6, minZ: -6, maxX: 6, maxZ: 6 }
 
 describe('floorPlaneBounds', () => {
-  it('falls back when there is nothing drawn yet', () => {
-    expect(floorPlaneBounds([], 0.6, FALLBACK)).toEqual(FALLBACK)
+  it('falls back until the model has been measured', () => {
+    expect(floorPlaneBounds(null, FALLBACK)).toEqual(FALLBACK)
   })
 
-  it('wraps an outline with the padding on every side', () => {
-    const bounds = floorPlaneBounds(
-      [
-        { x: 0, z: 0 },
-        { x: 4, z: 0 },
-        { x: 4, z: 3 },
-      ],
-      0.6,
-      FALLBACK,
-    )
+  it('covers the whole model footprint', () => {
+    const bounds = floorPlaneBounds({ minX: -18, minZ: -7, maxX: 22, maxZ: 31 }, FALLBACK)
 
-    expect(bounds).toEqual({ minX: -0.6, minZ: -0.6, maxX: 4.6, maxZ: 3.6 })
+    expect(bounds).toEqual({ minX: -18, minZ: -7, maxX: 22, maxZ: 31 })
   })
 
-  it('still gives the first point of a new outline something to stand on', () => {
-    // One click has no extent, so the plane would be zero-sized without pad.
-    const bounds = floorPlaneBounds([{ x: 2, z: -1 }], 1.5, FALLBACK)
+  it('grows a footprint too small to grab, around its own centre', () => {
+    const bounds = floorPlaneBounds({ minX: 9, minZ: 0, maxX: 11, maxZ: 40 }, FALLBACK)
 
-    expect(bounds.maxX - bounds.minX).toBeCloseTo(3, 9)
-    expect(bounds.maxZ - bounds.minZ).toBeCloseTo(3, 9)
-  })
-
-  it('ignores the fallback as soon as one point exists', () => {
-    const bounds = floorPlaneBounds([{ x: 50, z: 50 }], 1, FALLBACK)
-
-    expect(bounds.minX).toBe(49)
-    expect(bounds.maxX).toBe(51)
+    expect(bounds.maxX - bounds.minX).toBeCloseTo(4, 9)
+    expect((bounds.minX + bounds.maxX) / 2).toBeCloseTo(10, 9)
+    expect(bounds.minZ).toBe(0)
+    expect(bounds.maxZ).toBe(40)
   })
 })
 

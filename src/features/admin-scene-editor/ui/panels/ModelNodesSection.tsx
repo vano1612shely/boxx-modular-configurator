@@ -9,7 +9,6 @@ import { nodeRow, s } from '../editor-styles'
 import { nodeMenuItems } from '../menu-items'
 import type { PanelProps } from './shared'
 
-/** Outliner of the loaded glb, synced with clicks in the viewport. */
 export function ModelNodesSection({ vm, onOpenMenu }: PanelProps) {
   const [filter, setFilter] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
@@ -20,7 +19,6 @@ export function ModelNodesSection({ vm, onOpenMenu }: PanelProps) {
     return vm.modelNodes.filter((node) => node.name.toLowerCase().includes(query))
   }, [vm.modelNodes, filter])
 
-  // Clicking an object in the viewport selects it here — keep it in view.
   useEffect(() => {
     if (vm.selectedNodeId === null) return
     listRef.current

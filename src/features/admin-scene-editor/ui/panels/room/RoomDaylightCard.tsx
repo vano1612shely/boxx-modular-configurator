@@ -7,15 +7,6 @@ import { For } from '@/shared/ui/control-flow'
 import type { SceneEditorVm } from '../../../model/use-scene-editor-model'
 import { s } from '../../editor-styles'
 
-/**
- * Which side the sun is on.
- *
- * One direction for the whole room: windows on the chosen wall throw daylight
- * in, the rest do not. Letting each window light itself put beams across the
- * floor at odds with each other, which reads as several suns.
- *
- * Out here rather than under Walls, where it was correct and invisible.
- */
 export function RoomDaylightCard({
   vm,
   roomIndex,

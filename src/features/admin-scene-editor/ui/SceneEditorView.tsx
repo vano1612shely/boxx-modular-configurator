@@ -6,10 +6,6 @@ import { useSceneEditorModel } from '../model/use-scene-editor-model'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorSidebar } from './EditorSidebar'
 
-/**
- * Custom Payload document view: visual setup of a building model's scene —
- * camera, hidden meshes and the rooms the client can step into.
- */
 export function SceneEditorView() {
   const vm = useSceneEditorModel()
 

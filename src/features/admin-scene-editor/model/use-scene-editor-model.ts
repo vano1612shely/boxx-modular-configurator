@@ -16,6 +16,8 @@ import {
   type RoomOpening,
   type RoomVertex,
   type SunDirection,
+  type Extent,
+  type Vec3Tuple,
   type TexturedSurface,
   type WallSide,
 } from '@/entities/building'
@@ -28,22 +30,15 @@ import {
   type BlockRef,
   type EditorBox,
 } from '../lib/blocks'
+import type { PlaneBounds } from '../lib/floor-plane'
 import type { BuildingModel, Model } from '@/payload-types'
-
-/**
- * Zone-based editor state. The admin never types coordinates: rooms are drawn
- * point-by-point on the floor, wall/ceiling/roof volumes are dragged out as
- * boxes, cameras are captured from the current viewport.
- */
 
 export type EditorMode =
   | 'select'
   | 'draw-room'
   | 'block-roof'
-  /** Click a generated wall to drop a door or window on it. */
   | 'place-opening'
-  /** Click the model itself to take the room's floor level from it. */
-  | 'pick-floor-y'
+  | 'floor-level'
 
 export { defaultYRange, sameBlockRef }
 export type { BlockRef, EditorBox }
@@ -64,8 +59,7 @@ export type ModelNode = {
   kind: 'mesh' | 'group'
   depth: number
   hasChildren: boolean
-  /** Child-index path from the model root ("2/0/5") — the stable id used to
-   * attach this object to zone blocks. */
+  /** Child-index path from the model root ("2/0/5"). */
   path: string
   /** World-space AABB of the node's subtree (null when empty). */
   box: EditorBox | null
@@ -83,23 +77,13 @@ export function useSceneEditorModel() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [mode, setMode] = useState<EditorMode>('select')
   const [drawingPoints, setDrawingPoints] = useState<Array<{ x: number; z: number }>>([])
-  /**
-   * Height a NOT-yet-existing room is drawn at.
-   *
-   * y = 0 is the bottom of the glb, which on a modular building is the
-   * underside of the chassis — nowhere near a floor anybody walks on. Once a
-   * room exists this is superseded by its own `shell.floorY`.
-   */
+  // y = 0 is the underside of the glb chassis, not a floor anybody walks on.
   const [drawFloorY, setDrawFloorY] = useState(0)
   const [selectedRoomIndex, setSelectedRoomIndex] = useState<number | null>(null)
-  /** A room is open for editing — the sidebar and the canvas both scope to it. */
   const roomMode = selectedRoomIndex !== null
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null)
-  /** Kind placed by the next click in `place-opening` mode. */
   const [openingKind, setOpeningKind] = useState<OpeningKind>('door')
   const openingSeq = useRef(1)
-  // Multi-select: shift+click accumulates; the LAST ref is the primary one
-  // (it gets the gizmo handles and the numeric panel).
   const [selectedBlocks, setSelectedBlocks] = useState<BlockRef[]>([])
   const selectedBlock = selectedBlocks.length
     ? selectedBlocks[selectedBlocks.length - 1]
@@ -108,22 +92,19 @@ export function useSceneEditorModel() {
     setSelectedBlocks(ref ? [ref] : [])
   }, [])
   const [modelNodes, setModelNodes] = useState<ModelNode[]>([])
-  // Model-object selection mirrors block selection: shift+click accumulates,
-  // the LAST path is the primary one (highlight overlay + selection panel).
   const [selectedNodePaths, setSelectedNodePaths] = useState<string[]>([])
-  /** Overview: is the roof taken away so you can see the plan? */
   const [roofHidden, setRoofHidden] = useState(true)
-  /** Room mode: is the real glb still faintly there behind the generated room? */
   const [ghostModel, setGhostModel] = useState(true)
   const [planMode, setPlanMode] = useState(false)
-  const [modelHeight, setModelHeight] = useState(3.2)
+  const [modelBox, setModelBox] = useState<{ height: number; footprint: PlaneBounds } | null>(null)
+  const modelHeight = modelBox?.height ?? 3.2
+  const modelFootprint = modelBox?.footprint ?? null
   const [dirty, setDirty] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   const cameraGetterRef = useRef<(() => CameraSnapshot | null) | null>(null)
 
-  // Coarse undo checkpoints: at most one snapshot per 300ms, so a drag
-  // becomes a single undo step instead of hundreds.
+  // At most one undo snapshot per 300ms, so a drag is a single undo step.
   const draftRef = useRef<Draft | null>(null)
   const historyRef = useRef<Draft[]>([])
   const lastCheckpointAt = useRef(0)
@@ -184,8 +165,6 @@ export function useSceneEditorModel() {
 
   const snapshotCamera = (): CameraSnapshot | null => cameraGetterRef.current?.() ?? null
 
-  // ---- rooms (polygon) ----
-
   const finishRoomDrawing = () => {
     if (drawingPoints.length < 3) return
 
@@ -201,8 +180,6 @@ export function useSceneEditorModel() {
           key: `room-${nextIndex + 1}`,
           name: `Room ${nextIndex + 1}`,
           roomType: 'office',
-          // Rectified on close: hand-drawn outlines wobble 5-15cm off-axis,
-          // which would make every edge look diagonal to the wall assignment.
           floorPolygon: rectifyPolygon(drawingPoints.map((p) => ({ x: p.x, z: p.z }))).map(
             (p, i, all) => ({ ...p, side: autoAssignSides(all)[i] }),
           ),
@@ -227,16 +204,8 @@ export function useSceneEditorModel() {
     setSelectedRoomIndex(nextIndex)
   }
 
-  // ---- generated room shell ----
-
-  /**
-   * Rewrites a room's outline, keeping everything anchored to it in step.
-   *
-   * Openings are addressed by arc length along their wall, so ANY outline edit
-   * moves them unless they are re-anchored by world position — drag one corner
-   * and every door on the room would slide. The outward wall axes are
-   * recomputed for the same reason: they decide what the dollhouse hides.
-   */
+  // Openings are addressed by arc length, so any outline edit must re-anchor
+  // them by world position; the outward wall axes are recomputed for the same reason.
   const withPolygon = (room: DraftRoom, vertices: RoomVertex[]): DraftRoom => {
     const previous = roomVertices(room)
     const openings = roomOpenings(room.openings)
@@ -265,8 +234,7 @@ export function useSceneEditorModel() {
 
   const addOpening = (roomIndex: number, kind: OpeningKind, side: WallSide, along: number) => {
     const opening: RoomOpening = {
-      // Author-generated: Payload regenerates array row ids on every save, so
-      // they cannot be the identity that selection and undo hang off.
+      // Payload regenerates array row ids on every save, so they cannot be the identity.
       id: `${kind}-${Math.round(along * 1000)}-${openingSeq.current++}`,
       side,
       kind,
@@ -277,19 +245,9 @@ export function useSceneEditorModel() {
     }
     patchOpenings(roomIndex, (openings) => [...openings, opening])
     setSelectedOpeningId(opening.id)
-    // One click, one opening. The tool used to stay armed, so every further
-    // click — including the ones you make just looking around — dropped another
-    // door on the wall, and they stack invisibly on top of each other.
     setMode('select')
     return opening
   }
-
-  // ---- roof volumes ----
-  //
-  // One list, one meaning: these are the volumes the client's Ceiling toggle
-  // takes away. Rooms used to carry their own ceiling volumes as well, which
-  // was two concepts doing one job — and the per-room half only ever made
-  // sense in the overview, where no room is focused anyway.
 
   const roofBlocks = (d: Draft): EditorBox[] => (d.sceneConfig?.roofBlocks ?? []) as EditorBox[]
 
@@ -324,7 +282,37 @@ export function useSceneEditorModel() {
     setSelectedBlock(null)
   }
 
-  // ---- hidden model objects (persisted; applied in editor AND client) ----
+  type RoofModelPatch = {
+    model?: { id: number; url?: string | null } | null
+    position?: { x: number; y: number; z: number }
+    yawDeg?: number
+    scale?: number
+  }
+
+  const roofModel = draft?.sceneConfig?.roofModel ?? null
+  const roofModelUrl = modelUrlOf(roofModel?.model)
+  const [roofModelBounds, setRoofModelBounds] = useState<Extent | null>(null)
+
+  const patchRoofModel = (patch: RoofModelPatch) =>
+    patchDraft((d) => ({
+      ...d,
+      sceneConfig: {
+        ...d.sceneConfig,
+        // Holds the POPULATED relationship (the viewport renders the draft);
+        // Payload strips it back to an id on write.
+        roofModel: { ...(d.sceneConfig?.roofModel ?? {}), ...patch },
+      } as Draft['sceneConfig'],
+    }))
+
+  const roofPlacement = {
+    position: {
+      x: roofModel?.position?.x ?? 0,
+      y: roofModel?.position?.y ?? 0,
+      z: roofModel?.position?.z ?? 0,
+    },
+    yawDeg: roofModel?.yawDeg ?? 0,
+    scale: roofModel?.scale && roofModel.scale > 0 ? roofModel.scale : 1,
+  }
 
   const hiddenNodePaths = zoneNodePaths(draft?.sceneConfig?.hiddenNodePaths)
 
@@ -336,8 +324,6 @@ export function useSceneEditorModel() {
       return { ...d, sceneConfig: { ...d.sceneConfig, hiddenNodePaths: next } }
     })
   }
-
-  // ---- model outliner: zones created from actual glb nodes ----
 
   const primaryNodePath = selectedNodePaths.length
     ? selectedNodePaths[selectedNodePaths.length - 1]
@@ -360,10 +346,6 @@ export function useSceneEditorModel() {
       max: { x: box.max.x + NODE_PAD, y: box.max.y + NODE_PAD, z: box.max.z + NODE_PAD },
     })
 
-  /**
-   * A roof volume traced from real model objects: the union of their AABBs,
-   * padded a little. Beats dragging a rectangle and guessing the height.
-   */
   const addBlockFromNodes = (pathsOverride?: string[]) => {
     const paths = pathsOverride ?? selectedNodePaths
     const boxes = paths
@@ -384,12 +366,9 @@ export function useSceneEditorModel() {
       },
     }))
     patchDraft((d) => writeBlocks(d, [...roofBlocks(d), paddedNodeBox(union)]))
-    // Land the admin where the result is.
     setSelectedBlock({ index: roofBlocks(draft!).length })
   }
 
-  /** A room built from a floor node: its AABB footprint becomes the polygon,
-   * the box itself becomes the floor volume (its top = the walking level). */
   const addRoomFromNode = (pathOverride?: string) => {
     // typeof guard: DOM onClick handlers pass the event object as the arg.
     const path = typeof pathOverride === 'string' ? pathOverride : selectedNode?.path
@@ -415,8 +394,6 @@ export function useSceneEditorModel() {
           name: `Room ${nextIndex + 1}`,
           roomType: 'office' as const,
           floorPolygon: polygon.map((p, i) => ({ ...p, side: autoAssignSides(polygon)[i] })),
-          // The node's top face IS the walkable floor, so the generated slab
-          // lands exactly on the geometry the room was traced from.
           shell: {
             floorY: box.max.y,
             wallHeight: SHELL_DEFAULTS.wallHeight,
@@ -438,20 +415,16 @@ export function useSceneEditorModel() {
     setMode('select')
   }
 
-  // ---- clicks from the canvas ----
-
   const handleFloorClick = (x: number, z: number) => {
     if (mode === 'draw-room') {
-      // Close the loop when clicking near the first point.
-      const first = drawingPoints[0]
-      if (first && drawingPoints.length >= 3 && Math.hypot(x - first.x, z - first.z) < 0.4) {
-        finishRoomDrawing()
-        return
-      }
-      setDrawingPoints((points) => [...points, { x, z }])
+      setDrawingPoints((points) => {
+        // Skip a repeated corner: a zero-length wall has no outward normal, so no side.
+        const last = points[points.length - 1]
+        if (last && last.x === x && last.z === z) return points
+        return [...points, { x, z }]
+      })
       return
     }
-
   }
 
   const save = async () => {
@@ -470,21 +443,12 @@ export function useSceneEditorModel() {
     setSaveState(response.ok ? 'saved' : 'error')
   }
 
-  // A selected room authors at its own level; a room not drawn yet uses the
-  // level last picked off the model.
   const selectedShell = (
     selectedRoomIndex === null ? null : draft?.rooms?.[selectedRoomIndex]?.shell
   ) as { floorY?: number | null } | null | undefined
   const floorPlaneY =
     typeof selectedShell?.floorY === 'number' ? selectedShell.floorY : drawFloorY
 
-  /**
-   * The one way the floor level changes — drag handle, nudge button, numeric
-   * field and surface pick all land here.
-   *
-   * It also remembers the level for the NEXT room you draw, so tracing a
-   * second room on the same storey needs no setup at all.
-   */
   const setFloorLevel = (y: number) => {
     const level = Math.round(y * 1000) / 1000
     if (selectedRoomIndex !== null) {
@@ -516,10 +480,9 @@ export function useSceneEditorModel() {
     ghostModel,
     planMode,
     modelHeight,
+    modelFootprint,
     dirty,
     saveState,
-    // The canvas registers a live camera-snapshot getter here (a plain
-    // callback, not an exposed ref — vm consumers never mutate vm).
     onRegisterCameraGetter: (getter: (() => CameraSnapshot | null) | null) => {
       cameraGetterRef.current = getter
     },
@@ -528,17 +491,16 @@ export function useSceneEditorModel() {
       setMode(next)
       setDrawingPoints([])
       if (next !== 'select') setSelectedBlock(null)
-      // Room outlines are drawn on the 2D plan — points land exactly under
-      // the cursor there, so switch to it automatically.
       if (next === 'draw-room') setPlanMode(true)
-      // Nothing to click if the model is hidden: R3F skips invisible objects,
-      // so arming the pick has to bring the ghost back.
-      if (next === 'pick-floor-y') setGhostModel(true)
+      if (next === 'floor-level') {
+        // Seen from straight above, the drag ray is parallel to the plane it moves.
+        setPlanMode(false)
+        // R3F raycasts skip invisible objects, so the ghost must be back to snap to.
+        setGhostModel(true)
+      }
     },
     onSetPlanMode: setPlanMode,
     onUndo: undo,
-    // Esc peels the selection off in steps: tool → block → objects → room,
-    // so "show all rooms again" is always a few presses away.
     onEscape: () => {
       setDrawingPoints([])
       if (mode !== 'select') {
@@ -550,14 +512,11 @@ export function useSceneEditorModel() {
         return
       }
       setSelectedNodePaths([])
-      // Deliberately does NOT leave room mode: the way out is the Back button,
-      // so a stray Esc cannot dump you back to the building mid-edit.
     },
-    onModelHeight: setModelHeight,
+    onModelBounds: setModelBox,
     onEnterRoom: (index: number) => {
       setSelectedRoomIndex(index)
       setSelectedBlock(null)
-      // Model objects belong to the building, not to a room.
       setSelectedNodePaths([])
       setMode('select')
     },
@@ -598,6 +557,36 @@ export function useSceneEditorModel() {
     onAddBlock: addBlock,
     onUpdateBlock: updateBlock,
     onRemoveBlock: removeBlock,
+
+    roofModelUrl,
+    roofPlacement,
+    roofModelBounds,
+    onRoofModelBounds: setRoofModelBounds,
+    /** Takes the populated relationship, not a bare id — the viewport previews the DRAFT. */
+    onSetRoofModel: (model: { id: number; url?: string | null } | null) => {
+      patchRoofModel({ model })
+      if (model) setRoofHidden(false)
+      setRoofModelBounds(null)
+    },
+    onMoveRoofModel: (x: number, y: number, z: number) =>
+      patchRoofModel({
+        position: {
+          x: Math.round(x * 1000) / 1000,
+          y: Math.round(y * 1000) / 1000,
+          z: Math.round(z * 1000) / 1000,
+        },
+      }),
+    onSetRoofYaw: (yawDeg: number) => patchRoofModel({ yawDeg }),
+    onSetRoofScale: (scale: number) => patchRoofModel({ scale: scale > 0 ? scale : 1 }),
+    onFitRoofModel: (placement: { position: Vec3Tuple; scale: number }) =>
+      patchRoofModel({
+        position: {
+          x: Math.round(placement.position[0] * 1000) / 1000,
+          y: Math.round(placement.position[1] * 1000) / 1000,
+          z: Math.round(placement.position[2] * 1000) / 1000,
+        },
+        scale: Math.round(placement.scale * 10000) / 10000,
+      }),
     onUpdateRoomPoint: (roomIndex: number, pointIndex: number, x: number, z: number) =>
       patchPolygon(roomIndex, (vertices) =>
         vertices.map((v, i) => (i === pointIndex ? { ...v, x, z } : v)),
@@ -605,8 +594,6 @@ export function useSceneEditorModel() {
     onInsertRoomPoint: (roomIndex: number, edgeIndex: number, x: number, z: number) =>
       patchPolygon(roomIndex, (vertices) => {
         const next = [...vertices]
-        // The new point inherits the wall of the edge it splits — otherwise
-        // splitting a wall in two would hand half of it to another wall.
         next.splice(edgeIndex + 1, 0, { x, z, side: vertices[edgeIndex]?.side ?? 'w1' })
         return next
       }),
@@ -615,7 +602,6 @@ export function useSceneEditorModel() {
         vertices.length > 3 ? vertices.filter((_, i) => i !== pointIndex) : vertices,
       ),
 
-    // ---- generated shell ----
     selectedOpeningId,
     openingKind,
     onSelectOpening: setSelectedOpeningId,
@@ -625,22 +611,10 @@ export function useSceneEditorModel() {
         ...room,
         shell: { ...(room.shell ?? {}), ...patch },
       })),
-    /**
-     * The height room authoring happens at.
-     *
-     * The outline, its handles and the click plane all live here rather than
-     * at y = 0: the glb's own zero is the underside of the building, so a
-     * polygon drawn there floats a metre below the floor it describes.
-     */
     floorPlaneY,
-    /** Takes the floor level from wherever on the model the admin clicked. */
     onSetFloorLevel: setFloorLevel,
     onNudgeFloorLevel: (delta: number) => setFloorLevel(floorPlaneY + delta),
-    /** One-shot: take the level off whatever model surface gets clicked. */
-    onPickFloorY: (y: number) => {
-      setFloorLevel(y)
-      setMode('select')
-    },
+    onSnapFloorLevel: setFloorLevel,
     onAutoAssignSides: (roomIndex: number) =>
       patchPolygon(roomIndex, (vertices) => {
         const sides = autoAssignSides(vertices)
@@ -659,23 +633,11 @@ export function useSceneEditorModel() {
       patchOpenings(roomIndex, (openings) => openings.filter((opening) => opening.id !== id))
       setSelectedOpeningId((current) => (current === id ? null : current))
     },
-    /**
-     * The 3D door or window this room uses, and how it sits in the wall.
-     *
-     * Per kind rather than per opening: it describes the source file — which
-     * way it was authored, how deep it seats — and every door in a room is the
-     * same door. Individual swings are `yawDeg`/`mirror` on the opening.
-     */
     onSetOpeningModel: (
       roomIndex: number,
       kind: OpeningKind,
       patch: {
-        /**
-         * The populated relationship, not a bare id — the viewport previews
-         * the DRAFT, and an id alone carries no URL to load a glb from, so
-         * picking a door would show nothing until the next save and reload.
-         * Payload takes the id off a populated object on write.
-         */
+        /** Populated, not a bare id — the viewport previews the DRAFT. */
         model?: { id: number; url?: string | null } | null
         fit?: OpeningFit
         yawDeg?: number
@@ -693,7 +655,6 @@ export function useSceneEditorModel() {
       roomIndex: number,
       surface: TexturedSurface,
       patch: {
-        /** Populated, not a bare id — see `onSetOpeningModel` for why. */
         texture?: { id: number; url?: string | null } | null
         tileWidth?: number
         tileHeight?: number

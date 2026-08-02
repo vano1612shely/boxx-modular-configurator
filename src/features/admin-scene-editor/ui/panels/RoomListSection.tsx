@@ -7,13 +7,6 @@ import { For } from '@/shared/ui/control-flow'
 import { button, s } from '../editor-styles'
 import type { PanelProps } from './shared'
 
-/**
- * The rooms of this building, each a door into room mode.
- *
- * A card is a summary plus one obvious way in — the old version made the whole
- * card a click target for "select", which then quietly changed what half the
- * toolbar did.
- */
 export function RoomListSection({ vm, onOpenMenu }: PanelProps) {
   const rooms = vm.draft?.rooms ?? []
 

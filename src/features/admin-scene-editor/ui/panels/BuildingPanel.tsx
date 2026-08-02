@@ -7,7 +7,9 @@ import { MODE_HINTS, Toolbar } from '../controls/Toolbar'
 import { SegmentedControl } from '../controls/SegmentedControl'
 import { button, s } from '../editor-styles'
 import { CameraSection } from './CameraSection'
+import { FloorLevelCard } from './FloorLevelCard'
 import { ModelNodesSection } from './ModelNodesSection'
+import { RoofModelSection } from './RoofModelSection'
 import { RoofVolumesSection } from './RoofVolumesSection'
 import { RoomListSection } from './RoomListSection'
 import { SelectionPanel } from './SelectionPanel'
@@ -23,7 +25,6 @@ const ROOF_OPTIONS = [
   { value: 'hidden', label: 'Hidden', title: 'What the visitor sees with the roof toggled off' },
 ] as const
 
-/** Everything that belongs to the building as a whole. */
 export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
   const rooms = vm.draft?.rooms ?? []
   const volumes = vm.draft?.sceneConfig?.roofBlocks ?? []
@@ -50,6 +51,12 @@ export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
               active: vm.mode === 'block-roof',
               onSelect: () => vm.onSetMode('block-roof'),
             },
+            {
+              label: '⇕ Floor level',
+              title: 'The height the next room you draw starts at',
+              active: vm.mode === 'floor-level',
+              onSelect: () => vm.onSetMode('floor-level'),
+            },
           ]}
         />
 
@@ -67,6 +74,13 @@ export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
             onChange={(value) => vm.onSetRoofHidden(value === 'hidden')}
           />
         </div>
+
+        <Show when={vm.mode === 'floor-level'}>
+          <FloorLevelCard
+            vm={vm}
+            hint="Sets the height rooms you draw next will start at. Rooms already drawn keep their own."
+          />
+        </Show>
 
         <Show when={vm.mode === 'draw-room' && vm.drawingPoints.length > 0}>
           <div style={s.row}>
@@ -88,12 +102,14 @@ export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
         <RoomListSection vm={vm} onOpenMenu={onOpenMenu} />
       </Accordion>
 
-      <Accordion title="Roof volumes" badge={volumes.length}>
+      <Accordion title="Roof — from the model" badge={volumes.length}>
         <RoofVolumesSection vm={vm} onOpenMenu={onOpenMenu} />
       </Accordion>
 
-      {/* Closed by default: a 187-row outliner is a power tool, not the first
-          thing you should have to scroll past. */}
+      <Accordion title="Roof — separate model" badge={vm.roofModelUrl ? 1 : 0}>
+        <RoofModelSection vm={vm} />
+      </Accordion>
+
       <Accordion title="Model objects" badge={vm.modelNodes.length}>
         <ModelNodesSection vm={vm} onOpenMenu={onOpenMenu} />
       </Accordion>

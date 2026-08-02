@@ -13,15 +13,12 @@ import {
 } from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
-/** Scaffolding for looking at a single asset in its own little canvas. */
+// drei caches parsed glbs by URL and shares the scene, which the viewers mutate.
+// The fragment forces a separate parse without a second request.
+export function previewUrl(url: string): string {
+  return `${url}#preview`
+}
 
-/**
- * Neutral studio light.
- *
- * The environment map is the important part, and for the same reason it is
- * everywhere else in this project: a `metalness: 1` material has no colour of
- * its own, so with nothing to reflect it previews as a black silhouette.
- */
 export function ModelStage() {
   const gl = useThree((state) => state.gl)
 
@@ -46,14 +43,7 @@ export function ModelStage() {
   )
 }
 
-/**
- * Frames the camera on an object ONCE, and then leaves it alone.
- *
- * This replaces drei's `<Bounds observe>`, which re-fits whenever it notices a
- * change — including the change your own scroll wheel just made. The result was
- * a preview that zoomed in and snapped straight back out on every notch, and a
- * crash from inside its frame loop once the object it was watching went away.
- */
+// Replaces drei's <Bounds observe>, which re-fits on any change including zoom.
 export function FitOnce({ object }: { object: Object3D }) {
   const camera = useThree((state) => state.camera)
   const controls = useThree((state) => state.controls) as CameraControlsImpl | null
@@ -72,7 +62,6 @@ export function FitOnce({ object }: { object: Object3D }) {
       return
     }
 
-    // No controls — the hover preview. Place the camera by hand.
     const centre = box.getCenter(new Vector3())
     const radius = Math.max(box.getSize(new Vector3()).length() / 2, 0.001)
     const fov = MathUtils.degToRad((camera as PerspectiveCamera).fov ?? 45)

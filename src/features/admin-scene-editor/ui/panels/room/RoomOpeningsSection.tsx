@@ -13,7 +13,6 @@ import type { SceneEditorVm } from '../../../model/use-scene-editor-model'
 import { NumberInput } from '../../controls/NumberInput'
 import { button, s, SIDE_COLORS, tone } from '../../editor-styles'
 
-/** Kinds this room fills with a real model rather than a flat leaf. */
 function modelledKinds(room: RoomDoc): Set<OpeningKind> {
   return new Set(OPENING_KINDS.filter((kind) => Boolean(room.openingModels?.[kind]?.model)))
 }
@@ -37,13 +36,6 @@ function Field({
   )
 }
 
-/**
- * The selected opening, in numbers.
- *
- * These used to be five 42px boxes crammed into the list row, which clipped
- * every value they held — you could see "2,2" and had no idea whether that was
- * 2.2 or 2.28. One row per opening, and the numbers live here where they fit.
- */
 function OpeningDetail({
   vm,
   roomIndex,
@@ -87,9 +79,6 @@ function OpeningDetail({
         />
       </div>
 
-      {/* Which way THIS one faces. Only offered once a model stands in the
-          hole — a flat leaf looks the same from either side, so turning it
-          would be a control with no effect. */}
       <Show when={modelled}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
           <label style={{ ...s.field, flex: 1 }}>
@@ -128,7 +117,6 @@ function OpeningDetail({
   )
 }
 
-/** Doors and windows on the generated walls. */
 export function RoomOpeningsSection({
   vm,
   roomIndex,

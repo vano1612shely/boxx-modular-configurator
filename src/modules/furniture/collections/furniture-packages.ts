@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
 import { ROOM_TYPE_OPTIONS } from '../../shared/room-types'
+import { measureFootprint } from '../hooks/measure-footprint'
 
 export const FurniturePackages: CollectionConfig = {
   slug: 'furniture-packages',
@@ -13,6 +14,9 @@ export const FurniturePackages: CollectionConfig = {
   },
   access: {
     read: () => true,
+  },
+  hooks: {
+    beforeChange: [measureFootprint],
   },
   fields: [
     { name: 'title', type: 'text', required: true },
@@ -50,8 +54,6 @@ export const FurniturePackages: CollectionConfig = {
       required: true,
     },
     {
-      // A package is a piece of furniture somebody will place in a room — the
-      // title alone does not tell you which piece.
       name: 'preview',
       type: 'ui',
       admin: {
@@ -70,13 +72,18 @@ export const FurniturePackages: CollectionConfig = {
     {
       name: 'footprint',
       type: 'group',
-      admin: { description: 'Occupied floor rectangle (meters) — used for fit/collision checks.' },
+      admin: {
+        description:
+          'Occupied floor rectangle (meters) — used for fit and collision checks. Measured from ' +
+          'the model on save; leave blank unless the model needs a smaller or larger one than ' +
+          'its bounding box.',
+      },
       fields: [
         {
           type: 'row',
           fields: [
-            { name: 'width', type: 'number', required: true },
-            { name: 'depth', type: 'number', required: true },
+            { name: 'width', type: 'number' },
+            { name: 'depth', type: 'number' },
           ],
         },
       ],

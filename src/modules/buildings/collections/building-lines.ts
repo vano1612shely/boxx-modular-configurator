@@ -2,7 +2,6 @@ import type { CollectionConfig } from 'payload'
 
 export const BuildingLines: CollectionConfig = {
   slug: 'building-lines',
-  // 'Building Lines' and 'Building Models' read almost identically in the nav.
   labels: { singular: 'Product Line', plural: 'Product Lines' },
   admin: {
     group: 'Catalog',

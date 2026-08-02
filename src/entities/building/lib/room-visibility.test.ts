@@ -21,7 +21,6 @@ function shellFor(polygon: RoomVertex[]): RoomShellConfig {
   }
 }
 
-/** 6 x 4 room centred on the origin. */
 const RECT = room([
   [-3, -2],
   [3, -2],
@@ -29,7 +28,6 @@ const RECT = room([
   [-3, 2],
 ])
 
-/** Side facing -Z / +X / +Z / -X, whatever auto-assign called them. */
 const sideFacing = (polygon: RoomVertex[], x: number, z: number): WallSide => {
   const axes = computeSideAxes(polygon)
   return (Object.keys(axes) as WallSide[]).find(
@@ -76,9 +74,6 @@ describe('resolveRoomVisibility', () => {
   })
 
   it('drops a wall the moment the camera clears its plane, not its floor', () => {
-    // The headline rule. This camera is almost exactly edge-on to the south
-    // wall — it covers none of the floor and is barely turned towards the
-    // viewer — but the camera IS behind it, so its outside is in view.
     const south = sideFacing(RECT, 0, 1)
     // South wall inner face at z = 2, outer face a thickness beyond it.
     const outer = 2 + shell.wallThickness
@@ -91,8 +86,6 @@ describe('resolveRoomVisibility', () => {
   })
 
   it('does not flip a wall back and forth while the camera sits on its plane', () => {
-    // Parked exactly on the plane: whichever state it was in must survive, or
-    // the wall strobes through every camera animation.
     const south = sideFacing(RECT, 0, 1)
     const onPlane = { x: 0, y: 1.5, z: 2 + shell.wallThickness }
 
@@ -101,9 +94,6 @@ describe('resolveRoomVisibility', () => {
   })
 
   it('hides a recessed wall from the side it actually faces', () => {
-    // The classic failure of a geometry-derived facing test: this "north" wall
-    // is mostly a 3m recess whose back face points +Z, so a length-weighted
-    // mean normal would hide it when the camera is SOUTH — backwards.
     const notched = room(
       [
         [0, 0],
@@ -143,9 +133,6 @@ describe('resolveRoomVisibility — the ceiling only blocks from above', () => {
   const shell = shellFor(RECT)
 
   it('lifts the ceiling in top view, where the camera is over the footprint', () => {
-    // Straight down the middle: inside the outline in XZ, but far above the
-    // room. Judging "inside" by footprint alone left the lid on and the top
-    // view showed nothing but ceiling.
     const top = resolveRoomVisibility(RECT, shell, { x: 0, y: 12, z: 0.5 })
 
     expect(top.ceilingHidden).toBe(true)
@@ -158,8 +145,6 @@ describe('resolveRoomVisibility — the ceiling only blocks from above', () => {
   })
 
   it('lifts it as soon as the camera clears the top of the slab', () => {
-    // Same rule as the walls: the outside of the ceiling is the top of it, so
-    // the line is the wall height PLUS the slab, not the wall height.
     const outer = shell.floorY + shell.wallHeight + shell.ceilingThickness
 
     expect(

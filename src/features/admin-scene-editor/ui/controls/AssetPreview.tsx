@@ -5,36 +5,22 @@ import { Canvas } from '@react-three/fiber'
 import { Suspense, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 
-import { FitOnce, ModelStage } from '@/shared/three/ModelStage'
+import { FitOnce, ModelStage, previewUrl } from '@/shared/three/ModelStage'
 import { Show } from '@/shared/ui/control-flow'
 
 import { tone } from '../editor-styles'
 import type { AssetCollection, AssetRef } from './asset-library'
-
-/**
- * What the thing you are about to pick actually looks like.
- *
- * A list of filenames is not a choice you can make — "adskMatBasic_Wall_
- * Interior_baseColor.jpeg" and "Floor_Finish_baseColor.jpeg" tell you nothing
- * about which one is the plaster. A texture shows its image; a model has no
- * image to show, so it gets rendered.
- *
- * Rendered through a portal because the sidebar scrolls: an absolutely
- * positioned panel inside it is clipped by the scroll box, which is exactly
- * where a preview needs not to be.
- */
 
 const SIZE = 190
 
 type Props = {
   asset: AssetRef
   collection: AssetCollection
-  /** Where the row being hovered is, in viewport coordinates. */
   anchor: DOMRect
 }
 
 function ModelBody({ url }: { url: string }) {
-  const { scene } = useGLTF(url, false, true)
+  const { scene } = useGLTF(previewUrl(url), false, true)
   const object = useMemo(() => scene.clone(true), [scene])
 
   return (
@@ -46,12 +32,8 @@ function ModelBody({ url }: { url: string }) {
 }
 
 export function AssetPreview({ asset, collection, anchor }: Props) {
-  // Only ever rendered in response to a pointer, so there is no server pass to
-  // guard against — but `document` still has to exist before we portal into it.
   if (typeof document === 'undefined' || !asset.url) return null
 
-  // Left of the row, since the panel this hangs off lives on the right edge.
-  // Clamped so a row near the top or bottom still shows the whole preview.
   const top = Math.min(
     Math.max(anchor.top + anchor.height / 2 - SIZE / 2, 8),
     Math.max(window.innerHeight - SIZE - 8, 8),
@@ -87,7 +69,6 @@ export function AssetPreview({ asset, collection, anchor }: Props) {
           </div>
         }
       >
-        {/* Tiled, not stretched: a wall finish is judged by its repeat. */}
         <div
           style={{
             height: SIZE,

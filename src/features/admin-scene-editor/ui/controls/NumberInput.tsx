@@ -10,15 +10,7 @@ type Props = {
   style?: CSSProperties
 }
 
-/**
- * A number field you can actually type into.
- *
- * A plain controlled `<input type="number" value={someNumber}>` rewrites the
- * text on every keystroke, so the "." in "1.25" is dropped the moment it is
- * typed and you end up with 125. Holding the raw string while the field has
- * focus keeps half-typed values intact; the number is committed as soon as it
- * parses, and the display re-syncs to the real value on blur.
- */
+/** Holds the raw string while focused: a controlled number input drops the "." of a half-typed "1.25". */
 export function NumberInput({ value, onCommit, step = 0.01, title, style }: Props) {
   const [draft, setDraft] = useState<string | null>(null)
 

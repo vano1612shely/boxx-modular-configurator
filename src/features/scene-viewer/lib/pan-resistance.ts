@@ -1,6 +1,26 @@
 /** Fraction of the travel that pans at full speed before resistance starts. */
 const KNEE = 0.6
 
+/** How far off centre the view may slide, in half-frame-heights. */
+const MAX_OFFSET_HALF_HEIGHTS = 0.55
+
+/**
+ * How far the focal offset may reach at a given orbit distance, in metres.
+ *
+ * camera-controls applies the offset as a world-space translation *after* the
+ * camera has been aimed (`update()` composes the matrix, then adds the offset
+ * along its own columns), so a fixed world bound is a different displacement on
+ * screen at every distance: the same 2 m is a fifth of the frame from the
+ * dollhouse and ten frames away up close. Stating the bound in half-heights
+ * makes the limit — and the resistance approaching it — mean one thing at any
+ * zoom, and it is what lets the offset be rescaled with the distance without
+ * ever crossing its own bound.
+ */
+export function offsetLimit(radius: number, fovDeg: number): number {
+  const half = (Math.max(fovDeg, 1) * Math.PI) / 360
+  return MAX_OFFSET_HALF_HEIGHTS * Math.max(radius, 0) * Math.tan(half)
+}
+
 /**
  * How much of the pan speed survives at a given distance off centre: full speed
  * up to the knee, then falling linearly to nothing at the limit.

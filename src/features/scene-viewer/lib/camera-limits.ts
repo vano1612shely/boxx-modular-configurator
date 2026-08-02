@@ -1,4 +1,6 @@
-import { fitDistance, orbitRadius, type CameraPreset, type Extent } from '@/entities/building'
+import { orbitRadius, type CameraPreset, type Extent } from '@/entities/building'
+
+import { farthestPresetRadius, type ViewScope } from './view-presets'
 
 /** Closest the camera may orbit while a room is focused, in metres. */
 const ROOM_MIN_DISTANCE = 0.4
@@ -9,19 +11,14 @@ const CEILING_SLACK = 1.4
 /** Most the pan boundary ever gives downward, in metres. */
 const MAX_DROP = 0.5
 
-// zoomOut: multiple of the fitted distance (1 = subject fills the frame).
+// zoomOut: multiple of the farthest preset distance (1 = it is already the wall).
 // panSlack: fraction of subject radius; well under 1 or the subject pans off screen.
 export const LIMITS = {
   room: { zoomOut: 1.35, panSlack: 0.3 },
   building: { zoomOut: 1.6, panSlack: 0.5 },
 } as const
 
-export type LimitScope = {
-  min: [number, number, number]
-  max: [number, number, number]
-  dollhouse: CameraPreset
-  fov: number
-}
+export type LimitScope = ViewScope
 
 export type CameraLimits = {
   min: number
@@ -38,8 +35,8 @@ export type AuthoredCamera = {
 }
 
 /** Max orbit distance, never closer than the pose it has to admit. */
-function ceiling(authored: AuthoredCamera, pose: CameraPreset): number {
-  return Math.max(authored.maxDistance, orbitRadius(pose)) * CEILING_SLACK
+function ceiling(authored: AuthoredCamera, radius: number): number {
+  return Math.max(authored.maxDistance, radius) * CEILING_SLACK
 }
 
 export function cameraLimits(
@@ -52,7 +49,8 @@ export function cameraLimits(
     : authored.minDistance
 
   if (!scope) {
-    return { min, max: ceiling(authored, authored), boundary: null }
+    const authoredPose: CameraPreset = { position: authored.position, target: authored.target }
+    return { min, max: ceiling(authored, orbitRadius(authoredPose)), boundary: null }
   }
 
   const [minX, minY, minZ] = scope.min
@@ -61,9 +59,15 @@ export function cameraLimits(
   const { zoomOut, panSlack } = focusedRoom ? LIMITS.room : LIMITS.building
   const slack = radius * panSlack
 
+  // The ceiling is headroom past the *poses the view buttons produce*, not past
+  // the framing radius: the side views stand off further than the framing, so
+  // deriving it from the framing left them arriving with the wheel already at
+  // the stop in the zoom-out direction.
+  const farthest = farthestPresetRadius(scope)
+
   return {
     min,
-    max: Math.min(ceiling(authored, scope.dollhouse), fitDistance(radius, scope.fov) * zoomOut),
+    max: Math.min(ceiling(authored, farthest), farthest * zoomOut),
     // Bounds the orbit target, not the camera: downward slack is slack the
     // camera follows the target through, below the ground.
     boundary: {

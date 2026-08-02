@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { panSpeedFactor } from './pan-resistance'
+import { offsetLimit, panSpeedFactor } from './pan-resistance'
 
 const LIMIT = 10
 const KNEE = 6
@@ -44,5 +44,38 @@ describe('panSpeedFactor', () => {
 
   it('does not resist when there is nothing measured to resist against', () => {
     expect(panSpeedFactor(500, 0)).toBe(1)
+  })
+})
+
+/** Half of the frame height in world metres, at a distance. */
+function halfHeight(radius: number, fovDeg: number): number {
+  return radius * Math.tan((fovDeg * Math.PI) / 360)
+}
+
+describe('offsetLimit', () => {
+  it('is the same share of the screen at every distance', () => {
+    for (const radius of [0.4, 2, 8, 30]) {
+      expect(offsetLimit(radius, 50) / halfHeight(radius, 50)).toBeCloseTo(0.55, 9)
+    }
+  })
+
+  it('keeps the subject on screen, with room to look around it', () => {
+    for (const fov of [35, 50, 70]) {
+      const share = offsetLimit(12, fov) / halfHeight(12, fov)
+      expect(share).toBeGreaterThan(0.3)
+      expect(share).toBeLessThan(1)
+    }
+  })
+
+  // The offset is rescaled with the distance on a dolly, so a bound that scales
+  // the same way can never be crossed by zooming rather than by panning.
+  it('scales exactly as the offset does under a dolly', () => {
+    const zoomed = 0.6
+    expect(offsetLimit(10 * zoomed, 50)).toBeCloseTo(offsetLimit(10, 50) * zoomed, 9)
+  })
+
+  it('does not go negative on a degenerate camera', () => {
+    expect(offsetLimit(-5, 50)).toBe(0)
+    expect(offsetLimit(10, 0)).toBeGreaterThan(0)
   })
 })

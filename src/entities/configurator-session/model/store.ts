@@ -49,7 +49,11 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
       viewRequestId: s.viewRequestId + 1,
     })),
   exitRoomFocus: () =>
-    set((s) => ({ focusedRoomKey: null, viewRequestId: s.viewRequestId + 1 })),
+    set((s) => ({
+      focusedRoomKey: null,
+      moveToTarget: null,
+      viewRequestId: s.viewRequestId + 1,
+    })),
   setInteractionLock: (locked) => set({ interactionLock: locked }),
   setViewMode: (mode) =>
     set((s) => ({

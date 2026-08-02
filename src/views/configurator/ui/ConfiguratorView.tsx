@@ -1,4 +1,7 @@
+import { SearchX } from 'lucide-react'
+
 import { IntakeForm } from '@/features/building-intake'
+import { Callout, CenteredPanel } from '@/shared/ui/boxx'
 
 import { getBuildingScene } from '../api/get-building-scene'
 import { getIntakeLines, getIntegrationOptions } from '../api/get-catalog'
@@ -42,14 +45,22 @@ export async function ConfiguratorView({ searchParams }: Props) {
 
   if (resolution.status === 'not-found') {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-background p-4">
-        <div className="w-full max-w-md space-y-2 rounded-xl bg-card p-6 text-center shadow-md ring-1 ring-border">
-          <h1 className="text-xl font-medium">Nothing to configure yet</h1>
-          <p className="text-sm text-muted-foreground">
-            No buildings are available for this selection right now. Please try again shortly.
-          </p>
-        </div>
-      </main>
+      <CenteredPanel as="main">
+        <Callout
+          tone="notice"
+          align="center"
+          icon={<SearchX />}
+          // Callout renders its title in a <p>, so the page keeps its h1 through ARIA.
+          title={
+            <span role="heading" aria-level={1}>
+              Nothing to configure yet
+            </span>
+          }
+          className="max-w-md"
+        >
+          No buildings are available for this selection right now. Please try again shortly.
+        </Callout>
+      </CenteredPanel>
     )
   }
 

@@ -34,11 +34,14 @@ import { useConfiguration, type PlacedPackage } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import { HIGHLIGHT } from '@/shared/three/scene-tokens'
+import { FloatingBar, Pill } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
 import { setSceneCursor } from '@/shared/ui/scene-cursor'
 
 import { collidesWithAny } from '../lib/placement-geometry'
 import { footprintOf, setMeasuredFootprint } from '../lib/measured-footprints'
+
+const ROTATION_TICKS = [-180, -90, 0, 90, 180] as const
 
 type Props = {
   building: BuildingScene
@@ -331,12 +334,12 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
             }}
           >
             <Show when={rotateOpen}>
-              <div className="flex items-center gap-2 rounded-full bg-ink/95 px-3 py-1.5 shadow-xl backdrop-blur desktop:gap-3 desktop:px-4 desktop:py-2">
+              <FloatingBar tone="ink" className="gap-2 px-3 desktop:gap-3 desktop:px-4">
                 <div className="relative flex h-5 w-32 items-center desktop:w-44">
                   <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-between px-0.5">
-                    {[-180, -90, 0, 90, 180].map((tick) => (
-                      <span key={tick} className="h-2.5 w-0.5 rounded bg-white/40" />
-                    ))}
+                    <For each={ROTATION_TICKS} getKey={(tick) => tick}>
+                      {() => <span className="h-2.5 w-0.5 rounded-full bg-surface/40" />}
+                    </For>
                   </div>
                   <input
                     type="range"
@@ -351,32 +354,29 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
                 <span className="min-w-10 rounded-sm bg-surface/15 px-1.5 py-0.5 text-center text-xs font-medium text-surface tabular-nums">
                   {signedDegrees(placement.rotationYDeg)}°
                 </span>
-              </div>
+              </FloatingBar>
             </Show>
 
-            <div className="flex items-center overflow-hidden rounded-full bg-ink/95 shadow-xl backdrop-blur">
-              <button
-                type="button"
-                aria-label="Rotate"
+            <FloatingBar tone="ink">
+              <Pill
+                variant="ghost-inverted"
+                labelFrom="desktop"
+                selected={rotateOpen}
+                leadingIcon={<RotateCw size={16} />}
                 onClick={() => setRotateOpen((v) => !v)}
-                className={`flex size-10 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors desktop:size-auto desktop:px-4 desktop:py-2.5 ${
-                  rotateOpen ? 'bg-surface/20 text-surface' : 'text-surface/85 hover:bg-surface/10'
-                }`}
               >
-                <RotateCw size={16} />
-                <span className="hidden desktop:inline">Rotate</span>
-              </button>
-              <span className="h-6 w-px bg-surface/20 desktop:h-8" />
-              <button
-                type="button"
-                aria-label="Remove"
+                Rotate
+              </Pill>
+              <FloatingBar.Divider />
+              <Pill
+                variant="ghost-inverted"
+                labelFrom="desktop"
+                leadingIcon={<Trash2 size={16} />}
                 onClick={() => removePackage(placement.instanceId)}
-                className="flex size-11 flex-col items-center justify-center gap-1 text-[11px] font-medium text-surface/85 transition-colors hover:bg-surface/10 desktop:size-auto desktop:px-4 desktop:py-2.5"
               >
-                <Trash2 size={16} />
-                <span className="hidden desktop:inline">Remove</span>
-              </button>
-            </div>
+                Remove
+              </Pill>
+            </FloatingBar>
           </div>
         </Html>
       </Show>

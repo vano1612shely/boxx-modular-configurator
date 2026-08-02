@@ -4,6 +4,7 @@ import { ArrowLeft, DoorOpen } from 'lucide-react'
 
 import type { BuildingScene } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
+import { Chip, FloatingBar, Pill, PillLink, SceneOverlay } from '@/shared/ui/boxx'
 import { Show } from '@/shared/ui/control-flow'
 
 export function ConfiguratorHeader({ building }: { building: BuildingScene }) {
@@ -20,36 +21,51 @@ export function ConfiguratorHeader({ building }: { building: BuildingScene }) {
     .filter(Boolean)
     .join(' · ')
 
-  // Max width is capped to leave the opposite corner free for the quote button.
+  // Capped so the opposite corner stays free for the quote button.
   return (
-    <header className="pointer-events-none absolute top-[max(1rem,env(safe-area-inset-top))] left-[max(1rem,env(safe-area-inset-left))] z-20 flex max-w-[calc(100%-5rem)] items-center gap-2 desktop:max-w-[calc(100%-14rem)]">
-      <Show when={room}>
-        {(focused) => (
-          <>
-            <button
-              type="button"
-              onClick={clearFocus}
-              className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-full bg-primary py-2.5 pr-4 pl-3 text-sm font-medium text-primary-foreground shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+    <SceneOverlay
+      as="header"
+      corner="top-left"
+      z="header"
+      className="max-w-[calc(100%-5rem)] desktop:max-w-[calc(100%-14rem)]"
+    >
+      <Show
+        when={room}
+        fallback={
+          <FloatingBar shape="panel" className="min-w-0">
+            <PillLink
+              href="/configurator"
+              variant="secondary"
+              leadingIcon={<ArrowLeft size={16} />}
+              labelFrom="desktop"
             >
-              <ArrowLeft size={16} strokeWidth={2.5} />
+              Change selection
+            </PillLink>
+            <FloatingBar.Divider />
+            <div className="min-w-0">
+              <h1 className="truncate text-sm leading-normal font-medium">{building.title}</h1>
+              <p className="truncate text-xs text-muted-foreground">{meta}</p>
+            </div>
+          </FloatingBar>
+        }
+      >
+        {(focused) => (
+          <FloatingBar shape="panel" className="min-w-0">
+            <Pill
+              variant="primary"
+              leadingIcon={<ArrowLeft size={16} />}
+              onClick={clearFocus}
+            >
               <span className="hidden desktop:inline">Back to building</span>
               <span className="desktop:hidden">Building</span>
-            </button>
-
-            <div className="pointer-events-auto flex min-w-0 items-center gap-2 rounded-full bg-card/95 py-2 pr-4 pl-3 shadow-md ring-1 ring-border backdrop-blur">
-              <DoorOpen size={15} className="shrink-0 text-muted-foreground" />
-              <span className="truncate text-sm font-semibold">{focused.name}</span>
-            </div>
-          </>
+            </Pill>
+            <FloatingBar.Divider />
+            <Chip icon={<DoorOpen />} className="min-w-0 shrink">
+              <span className="truncate">{focused.name}</span>
+            </Chip>
+          </FloatingBar>
         )}
       </Show>
-
-      <Show when={room === null}>
-        <div className="pointer-events-auto min-w-0 rounded-xl bg-card/95 px-4 py-2.5 shadow-md ring-1 ring-border backdrop-blur">
-          <h1 className="truncate text-sm font-semibold">{building.title}</h1>
-          <p className="truncate text-xs text-muted-foreground">{meta}</p>
-        </div>
-      </Show>
-    </header>
+    </SceneOverlay>
   )
 }

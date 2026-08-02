@@ -1,9 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 
-import { For } from '@/shared/ui/control-flow'
+import { Card, Eyebrow, Field, OptionGroup, Pill, Progress } from '@/shared/ui/boxx'
+import { Match, Show, Switch } from '@/shared/ui/control-flow'
 
 export type IntakeLine = {
   slug: string
@@ -16,84 +17,110 @@ type Props = {
   lines: IntakeLine[]
 }
 
+const UNIT_LABEL = { offices: 'Offices', classrooms: 'Classrooms' } as const
+
+const heading =
+  'text-[1.5625rem] leading-[1.3] font-medium text-foreground desktop:text-[2.1875rem]'
+
 export function IntakeForm({ lines }: Props) {
   const router = useRouter()
+  const [step, setStep] = useState(1)
   const [lineSlug, setLineSlug] = useState(lines[0]?.slug ?? '')
   const [units, setUnits] = useState(2)
   const [restrooms, setRestrooms] = useState(0)
 
   const line = lines.find((l) => l.slug === lineSlug) ?? lines[0]
 
-  const handleSubmit = (event: React.FormEvent) => {
+  // Told here rather than after navigating, which is where the over-capacity
+  // screen used to be the first news of it.
+  const overCapacity = line?.maxUnits != null && units > line.maxUnits
+
+  const options = lines.map((item) => ({ value: item.slug, label: item.name }))
+
+  const handlePick = (slug: string) => {
+    setLineSlug(slug)
+    setStep(2)
+  }
+
+  const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
     const params = new URLSearchParams({
       building: lineSlug,
-      units: String(units),
+      offices: String(units),
       restrooms: String(restrooms),
     })
     router.push(`/configurator?${params.toString()}`)
   }
 
   return (
-    <form
+    <Card
+      as="form"
       onSubmit={handleSubmit}
-      className="w-full max-w-sm space-y-5 rounded-xl border bg-background p-6 shadow-lg"
+      tone="cream"
+      pad="md"
+      hairline
+      className="flex w-full max-w-xl flex-col gap-block desktop:p-block"
     >
-      <div>
-        <h1 className="text-lg font-semibold">Build your building</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Answer two questions and we’ll suggest the closest-fitting model.
-        </p>
-      </div>
+      <Progress step={step} total={2} />
 
-      <label className="block space-y-1.5">
-        <span className="text-sm font-medium">Building type</span>
-        <select
-          value={lineSlug}
-          onChange={(event) => setLineSlug(event.target.value)}
-          className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-        >
-          <For each={lines} getKey={(l) => l.slug}>
-            {(item) => <option value={item.slug}>{item.name}</option>}
-          </For>
-        </select>
-      </label>
+      <Switch>
+        <Match when={step === 1}>
+          <div className="flex flex-col gap-block">
+            <div className="flex flex-col gap-2">
+              <Eyebrow>Find your solution</Eyebrow>
+              <h1 className={heading}>What kind of building do you need?</h1>
+            </div>
 
-      <label className="block space-y-1.5">
-        <span className="text-sm font-medium">
-          How many {line?.unitLabel ?? 'offices'} do you need?
-        </span>
-        <input
-          type="number"
-          min={1}
-          max={99}
-          value={units}
-          onChange={(event) => setUnits(Number.parseInt(event.target.value, 10) || 1)}
-          className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-      </label>
+            <OptionGroup
+              label="Building line"
+              value={lineSlug}
+              options={options}
+              onChange={handlePick}
+            />
+          </div>
+        </Match>
 
-      <label className="block space-y-1.5">
-        <span className="text-sm font-medium">How many restrooms do you need?</span>
-        <input
-          type="number"
-          min={0}
-          max={20}
-          value={restrooms}
-          onChange={(event) => setRestrooms(Math.max(Number.parseInt(event.target.value, 10) || 0, 0))}
-          className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-        <span className="block text-xs text-muted-foreground">
-          We’ll pick the closest model that covers it.
-        </span>
-      </label>
+        <Match when={step === 2}>
+          <div className="flex flex-col gap-block">
+            <div className="flex flex-col gap-2">
+              <Show when={line?.name}>
+                <Eyebrow>{line?.name}</Eyebrow>
+              </Show>
+              <h1 className={heading}>How much space do you need?</h1>
+            </div>
 
-      <button
-        type="submit"
-        className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-      >
-        Show my building
-      </button>
-    </form>
+            <div className="flex flex-col gap-card">
+              <Field.Stepper
+                label={UNIT_LABEL[line?.unitLabel ?? 'offices']}
+                hint={overCapacity ? 'Beyond the largest standard size — we’ll quote it as a custom build.' : undefined}
+                value={units}
+                onChange={setUnits}
+                min={1}
+                max={99}
+              />
+
+              <Field.Stepper
+                label="Restrooms"
+                hint="We’ll pick the closest model that covers it."
+                value={restrooms}
+                onChange={setRestrooms}
+                min={0}
+                max={20}
+              />
+            </div>
+
+            <div className="flex flex-col gap-card desktop:flex-row">
+              <Pill variant="secondary" size="lg" onClick={() => setStep(1)}>
+                Back
+              </Pill>
+
+              <Pill type="submit" variant="primary" size="lg" className="grow">
+                Show my building
+              </Pill>
+            </div>
+          </div>
+        </Match>
+      </Switch>
+    </Card>
   )
 }

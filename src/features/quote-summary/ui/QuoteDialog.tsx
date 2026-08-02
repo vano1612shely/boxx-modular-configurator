@@ -1,10 +1,11 @@
 'use client'
 
-import { FileText } from 'lucide-react'
+import { CircleCheck, FileText, TriangleAlert, X } from 'lucide-react'
 import { useState } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
+import { Callout, Card, Eyebrow, Field, OVERLAY_Z, Pill, SceneOverlay } from '@/shared/ui/boxx'
 import { For, Match, Show, Switch } from '@/shared/ui/control-flow'
 
 import {
@@ -18,6 +19,12 @@ type Props = {
   integration: IntegrationOptions
 }
 
+const requiredMark = (
+  <span aria-hidden className="text-brand">
+    *
+  </span>
+)
+
 export function QuoteDialog({ building, packages, integration }: Props) {
   const vm = useQuoteSummaryModel({ building, packages, integration })
   const [open, setOpen] = useState(false)
@@ -29,110 +36,130 @@ export function QuoteDialog({ building, packages, integration }: Props) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Request a quote"
-        className="absolute top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-30 flex items-center gap-2 rounded-full bg-primary p-3 text-sm font-medium text-primary-foreground shadow-xl transition-transform hover:scale-[1.02] active:scale-[0.98] desktop:py-3 desktop:pr-5 desktop:pl-4"
-      >
-        <FileText size={16} strokeWidth={2.5} />
-        <span className="hidden desktop:inline">Request a quote</span>
-      </button>
+      <SceneOverlay corner="top-right" z="quote">
+        <Pill
+          variant="primary"
+          labelFrom="desktop"
+          leadingIcon={<FileText size={16} />}
+          onClick={() => setOpen(true)}
+          className="shadow-xl shadow-ink/15"
+        >
+          Request a quote
+        </Pill>
+      </SceneOverlay>
 
       <Show when={open}>
-        {/* Above the trigger, which sits at z-30 — the modal used to open *under*
-            the button that opened it. */}
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
-          <div className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-xl bg-background p-5 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Request a quote</h2>
-              <button
-                type="button"
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Request a quote"
+          className="absolute inset-0 flex items-center justify-center bg-ink/40 p-4"
+          style={{ zIndex: OVERLAY_Z.modal }}
+        >
+          <Card
+            tone="cream"
+            elevation="float"
+            pad="md"
+            className="flex max-h-[85dvh] w-full max-w-md flex-col gap-block overflow-y-auto"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Eyebrow>Your configuration</Eyebrow>
+                <h2 className="text-xl leading-normal font-medium">Request a quote</h2>
+              </div>
+              <Pill
+                variant="secondary"
+                size="sm"
+                aria-label="Close"
                 onClick={() => setOpen(false)}
-                className="rounded-full px-2 py-1 text-sm text-muted-foreground hover:bg-secondary"
               >
-                ✕
-              </button>
+                Close
+                <X size={14} className="shrink-0" />
+              </Pill>
             </div>
 
             <Switch>
               <Match when={vm.submitState.phase === 'success'}>
-                <div className="mt-6 space-y-2 text-center">
-                  <p className="text-2xl">✓</p>
-                  <p className="text-sm font-medium">Your quote request has been sent.</p>
-                  <p className="text-xs text-muted-foreground">
-                    The team will get back to you shortly.
-                  </p>
-                </div>
+                <Callout
+                  tone="success"
+                  align="center"
+                  icon={<CircleCheck />}
+                  title="Your quote request has been sent."
+                >
+                  The team will get back to you shortly.
+                </Callout>
               </Match>
               <Match when={vm.submitState.phase !== 'success'}>
-                <div className="mt-4 space-y-4">
-                  <section className="rounded-lg border p-3">
-                    <p className="text-sm font-medium">{vm.buildingTitle}</p>
+                <div className="flex flex-col gap-card">
+                  <Card as="section" radius="card" elevation="none" pad="sm" hairline>
+                    <p className="text-base leading-normal font-medium">{vm.buildingTitle}</p>
                     <For each={vm.quotePackages} getKey={(p, i) => `${p.packageId}-${i}`}>
                       {(pkg) => (
-                        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                        <div className="mt-1 flex justify-between gap-4 text-sm text-muted-foreground">
                           <span>{pkg.title}</span>
                           <Show when={pkg.price}>
-                            {(price) => <span>${price.toLocaleString()}</span>}
+                            {(price) => (
+                              <span className="shrink-0">${price.toLocaleString()}</span>
+                            )}
                           </Show>
                         </div>
                       )}
                     </For>
-                    <div className="mt-2 flex justify-between border-t pt-2 text-sm font-medium">
+                    <div className="mt-3 flex justify-between gap-4 border-t pt-3 text-base font-medium">
                       <span>Furniture total</span>
-                      <span>${vm.totalPrice.toLocaleString()}</span>
+                      <span className="shrink-0">${vm.totalPrice.toLocaleString()}</span>
                     </div>
-                  </section>
+                  </Card>
 
-                  <section className="space-y-2">
-                    <input
-                      value={contact.name}
-                      onChange={field('name')}
-                      placeholder="Full name *"
-                      className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                    <input
-                      value={contact.email}
-                      onChange={field('email')}
-                      type="email"
-                      placeholder="Email *"
-                      className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                    <input
-                      value={contact.phone}
-                      onChange={field('phone')}
-                      placeholder="Phone"
-                      className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                    <input
-                      value={contact.company}
-                      onChange={field('company')}
-                      placeholder="Company"
-                      className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </section>
+                  <Field.Text
+                    label={<>Full name {requiredMark}</>}
+                    value={contact.name}
+                    onChange={field('name')}
+                    required
+                    autoComplete="name"
+                  />
+                  <Field.Text
+                    label={<>Email {requiredMark}</>}
+                    type="email"
+                    value={contact.email}
+                    onChange={field('email')}
+                    required
+                    autoComplete="email"
+                  />
+                  <Field.Text
+                    label="Phone"
+                    type="tel"
+                    value={contact.phone}
+                    onChange={field('phone')}
+                    autoComplete="tel"
+                  />
+                  <Field.Text
+                    label="Company"
+                    value={contact.company}
+                    onChange={field('company')}
+                    autoComplete="organization"
+                  />
 
                   <Show when={vm.submitState.phase === 'error' && vm.submitState}>
                     {(state) => (
-                      <p className="text-xs text-destructive">
+                      <Callout tone="danger" icon={<TriangleAlert />} className="p-4">
                         {'message' in state ? state.message : ''}
-                      </p>
+                      </Callout>
                     )}
                   </Show>
 
-                  <button
-                    type="button"
+                  <Pill
+                    variant="primary"
+                    block
                     disabled={vm.submitState.phase === 'submitting'}
                     onClick={() => void vm.onSubmit(contact)}
-                    className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
                   >
                     {vm.submitState.phase === 'submitting' ? 'Sending…' : 'Send quote request'}
-                  </button>
+                  </Pill>
                 </div>
               </Match>
             </Switch>
-          </div>
+          </Card>
         </div>
       </Show>
     </>

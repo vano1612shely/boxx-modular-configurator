@@ -1,9 +1,11 @@
 'use client'
 
 import { Html } from '@react-three/drei'
+import { Plus } from 'lucide-react'
 
 import type { RoomZone } from '@/entities/building'
 import { polygonCentroid, roomFloorTopY } from '@/entities/building'
+import { Chip } from '@/shared/ui/boxx'
 import { For } from '@/shared/ui/control-flow'
 
 type Props = {
@@ -31,12 +33,15 @@ export function RoomHotspots({ rooms, visible, onFocusRoom }: Props) {
               event.stopPropagation()
               onFocusRoom(room.key)
             }}
-            className="flex items-center gap-1.5 rounded-full bg-background/90 py-1.5 pr-3.5 pl-2.5 text-sm font-medium shadow-md ring-1 ring-border backdrop-blur transition-transform hover:scale-105"
+            className="group flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-              +
-            </span>
-            <span className="whitespace-nowrap">{room.name}</span>
+            <Chip
+              tone="glass"
+              icon={<Plus />}
+              className="shadow-md transition-transform group-hover:scale-105"
+            >
+              {room.name}
+            </Chip>
           </button>
         </Html>
       )}

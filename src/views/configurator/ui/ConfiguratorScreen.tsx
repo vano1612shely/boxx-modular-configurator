@@ -1,11 +1,14 @@
 'use client'
 
+import { TriangleAlert } from 'lucide-react'
+
 import type { BuildingScene } from '@/entities/building'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import { PackagePanel, PlacedPackages } from '@/features/package-placement'
 import { QuoteDialog, type IntegrationOptions } from '@/features/quote-summary'
 import { SceneViewer } from '@/features/scene-viewer'
 import { withModule } from '@/shared/lib'
+import { Callout, CenteredPanel } from '@/shared/ui/boxx'
 
 import { ConfiguratorHeader } from './ConfiguratorHeader'
 
@@ -29,11 +32,17 @@ function Scene({ building, packages }: SceneProps) {
 // unreachable asset blanks the whole page.
 const SafeSceneViewer = withModule(Scene, {
   errorFallback: (
-    <div className="flex size-full items-center justify-center bg-background p-8 text-center">
-      <p className="max-w-sm text-sm text-muted-foreground">
-        The 3D view could not be loaded. Please refresh the page — your configuration is kept.
-      </p>
-    </div>
+    <CenteredPanel>
+      <Callout
+        tone="danger"
+        align="center"
+        icon={<TriangleAlert />}
+        title="The 3D view could not be loaded"
+        className="max-w-md"
+      >
+        Please refresh the page — your configuration is kept.
+      </Callout>
+    </CenteredPanel>
   ),
 })
 

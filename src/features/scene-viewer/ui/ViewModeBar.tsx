@@ -6,11 +6,8 @@ import { useState } from 'react'
 import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession, type ViewMode } from '@/entities/configurator-session'
 import { cn } from '@/shared/lib'
+import { FloatingBar, Pill, SceneOverlay } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
-
-function Label({ children }: { children: string }) {
-  return <span className="hidden desktop:inline">{children}</span>
-}
 
 const SIDE_VIEWS: Array<{ mode: ViewMode; label: string }> = [
   { mode: 'side-front', label: 'Front' },
@@ -49,84 +46,96 @@ export function ViewModeBar() {
     )
   }
 
-  const itemClass = (active: boolean, disabled = false) =>
-    cn(
-      'flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors desktop:px-4',
-      active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-secondary',
-      disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent',
-    )
-
   return (
-    <div
+    <SceneOverlay
+      corner="bottom-center"
       className={cn(
-        'absolute z-10 -translate-x-1/2 transition-all duration-300',
-        isRoomFocused
-          ? 'bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 desktop:bottom-4 desktop:left-[calc(50%-11rem)] lg:left-[calc(50%-13rem)]'
-          : 'bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2',
+        'w-max transition-all duration-300',
+        isRoomFocused &&
+          'bottom-[calc(5rem+env(safe-area-inset-bottom))] desktop:bottom-4 desktop:left-[calc(50%-11rem)] lg:left-[calc(50%-13rem)]',
       )}
     >
       <Show when={sideOpen}>
-        <div className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-1 rounded-full bg-card p-1.5 shadow-xl ring-1 ring-border">
+        <FloatingBar
+          shape="panel"
+          className="absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 flex-col items-stretch"
+        >
           <For each={SIDE_VIEWS} getKey={(v) => v.mode}>
             {(view) => (
-              <button
-                type="button"
+              <Pill
+                variant="ghost"
+                selected={viewMode === view.mode}
                 onClick={() => pick(view.mode)}
-                className={cn(
-                  'rounded-full px-4 py-2 text-sm font-medium transition-colors',
-                  viewMode === view.mode
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground hover:bg-secondary',
-                )}
               >
                 {view.label}
-              </button>
+              </Pill>
             )}
           </For>
-        </div>
+        </FloatingBar>
       </Show>
 
-      <div className="flex items-center gap-1 rounded-full bg-card p-1.5 shadow-xl ring-1 ring-border">
-        <button type="button" onClick={() => pick('dollhouse')} className={itemClass(viewMode === 'dollhouse')}>
-          {isRoomFocused ? <Box size={16} /> : <Home size={16} />}
-          <Label>{isRoomFocused ? 'Dollhouse' : 'Overview'}</Label>
-        </button>
-        <button type="button" onClick={() => pick('top')} className={itemClass(viewMode === 'top')}>
-          <LayoutGrid size={16} />
-          <Label>Top view</Label>
-        </button>
-        <button
-          type="button"
+      <FloatingBar>
+        <Pill
+          variant="ghost"
+          labelFrom="desktop"
+          selected={viewMode === 'dollhouse'}
+          leadingIcon={isRoomFocused ? <Box size={16} /> : <Home size={16} />}
+          onClick={() => pick('dollhouse')}
+        >
+          {isRoomFocused ? 'Dollhouse' : 'Overview'}
+        </Pill>
+        <Pill
+          variant="ghost"
+          labelFrom="desktop"
+          selected={viewMode === 'top'}
+          leadingIcon={<LayoutGrid size={16} />}
+          onClick={() => pick('top')}
+        >
+          Top view
+        </Pill>
+        <Pill
+          variant="ghost"
+          labelFrom="desktop"
+          selected={isSideView}
+          aria-expanded={sideOpen}
+          leadingIcon={
+            <>
+              <Eye size={16} />
+              <ChevronUp
+                size={14}
+                aria-hidden
+                className={cn('order-last transition-transform', sideOpen && 'rotate-180')}
+              />
+            </>
+          }
           onClick={() => setSideOpen((v) => !v)}
-          className={itemClass(isSideView)}
         >
-          <Eye size={16} />
-          <Label>Side views</Label>
-          <ChevronUp size={14} className={cn('transition-transform', sideOpen && 'rotate-180')} />
-        </button>
-        <span className="h-6 w-px bg-border" />
-        <button
-          type="button"
+          Side views
+        </Pill>
+        <FloatingBar.Divider />
+        <Pill
+          variant="ghost"
+          labelFrom="desktop"
           disabled={!selected}
+          leadingIcon={<Footprints size={16} />}
           onClick={moveToSelected}
-          className={itemClass(false, !selected)}
         >
-          <Footprints size={16} />
-          <Label>Move to</Label>
-        </button>
+          Move to
+        </Pill>
         <Show when={!isRoomFocused}>
-          <span className="h-6 w-px bg-border" />
-          <button
-            type="button"
-            onClick={toggleCeiling}
+          <FloatingBar.Divider />
+          <Pill
+            variant="ghost"
+            labelFrom="desktop"
+            selected={showCeiling}
+            leadingIcon={<Layers size={16} />}
             title={showCeiling ? 'Hide ceiling & roof' : 'Show ceiling & roof'}
-            className={itemClass(showCeiling)}
+            onClick={toggleCeiling}
           >
-            <Layers size={16} />
-            <Label>Ceiling</Label>
-          </button>
+            Ceiling
+          </Pill>
         </Show>
-      </div>
-    </div>
+      </FloatingBar>
+    </SceneOverlay>
   )
 }

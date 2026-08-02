@@ -63,6 +63,11 @@ export function SceneViewer({ building, children }: Props) {
         // The environment map carries most of the soft light in both rigs.
         scene={{ environmentIntensity: 0.35 }}
         dpr={[1, 2]}
+        // Per-material clipping planes are off by default; the selection glow
+        // uses one to stop short of the floor instead of z-fighting with it.
+        onCreated={({ gl }) => {
+          gl.localClippingEnabled = true
+        }}
         className="touch-none"
         onPointerMissed={() => useConfiguration.getState().selectPackage(null)}
       >

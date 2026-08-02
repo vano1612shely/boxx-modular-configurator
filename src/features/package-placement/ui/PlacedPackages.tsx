@@ -174,25 +174,87 @@ function signedDegrees(rotationYDeg: number): number {
   return wrapped > 180 ? wrapped - 360 : wrapped
 }
 
-/** Inverted-hull silhouette: a clone rendered back-face only, to be scaled up by the caller. */
-function buildOutlineShell(source: Object3D): { shell: Object3D; material: MeshBasicMaterial } {
-  const material = new MeshBasicMaterial({
-    color: OUTLINE_VALID.clone(),
-    side: BackSide,
-    toneMapped: false,
-  })
+/**
+ * Concentric inverted hulls, widening and fading outwards, so the highlight
+ * reads as a glow rather than a stroke. Same colour throughout, so the layers
+ * composite order-independently and cannot flicker against each other.
+ */
+const OUTLINE_LAYERS = [
+  { inflate: 1.008, opacity: 0.85 },
+  { inflate: 1.02, opacity: 0.4 },
+  { inflate: 1.036, opacity: 0.16 },
+]
 
+/** Clipped this far above the floor, so the hull never meets it and z-fights. */
+const OUTLINE_FLOOR_LIFT = 0.006
+
+type Outline = {
+  layers: Array<{ shell: Object3D; material: MeshBasicMaterial }>
+  dispose: () => void
+}
+
+/**
+ * Inflates each mesh about **its own** centre rather than scaling the package as
+ * a group. Scaling the group translates every part away from the group centre,
+ * which pushes one part's hull out through the side of its neighbour; growing
+ * each part in place keeps every hull surface buried inside the geometry it
+ * belongs to, where the depth test hides it.
+ */
+function inflatedClone(source: Object3D, factor: number, material: MeshBasicMaterial): Object3D {
   const shell = source.clone(true)
+
   shell.traverse((object) => {
-    if (object instanceof Mesh) {
-      object.material = material
-      object.castShadow = false
-      object.receiveShadow = false
-      object.raycast = () => {}
-    }
+    if (!(object instanceof Mesh)) return
+
+    const geometry = object.geometry.clone()
+    geometry.computeBoundingBox()
+    const centre = geometry.boundingBox?.getCenter(new Vector3()) ?? new Vector3()
+
+    geometry.translate(-centre.x, -centre.y, -centre.z)
+    geometry.scale(factor, factor, factor)
+    geometry.translate(centre.x, centre.y, centre.z)
+
+    object.geometry = geometry
+    object.material = material
+    object.castShadow = false
+    object.receiveShadow = false
+    object.raycast = () => {}
   })
 
-  return { shell, material }
+  return shell
+}
+
+function buildOutline(source: Object3D, floorY: number): Outline {
+  const clip = new Plane(new Vector3(0, 1, 0), -(floorY + OUTLINE_FLOOR_LIFT))
+
+  const layers = OUTLINE_LAYERS.map(({ inflate, opacity }, index) => {
+    const material = new MeshBasicMaterial({
+      color: OUTLINE_VALID.clone(),
+      side: BackSide,
+      toneMapped: false,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      clippingPlanes: [clip],
+    })
+
+    const shell = inflatedClone(source, inflate, material)
+    shell.renderOrder = -1 - index
+
+    return { shell, material }
+  })
+
+  return {
+    layers,
+    dispose: () => {
+      for (const { shell, material } of layers) {
+        shell.traverse((object) => {
+          if (object instanceof Mesh) object.geometry.dispose()
+        })
+        material.dispose()
+      }
+    },
+  }
 }
 
 function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: ItemProps) {
@@ -200,6 +262,8 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const groupRef = useRef<Group>(null)
   const rotationRef = useRef<Group>(null)
   const [rotateOpen, setRotateOpen] = useState(false)
+
+  const floorY = roomFloorTopY(room)
 
   const { object, outline } = useMemo(() => {
     const clone = scene.clone(true)
@@ -215,8 +279,10 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
     setMeasuredFootprint(pkg.id, { width: size.x, depth: size.z })
 
-    return { object: clone, outline: buildOutlineShell(clone) }
-  }, [scene, pkg.id])
+    return { object: clone, outline: buildOutline(clone, floorY) }
+  }, [scene, pkg.id, floorY])
+
+  useEffect(() => outline.dispose, [outline])
 
   const selectedInstanceId = useConfiguration((s) => s.selectedInstanceId)
   const draggingInstanceId = useConfiguration((s) => s.draggingInstanceId)
@@ -233,9 +299,8 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const isDragging = draggingInstanceId === placement.instanceId
   const isInvalid = isDragging && !dragValid
 
-  const floorY = roomFloorTopY(room)
-
-  outline.material.color.copy(isInvalid ? OUTLINE_INVALID : OUTLINE_VALID)
+  const tint = isInvalid ? OUTLINE_INVALID : OUTLINE_VALID
+  for (const layer of outline.layers) layer.material.color.copy(tint)
 
   const introPlayedRef = useRef(false)
 
@@ -311,11 +376,9 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
           <primitive object={object} />
         </group>
         <Show when={isSelected}>
-          {/* Scaled by a group: the shell carries the recentring offset in its
-              own transform, which scaling it directly would multiply too. */}
-          <group scale={1.035}>
-            <primitive object={outline.shell} />
-          </group>
+          <For each={outline.layers} getKey={(_, index) => index}>
+            {(layer) => <primitive object={layer.shell} />}
+          </For>
         </Show>
       </group>
 

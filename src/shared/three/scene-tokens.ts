@@ -31,15 +31,10 @@ export const SCENE_BACKGROUND = BOXX.sand
 export const CUT_FACE = BOXX.sandDeep
 
 export const HIGHLIGHT = {
-  /**
-   * The inverted-hull outline is thick enough to read as a silhouette, so ink
-   * looked like a hole cut around the furniture rather than a highlight.
-   * Cherry is the brand's own "this one" colour and stays legible against the
-   * warm neutrals every room is built from.
-   */
-  selected: BOXX.cherry,
-  /** Far enough from cherry in hue to survive being seen next to it mid-drag. */
-  blocked: BOXX.mango,
+  /** Warm and quiet: selection is the state you are in most of the time. */
+  selected: BOXX.mango,
+  /** Red is what "this will not fit" is expected to look like. */
+  blocked: BOXX.cherry,
   /** Warm grey, so the drag ghost belongs to the same family as the ground. */
   ghost: '#a7a29a',
 } as const

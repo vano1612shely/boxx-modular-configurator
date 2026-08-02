@@ -15,6 +15,7 @@ import {
 } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { cn } from '@/shared/lib'
+import { SCENE_BACKGROUND } from '@/shared/three/scene-tokens'
 import { Show } from '@/shared/ui/control-flow'
 import { bindSceneCursor, setSceneCursor } from '@/shared/ui/scene-cursor'
 
@@ -65,7 +66,7 @@ export function SceneViewer({ building, children }: Props) {
         className="touch-none"
         onPointerMissed={() => useConfiguration.getState().selectPackage(null)}
       >
-        <color attach="background" args={['#f2f3f5']} />
+        <color attach="background" args={[SCENE_BACKGROUND]} />
         <SceneLighting bounds={bounds} focusedRoom={vm.focusedRoom} />
         <Show when={building.roofModel}>
           {(roof) => (

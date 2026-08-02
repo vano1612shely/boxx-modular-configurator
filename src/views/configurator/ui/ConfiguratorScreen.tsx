@@ -29,7 +29,7 @@ function Scene({ building, packages }: SceneProps) {
 // unreachable asset blanks the whole page.
 const SafeSceneViewer = withModule(Scene, {
   errorFallback: (
-    <div className="flex size-full items-center justify-center bg-muted/40 p-8 text-center">
+    <div className="flex size-full items-center justify-center bg-background p-8 text-center">
       <p className="max-w-sm text-sm text-muted-foreground">
         The 3D view could not be loaded. Please refresh the page — your configuration is kept.
       </p>

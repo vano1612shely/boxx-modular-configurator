@@ -33,8 +33,8 @@ import { clampPoseToPolygon, progressiveEdgeSnap, roomFloorTopY } from '@/entiti
 import { useConfiguration, type PlacedPackage } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
+import { HIGHLIGHT } from '@/shared/three/scene-tokens'
 import { For, Show } from '@/shared/ui/control-flow'
-
 import { setSceneCursor } from '@/shared/ui/scene-cursor'
 
 import { collidesWithAny } from '../lib/placement-geometry'
@@ -144,7 +144,7 @@ function PlacementGhost({ placement, pkg, floorY = 0 }: GhostProps) {
         <boxGeometry args={[pkg.footprint.width, 0.9, pkg.footprint.depth]} />
         <meshStandardMaterial
           ref={materialRef}
-          color="#94a3b8"
+          color={HIGHLIGHT.ghost}
           transparent
           opacity={0.2}
           depthWrite={false}
@@ -162,8 +162,8 @@ type ItemProps = {
   obstacles: Obstacle[]
 }
 
-const OUTLINE_VALID = new Color('#ffdb00')
-const OUTLINE_INVALID = new Color('#ef4444')
+const OUTLINE_VALID = new Color(HIGHLIGHT.selected)
+const OUTLINE_INVALID = new Color(HIGHLIGHT.blocked)
 
 /** Stored 0…360 rotation expressed as −180…180. */
 function signedDegrees(rotationYDeg: number): number {
@@ -331,7 +331,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
             }}
           >
             <Show when={rotateOpen}>
-              <div className="flex items-center gap-2 rounded-full bg-neutral-900/95 px-3 py-1.5 shadow-xl backdrop-blur desktop:gap-3 desktop:px-4 desktop:py-2">
+              <div className="flex items-center gap-2 rounded-full bg-ink/95 px-3 py-1.5 shadow-xl backdrop-blur desktop:gap-3 desktop:px-4 desktop:py-2">
                 <div className="relative flex h-5 w-32 items-center desktop:w-44">
                   <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-between px-0.5">
                     {[-180, -90, 0, 90, 180].map((tick) => (
@@ -348,30 +348,30 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
                     className="rotation-slider relative w-full"
                   />
                 </div>
-                <span className="min-w-10 rounded bg-neutral-800 px-1.5 py-0.5 text-center text-xs font-semibold text-white tabular-nums">
+                <span className="min-w-10 rounded-sm bg-surface/15 px-1.5 py-0.5 text-center text-xs font-medium text-surface tabular-nums">
                   {signedDegrees(placement.rotationYDeg)}°
                 </span>
               </div>
             </Show>
 
-            <div className="flex items-center overflow-hidden rounded-full bg-neutral-900/95 shadow-xl backdrop-blur desktop:rounded-2xl">
+            <div className="flex items-center overflow-hidden rounded-full bg-ink/95 shadow-xl backdrop-blur">
               <button
                 type="button"
                 aria-label="Rotate"
                 onClick={() => setRotateOpen((v) => !v)}
                 className={`flex size-10 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors desktop:size-auto desktop:px-4 desktop:py-2.5 ${
-                  rotateOpen ? 'bg-neutral-700 text-white' : 'text-neutral-200 hover:bg-neutral-800'
+                  rotateOpen ? 'bg-surface/20 text-surface' : 'text-surface/85 hover:bg-surface/10'
                 }`}
               >
                 <RotateCw size={16} />
                 <span className="hidden desktop:inline">Rotate</span>
               </button>
-              <span className="h-6 w-px bg-neutral-700 desktop:h-8" />
+              <span className="h-6 w-px bg-surface/20 desktop:h-8" />
               <button
                 type="button"
                 aria-label="Remove"
                 onClick={() => removePackage(placement.instanceId)}
-                className="flex size-10 flex-col items-center justify-center gap-1 text-[11px] font-medium text-neutral-200 transition-colors hover:bg-neutral-800 desktop:size-auto desktop:px-4 desktop:py-2.5"
+                className="flex size-11 flex-col items-center justify-center gap-1 text-[11px] font-medium text-surface/85 transition-colors hover:bg-surface/10 desktop:size-auto desktop:px-4 desktop:py-2.5"
               >
                 <Trash2 size={16} />
                 <span className="hidden desktop:inline">Remove</span>

@@ -51,8 +51,8 @@ export function ViewModeBar() {
 
   const itemClass = (active: boolean, disabled = false) =>
     cn(
-      'flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors sm:px-4',
-      active ? 'bg-neutral-900 text-white' : 'text-neutral-800 hover:bg-neutral-100',
+      'flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors desktop:px-4',
+      active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-secondary',
       disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent',
     )
 
@@ -66,17 +66,17 @@ export function ViewModeBar() {
       )}
     >
       <Show when={sideOpen}>
-        <div className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-1 rounded-2xl bg-white p-1.5 shadow-xl ring-1 ring-black/5">
+        <div className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-1 rounded-full bg-card p-1.5 shadow-xl ring-1 ring-border">
           <For each={SIDE_VIEWS} getKey={(v) => v.mode}>
             {(view) => (
               <button
                 type="button"
                 onClick={() => pick(view.mode)}
                 className={cn(
-                  'rounded-xl px-4 py-2 text-sm font-medium transition-colors',
+                  'rounded-full px-4 py-2 text-sm font-medium transition-colors',
                   viewMode === view.mode
-                    ? 'bg-neutral-900 text-white'
-                    : 'text-neutral-800 hover:bg-neutral-100',
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-foreground hover:bg-secondary',
                 )}
               >
                 {view.label}
@@ -86,7 +86,7 @@ export function ViewModeBar() {
         </div>
       </Show>
 
-      <div className="flex items-center gap-1 rounded-full bg-white p-1.5 shadow-xl ring-1 ring-black/5">
+      <div className="flex items-center gap-1 rounded-full bg-card p-1.5 shadow-xl ring-1 ring-border">
         <button type="button" onClick={() => pick('dollhouse')} className={itemClass(viewMode === 'dollhouse')}>
           {isRoomFocused ? <Box size={16} /> : <Home size={16} />}
           <Label>{isRoomFocused ? 'Dollhouse' : 'Overview'}</Label>
@@ -104,7 +104,7 @@ export function ViewModeBar() {
           <Label>Side views</Label>
           <ChevronUp size={14} className={cn('transition-transform', sideOpen && 'rotate-180')} />
         </button>
-        <span className="h-6 w-px bg-neutral-200" />
+        <span className="h-6 w-px bg-border" />
         <button
           type="button"
           disabled={!selected}
@@ -115,7 +115,7 @@ export function ViewModeBar() {
           <Label>Move to</Label>
         </button>
         <Show when={!isRoomFocused}>
-          <span className="h-6 w-px bg-neutral-200" />
+          <span className="h-6 w-px bg-border" />
           <button
             type="button"
             onClick={toggleCeiling}

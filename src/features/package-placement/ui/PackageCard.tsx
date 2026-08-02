@@ -26,7 +26,7 @@ export function PackageCard({
       onClick={onAdd}
       title={fits ? `Add ${pkg.title} to the room` : 'Does not fit this room'}
       className={cn(
-        'group relative flex flex-col overflow-hidden rounded-2xl bg-card text-left',
+        'group relative flex flex-col overflow-hidden rounded-lg bg-card text-left',
         'ring-1 ring-border transition-all duration-200',
         fits
           ? 'hover:-translate-y-0.5 hover:shadow-lg hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-primary'
@@ -54,9 +54,9 @@ export function PackageCard({
         <Show when={fits}>
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-200 group-hover:bg-black/10 group-hover:opacity-100"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center bg-ink/0 opacity-0 transition-all duration-200 group-hover:bg-ink/10 group-hover:opacity-100"
           >
-            <span className="flex size-11 items-center justify-center rounded-full bg-white text-neutral-900 shadow-lg">
+            <span className="flex size-11 items-center justify-center rounded-full bg-surface text-ink shadow-lg">
               <Plus size={20} strokeWidth={2.5} />
             </span>
           </span>

@@ -33,14 +33,16 @@ export function QuoteDialog({ building, packages, integration }: Props) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Request a quote"
-        className="absolute top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-40 flex items-center gap-2 rounded-full bg-neutral-900 p-3 text-sm font-semibold text-white shadow-xl ring-1 ring-white/10 transition-transform hover:scale-[1.02] active:scale-[0.98] desktop:py-3 desktop:pr-5 desktop:pl-4"
+        className="absolute top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-30 flex items-center gap-2 rounded-full bg-primary p-3 text-sm font-medium text-primary-foreground shadow-xl transition-transform hover:scale-[1.02] active:scale-[0.98] desktop:py-3 desktop:pr-5 desktop:pl-4"
       >
         <FileText size={16} strokeWidth={2.5} />
         <span className="hidden desktop:inline">Request a quote</span>
       </button>
 
       <Show when={open}>
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
+        {/* Above the trigger, which sits at z-30 — the modal used to open *under*
+            the button that opened it. */}
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
           <div className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-xl bg-background p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">Request a quote</h2>

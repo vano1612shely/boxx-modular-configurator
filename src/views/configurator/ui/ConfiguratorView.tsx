@@ -32,7 +32,7 @@ export async function ConfiguratorView({ searchParams }: Props) {
     const lines = await getIntakeLines()
 
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-secondary/40 p-4">
+      <main className="flex min-h-dvh items-center justify-center bg-background p-4">
         <IntakeForm lines={lines} />
       </main>
     )
@@ -42,10 +42,13 @@ export async function ConfiguratorView({ searchParams }: Props) {
 
   if (resolution.status === 'not-found') {
     return (
-      <main className="flex min-h-dvh items-center justify-center">
-        <p className="text-muted-foreground">
-          No buildings available yet. Add one in the admin panel.
-        </p>
+      <main className="flex min-h-dvh items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md space-y-2 rounded-xl bg-card p-6 text-center shadow-md ring-1 ring-border">
+          <h1 className="text-xl font-medium">Nothing to configure yet</h1>
+          <p className="text-sm text-muted-foreground">
+            No buildings are available for this selection right now. Please try again shortly.
+          </p>
+        </div>
       </main>
     )
   }

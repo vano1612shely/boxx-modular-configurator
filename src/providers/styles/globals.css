@@ -9,49 +9,96 @@
   }
 }
 
+/* BOXX 2026 design system. Names and values are taken from the client's Figma
+   style guide (file zmxH8gYUekbqxgBCAVeFjk, frame "Style Guide"), not sampled
+   from a render — keep the names so a designer can find them. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
+  --boxx-cherry: #a80030;
+  --boxx-cherry-deep: #812718;
+  --boxx-cherry-light: #f7d8e0;
+  --boxx-gold: #cec09c;
+  --boxx-gold-light: #ffe6db;
+  --boxx-ink: #131211;
+  --boxx-ink-faded: #353735;
+  --boxx-sand: #f9f7f4;
+  --boxx-sand-deep: #f4efe8;
+  --boxx-surface: #ffffff;
+  --boxx-success: #047e00;
+  --boxx-success-bg: #c6e6ca;
+  --boxx-blue-light: #d2e9ff;
+
+  /* The guide has no error colour. Dark Red is the closest thing it names, but
+     it sits 12° of hue from Cherry — so error state must never rest on colour
+     alone; Callout always pairs it with an icon and a sentence. */
+  --boxx-danger: #a90f1c;
+
+  /* Muted body text. The guide's Faded Black (#353735) is nearly black and
+     reads as body copy, not as a secondary line; this is the value the layouts
+     actually use. 5.25:1 on sand. */
+  --boxx-ink-soft: #6a6766;
+
+  /* The card edge in the layouts ramps #83807C→#A7A6A6→#FFFFFF. A percentage of
+     ink reads correctly on white and on sand from one declaration. */
+  --boxx-hairline: color-mix(in srgb, var(--boxx-ink) 12%, transparent);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+:root {
+  /* Load-bearing. IntakeForm ships a native <select> and two number inputs,
+     QuoteDialog four text inputs; with no scheme declared a visitor on a
+     dark-mode OS gets those repainted dark grey inside our light panel, on the
+     client's light page. This also stops the host page's scheme leaking in. */
+  color-scheme: only light;
+  accent-color: var(--boxx-cherry);
+
+  /* White Sand, not white and not cream: the configurator is iframed into the
+     client's page and that page's ground is White Sand. Cream would draw a
+     visible rectangle along the seam. Cream is for boxed surfaces inside. */
+  --background: var(--boxx-sand);
+  --foreground: var(--boxx-ink);
+
+  --card: var(--boxx-surface);
+  --card-foreground: var(--boxx-ink);
+  --popover: var(--boxx-surface);
+  --popover-foreground: var(--boxx-ink);
+
+  /* Ink, never Cherry. In this system the filled button is black — the selected
+     wizard option, the active tab, every commit action. Cherry is the progress
+     fill, the CTA band and the logo diamond. Mapping Cherry here would turn the
+     room hotspots and the package count badge red. */
+  --primary: var(--boxx-ink);
+  --primary-foreground: var(--boxx-surface);
+
+  --secondary: var(--boxx-sand-deep);
+  --secondary-foreground: var(--boxx-ink);
+  --muted: var(--boxx-sand-deep);
+  --muted-foreground: var(--boxx-ink-soft);
+
+  --accent: var(--boxx-cherry-light);
+  --accent-foreground: var(--boxx-ink);
+
+  --destructive: var(--boxx-danger);
+  --destructive-foreground: var(--boxx-surface);
+
+  --border: var(--boxx-hairline);
+  --input: var(--boxx-hairline);
+  --ring: var(--boxx-cherry);
+
+  /* 12px. Generates 8 / 10 / 12 / 16, which is the ramp the layouts use. The
+     style guide names only 5px and "fully pill", but 5px appears on no artboard
+     — it documents the media radius and leaves panels undocumented. */
+  --radius: 0.75rem;
+}
+
+@theme {
+  /* Must be a plain @theme, not @theme inline: Tailwind's preflight resolves
+     --default-font-family through --theme(--font-sans), and an inlined key is
+     never emitted to :root for it to find. */
+  --font-sans: var(--font-boxx), ui-sans-serif, system-ui, sans-serif;
+
+  /* The guide's three spacings: between cards, title-to-content, section-to-section. */
+  --spacing-card: 0.625rem;
+  --spacing-block: 1.875rem;
+  --spacing-section: 6.25rem;
 }
 
 @theme inline {
@@ -74,6 +121,22 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* Brand names, for the places that mean "Cherry" rather than "primary". */
+  --color-brand: var(--boxx-cherry);
+  --color-brand-deep: var(--boxx-cherry-deep);
+  --color-brand-soft: var(--boxx-cherry-light);
+  --color-gold: var(--boxx-gold);
+  --color-gold-soft: var(--boxx-gold-light);
+  --color-ink: var(--boxx-ink);
+  --color-ink-soft: var(--boxx-ink-soft);
+  --color-sand: var(--boxx-sand);
+  --color-sand-deep: var(--boxx-sand-deep);
+  --color-surface: var(--boxx-surface);
+  --color-success: var(--boxx-success);
+  --color-success-soft: var(--boxx-success-bg);
+  --color-info-soft: var(--boxx-blue-light);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -90,7 +153,7 @@
   }
 }
 
-/* IKEA-style rotation slider inside the selection toolbar */
+/* Rotation slider inside the in-scene selection toolbar, which sits on ink. */
 .rotation-slider {
   appearance: none;
   height: 4px;
@@ -104,7 +167,7 @@
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--boxx-surface);
   border: none;
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
   cursor: pointer;
@@ -114,7 +177,7 @@
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--boxx-surface);
   border: none;
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
   cursor: pointer;

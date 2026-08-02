@@ -10,6 +10,8 @@ import {
 
 import type { ZoneBox } from '@/entities/building'
 
+import { CUT_FACE } from './scene-tokens'
+
 export const MAX_HIDE_BOXES = 24
 
 type SharedUniforms = {
@@ -20,7 +22,7 @@ type SharedUniforms = {
 }
 
 /** Flat fill shown where a hide box exposes the inside of a hollow shell. */
-export const CAP_COLOR = '#e8e5df'
+export const CAP_COLOR = CUT_FACE
 
 export type OverviewClippingController = {
   setHideBoxes: (boxes: ZoneBox[]) => void

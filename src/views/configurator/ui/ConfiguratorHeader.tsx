@@ -29,14 +29,14 @@ export function ConfiguratorHeader({ building }: { building: BuildingScene }) {
             <button
               type="button"
               onClick={clearFocus}
-              className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-full bg-neutral-900 py-2.5 pr-4 pl-3 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-full bg-primary py-2.5 pr-4 pl-3 text-sm font-medium text-primary-foreground shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
             >
               <ArrowLeft size={16} strokeWidth={2.5} />
               <span className="hidden desktop:inline">Back to building</span>
               <span className="desktop:hidden">Building</span>
             </button>
 
-            <div className="pointer-events-auto flex min-w-0 items-center gap-2 rounded-full bg-white/95 py-2 pr-4 pl-3 shadow-md ring-1 ring-black/5 backdrop-blur">
+            <div className="pointer-events-auto flex min-w-0 items-center gap-2 rounded-full bg-card/95 py-2 pr-4 pl-3 shadow-md ring-1 ring-border backdrop-blur">
               <DoorOpen size={15} className="shrink-0 text-muted-foreground" />
               <span className="truncate text-sm font-semibold">{focused.name}</span>
             </div>
@@ -45,7 +45,7 @@ export function ConfiguratorHeader({ building }: { building: BuildingScene }) {
       </Show>
 
       <Show when={room === null}>
-        <div className="pointer-events-auto min-w-0 rounded-2xl bg-white/95 px-4 py-2.5 shadow-md ring-1 ring-black/5 backdrop-blur">
+        <div className="pointer-events-auto min-w-0 rounded-xl bg-card/95 px-4 py-2.5 shadow-md ring-1 ring-border backdrop-blur">
           <h1 className="truncate text-sm font-semibold">{building.title}</h1>
           <p className="truncate text-xs text-muted-foreground">{meta}</p>
         </div>

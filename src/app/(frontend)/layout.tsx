@@ -1,7 +1,20 @@
 import type { Metadata, Viewport } from 'next'
+import localFont from 'next/font/local'
 import type { PropsWithChildren } from 'react'
 
 import { AppProviders } from '@/providers'
+
+// General Sans is the BOXX brand face. Self-hosted rather than pulled from
+// Fontshare's CDN: the configurator runs inside the client's iframe, which
+// inherits nothing from the host cascade, and a third-party font request is
+// exactly what a host CSP font-src blocks. One variable file covers Regular 400
+// and Medium 500, the only two weights the design system uses.
+const generalSans = localFont({
+  src: '../fonts/GeneralSans-Variable.woff2',
+  variable: '--font-boxx',
+  weight: '200 700',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: '3D Building Configurator',
@@ -12,12 +25,12 @@ export const metadata: Metadata = {
 // landscape; overlay controls stay clear via env(safe-area-inset-*).
 export const viewport: Viewport = {
   viewportFit: 'cover',
-  themeColor: '#f2f3f5',
+  themeColor: '#f9f7f4',
 }
 
 export default function FrontendLayout({ children }: PropsWithChildren) {
   return (
-    <html lang="en">
+    <html lang="en" className={generalSans.variable}>
       <body>
         <AppProviders>{children}</AppProviders>
       </body>

@@ -45,7 +45,7 @@ export function PackagePanel({ building, packages }: Props) {
             type="button"
             aria-label="Close the furniture list"
             onClick={() => setExpanded(false)}
-            className="fixed inset-0 -z-10 bg-black/20 backdrop-blur-[2px]"
+            className="absolute inset-0 -z-10 bg-ink/20 backdrop-blur-[2px]"
           />
         </Show>
 

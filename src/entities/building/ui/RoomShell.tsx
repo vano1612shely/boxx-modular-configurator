@@ -39,8 +39,11 @@ const SURFACE_COLORS: Record<ShellSurface, string> = {
   wallEdge: '#ffffff',
   floor: '#c9b79c',
   ceiling: '#f6f5f3',
-  door: '#8a6f52',
-  window: '#9fb6c4',
+  // Shown only when a room has no door/window glb. Both used to be wrong about
+  // the product: stained timber where BOXX fits white doors, and a blue-grey
+  // pane that is the only cool value anywhere in the brand.
+  door: '#efece7',
+  window: '#dfe3e2',
 }
 
 const FRAME_SURFACES = new Set<ShellSurface>(['wallEdge', 'wallOuter'])

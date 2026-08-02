@@ -18,6 +18,7 @@ describe('scene tokens mirror globals.css', () => {
     ['cherry', 'cherry'],
     ['cherryDeep', 'cherry-deep'],
     ['gold', 'gold'],
+    ['mango', 'mango'],
     ['ink', 'ink'],
     ['sand', 'sand'],
     ['sandDeep', 'sand-deep'],

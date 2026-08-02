@@ -16,6 +16,7 @@ export const BOXX = {
   cherry: '#a80030',
   cherryDeep: '#812718',
   gold: '#cec09c',
+  mango: '#ffaa2f',
   ink: '#131211',
   sand: '#f9f7f4',
   sandDeep: '#f4efe8',
@@ -30,10 +31,15 @@ export const SCENE_BACKGROUND = BOXX.sand
 export const CUT_FACE = BOXX.sandDeep
 
 export const HIGHLIGHT = {
-  /** Was IKEA yellow. Ink so selection reads as chrome, not as a brand mark. */
-  selected: BOXX.ink,
-  /** Deliberately not cherry: a cherry outline would collide with the cut lines. */
-  blocked: BOXX.danger,
+  /**
+   * The inverted-hull outline is thick enough to read as a silhouette, so ink
+   * looked like a hole cut around the furniture rather than a highlight.
+   * Cherry is the brand's own "this one" colour and stays legible against the
+   * warm neutrals every room is built from.
+   */
+  selected: BOXX.cherry,
+  /** Far enough from cherry in hue to survive being seen next to it mid-drag. */
+  blocked: BOXX.mango,
   /** Warm grey, so the drag ghost belongs to the same family as the ground. */
   ghost: '#a7a29a',
 } as const

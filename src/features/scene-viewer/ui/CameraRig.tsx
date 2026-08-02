@@ -1,7 +1,6 @@
 'use client'
 
 import { CameraControls } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
 import CameraControlsImpl from 'camera-controls'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, MathUtils, Vector3 } from 'three'
@@ -155,25 +154,28 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
   }, [scope])
 
   // Nothing in camera-controls bounds the focal offset, so without this the view
-  // can be slid until the room leaves the frame with no way back but a preset.
+  // can be slid until the room leaves the frame.
   //
-  // Only once the gesture is over. The offset drag adds a delta per pointermove,
-  // and setFocalOffset both snaps the current value and clears the library's
-  // "user is controlling" flag — which also picks the smoothing time — so
-  // clamping mid-drag fights the incoming deltas and the view stutters at the
-  // limit instead of stopping at it. Left to settle afterwards it eases back.
-  useFrame(() => {
+  // Bound on the 'control' event, which fires synchronously after each drag
+  // delta has been applied and before anything renders — so the offset is never
+  // shown past the limit and the drag simply stops there. Clamping in a frame
+  // loop instead raced the incoming deltas and stuttered at the edge.
+  useEffect(() => {
     const controls = controlsRef.current
     if (!controls || maxOffset <= 0) return
-    if (controls.currentAction !== CameraControlsImpl.ACTION.NONE) return
 
-    const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
-    const planar = Math.hypot(offset.x, offset.y)
-    if (planar <= maxOffset) return
+    const bound = () => {
+      const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
+      const planar = Math.hypot(offset.x, offset.y)
+      if (planar <= maxOffset) return
 
-    const scale = maxOffset / planar
-    void controls.setFocalOffset(offset.x * scale, offset.y * scale, offset.z, true)
-  })
+      const scale = maxOffset / planar
+      void controls.setFocalOffset(offset.x * scale, offset.y * scale, offset.z, false)
+    }
+
+    controls.addEventListener('control', bound)
+    return () => controls.removeEventListener('control', bound)
+  }, [maxOffset])
 
   useEffect(() => {
     const controls = controlsRef.current

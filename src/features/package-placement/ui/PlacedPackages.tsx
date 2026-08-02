@@ -175,59 +175,32 @@ function signedDegrees(rotationYDeg: number): number {
 }
 
 /**
- * Concentric inverted hulls, widening and fading outwards, so the highlight
- * reads as a glow rather than a stroke. Same colour throughout, so the layers
- * composite order-independently and cannot flicker against each other.
+ * Two inverted hulls at different scales, the outer one fainter, so the edge
+ * fades outwards instead of ending as a hard stroke. Same colour in both, so
+ * they composite order-independently and cannot flicker against each other.
+ *
+ * The whole clone is scaled by a parent group rather than each mesh being
+ * inflated in place. Growing meshes individually was tried and is wrong: a
+ * geometry-space scale moves any part whose own centre is offset, so thin legs
+ * and panels came out as displaced copies floating beside the model.
  */
 const OUTLINE_LAYERS = [
-  { inflate: 1.008, opacity: 0.85 },
-  { inflate: 1.02, opacity: 0.4 },
-  { inflate: 1.036, opacity: 0.16 },
+  { scale: 1.008, opacity: 0.8 },
+  { scale: 1.022, opacity: 0.32 },
 ]
 
 /** Clipped this far above the floor, so the hull never meets it and z-fights. */
 const OUTLINE_FLOOR_LIFT = 0.006
 
 type Outline = {
-  layers: Array<{ shell: Object3D; material: MeshBasicMaterial }>
+  layers: Array<{ shell: Object3D; material: MeshBasicMaterial; scale: number }>
   dispose: () => void
-}
-
-/**
- * Inflates each mesh about **its own** centre rather than scaling the package as
- * a group. Scaling the group translates every part away from the group centre,
- * which pushes one part's hull out through the side of its neighbour; growing
- * each part in place keeps every hull surface buried inside the geometry it
- * belongs to, where the depth test hides it.
- */
-function inflatedClone(source: Object3D, factor: number, material: MeshBasicMaterial): Object3D {
-  const shell = source.clone(true)
-
-  shell.traverse((object) => {
-    if (!(object instanceof Mesh)) return
-
-    const geometry = object.geometry.clone()
-    geometry.computeBoundingBox()
-    const centre = geometry.boundingBox?.getCenter(new Vector3()) ?? new Vector3()
-
-    geometry.translate(-centre.x, -centre.y, -centre.z)
-    geometry.scale(factor, factor, factor)
-    geometry.translate(centre.x, centre.y, centre.z)
-
-    object.geometry = geometry
-    object.material = material
-    object.castShadow = false
-    object.receiveShadow = false
-    object.raycast = () => {}
-  })
-
-  return shell
 }
 
 function buildOutline(source: Object3D, floorY: number): Outline {
   const clip = new Plane(new Vector3(0, 1, 0), -(floorY + OUTLINE_FLOOR_LIFT))
 
-  const layers = OUTLINE_LAYERS.map(({ inflate, opacity }, index) => {
+  const layers = OUTLINE_LAYERS.map(({ scale, opacity }) => {
     const material = new MeshBasicMaterial({
       color: OUTLINE_VALID.clone(),
       side: BackSide,
@@ -238,21 +211,22 @@ function buildOutline(source: Object3D, floorY: number): Outline {
       clippingPlanes: [clip],
     })
 
-    const shell = inflatedClone(source, inflate, material)
-    shell.renderOrder = -1 - index
+    const shell = source.clone(true)
+    shell.traverse((object) => {
+      if (!(object instanceof Mesh)) return
+      object.material = material
+      object.castShadow = false
+      object.receiveShadow = false
+      object.raycast = () => {}
+    })
 
-    return { shell, material }
+    return { shell, material, scale }
   })
 
   return {
     layers,
     dispose: () => {
-      for (const { shell, material } of layers) {
-        shell.traverse((object) => {
-          if (object instanceof Mesh) object.geometry.dispose()
-        })
-        material.dispose()
-      }
+      for (const { material } of layers) material.dispose()
     },
   }
 }
@@ -377,7 +351,13 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
         </group>
         <Show when={isSelected}>
           <For each={outline.layers} getKey={(_, index) => index}>
-            {(layer) => <primitive object={layer.shell} />}
+            {(layer) => (
+              // Scaled by a group: the shell carries the recentring offset in
+              // its own transform, which scaling it directly would multiply too.
+              <group scale={layer.scale}>
+                <primitive object={layer.shell} />
+              </group>
+            )}
           </For>
         </Show>
       </group>

@@ -40,20 +40,11 @@ next-env.d.ts
 
 .env
 
-# Payload upload storage.
-#
-# These are the files visitors and admins uploaded, written to disk by the
-# local-disk adapter — 55 MB of them already. They are DATA, not source: they
-# belong in S3 (set S3_BUCKET and the adapter in payload.config.ts takes over),
-# and on a serverless host the local disk is wiped between invocations anyway.
-# Committing them would also bake that 55 MB into the history permanently.
+# Payload upload storage — uploaded data, not source.
 /media
 /models
 /textures
 /images
-
-# Netlify
-.netlify
 
 # Playwright
 node_modules/
@@ -61,3 +52,8 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Local-only: notes, demo data and tooling config
+/docs
+/src/seed
+/.claude

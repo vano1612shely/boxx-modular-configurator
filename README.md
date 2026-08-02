@@ -41,19 +41,11 @@ location /api          { proxy_pass http://127.0.0.1:3000; }
 location /_next        { proxy_pass http://127.0.0.1:3000; }
 ```
 
-### Object storage (optional)
+### Uploads
 
-Uploads are stored on local disk by default. To switch to S3/R2, set in `.env`:
-
-```
-S3_BUCKET=…
-S3_ENDPOINT=…          # e.g. https://<account>.r2.cloudflarestorage.com
-S3_REGION=auto
-S3_ACCESS_KEY_ID=…
-S3_SECRET_ACCESS_KEY=…
-```
-
-No code changes needed — the storage adapter activates when `S3_BUCKET` is set.
+Models, textures and images are written to `./models`, `./textures` and `./images`
+next to the code, and served by the app. Those directories must survive a restart
+and a redeploy.
 
 ---
 

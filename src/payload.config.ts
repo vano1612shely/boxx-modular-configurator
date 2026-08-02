@@ -1,8 +1,7 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
-import { s3Storage } from '@payloadcms/storage-s3'
 import path from 'path'
-import { buildConfig, type Plugin } from 'payload'
+import { buildConfig } from 'payload'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
@@ -10,40 +9,6 @@ import { collections, globals } from './modules'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
-
-const useS3 = Boolean(process.env.S3_BUCKET)
-
-/** Public bucket/CDN base URL; the bucket must allow public reads. */
-const publicBucketUrl = process.env.S3_PUBLIC_URL?.replace(/\/+$/, '')
-
-const servedDirectly = publicBucketUrl
-  ? {
-      generateFileURL: ({ filename, prefix }: { filename: string; prefix?: string }) =>
-        [publicBucketUrl, prefix, filename].filter(Boolean).join('/'),
-    }
-  : {}
-
-const plugins: Plugin[] = useS3
-  ? [
-      s3Storage({
-        collections: {
-          images: servedDirectly,
-          models: servedDirectly,
-          // Miss one and that collection silently keeps writing to local disk.
-          textures: servedDirectly,
-        },
-        bucket: process.env.S3_BUCKET ?? '',
-        config: {
-          endpoint: process.env.S3_ENDPOINT,
-          region: process.env.S3_REGION ?? 'auto',
-          credentials: {
-            accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
-            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
-          },
-        },
-      }),
-    ]
-  : []
 
 export default buildConfig({
   admin: {
@@ -69,5 +34,4 @@ export default buildConfig({
     migrationDir: path.resolve(dirname, 'migrations'),
   }),
   sharp,
-  plugins,
 })

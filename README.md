@@ -138,6 +138,26 @@ docker compose logs -f app
 Then open `http://SERVER_IP/admin` and create the first admin user. The admin panel
 refuses to create a second one once any user exists, so do this yourself.
 
+### Schema changes need a migration, always
+
+Development runs Payload's push mode: the database is altered to match the
+collections on boot. Production does not — it applies only what is committed under
+`src/migrations`. A field added without a migration therefore works perfectly
+locally and breaks exactly one collection in production.
+
+After changing any collection or field:
+
+```bash
+pnpm generate:types
+pnpm migrate:create <name>      # commit both the .ts and the .json snapshot
+```
+
+Read the generated SQL before committing it. Drizzle infers intent from a schema
+diff, and a renamed field is indistinguishable from "drop one column, add another".
+
+CI queries every collection after a release for this reason: a page can render
+while the schema under it is a migration behind.
+
 ### Updating later
 
 ```bash

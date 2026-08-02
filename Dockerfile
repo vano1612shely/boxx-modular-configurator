@@ -40,7 +40,14 @@ COPY --from=builder /app/src ./src
 # The upload adapter writes relative to the working directory, so these are the
 # paths the bind mounts have to land on. Created here so the container still
 # starts if a mount is missing.
-RUN mkdir -p models textures images media && chown -R node:node /app
+#
+# Only what the app writes to is given away. `chown -R /app` rewrites every
+# file's metadata, and overlayfs records that as a second full copy of
+# node_modules — a 1.15 GB layer that, being last, changed on every commit and
+# was re-pulled on every deploy. Everything else is world-readable already.
+RUN mkdir -p models textures images media .next/cache \
+ && chown node:node models textures images media \
+ && chown -R node:node .next/cache
 
 USER node
 EXPOSE 3000

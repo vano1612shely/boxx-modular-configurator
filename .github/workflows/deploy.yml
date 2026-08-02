@@ -155,7 +155,7 @@ jobs:
           for attempt in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://${{ secrets.SSH_HOST }}/configurator" || true)
             if [ "$code" = "200" ]; then
-              echo "healthy after ${attempt} attempt(s)"
+              echo "serving after ${attempt} attempt(s)"
               exit 0
             fi
             echo "attempt ${attempt}: HTTP ${code}"
@@ -165,3 +165,26 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             'cd /opt/boxx && docker compose logs --tail 80 app'
           exit 1
+
+      # A page can render while the schema underneath it is a migration behind:
+      # the first release did exactly that, and only one collection was broken.
+      # Querying each one turns that into a failed deploy instead of a report
+      # from whoever opens the admin panel next.
+      - name: Query every collection
+        run: |
+          failed=0
+          for collection in regions building-lines building-models furniture-packages \
+                            models textures images quotes users; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+              "http://${{ secrets.SSH_HOST }}/api/${collection}?limit=1&depth=0" || echo 000)
+            # 401 and 403 are answers; a 5xx means the query itself broke.
+            case "$code" in
+              5*|000) echo "  $collection -> HTTP $code"; failed=1 ;;
+              *) echo "  $collection -> HTTP $code" ;;
+            esac
+          done
+          if [ "$failed" = "1" ]; then
+            ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+              'cd /opt/boxx && docker compose logs --tail 60 app'
+            exit 1
+          fi

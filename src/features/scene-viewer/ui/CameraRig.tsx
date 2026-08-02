@@ -1,6 +1,8 @@
 'use client'
 
 import { CameraControls } from '@react-three/drei'
+import { useFrame } from '@react-three/fiber'
+import CameraControlsImpl from 'camera-controls'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, MathUtils, Vector3 } from 'three'
 
@@ -99,6 +101,12 @@ function viewModePreset(mode: ViewMode, scope: ViewScope): CameraPreset {
   }
 }
 
+/** Reused so the per-frame offset clamp allocates nothing and mutates no hook value. */
+const OFFSET_SCRATCH = new Vector3()
+
+/** How far the view may slide off the subject, as a fraction of its radius. */
+const MAX_OFFSET_RATIO = 0.6
+
 export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
   const controlsRef = useRef<CameraControls>(null)
   const viewMode = useConfiguratorSession((s) => s.viewMode)
@@ -130,6 +138,40 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
     const controls = controlsRef.current
     if (!controls) return
 
+    // Panning must not carry the pivot with it. TRUCK — the default for the
+    // right button and two fingers — moves the target as well as the camera, so
+    // one pan leaves the orbit centred on wherever the drag ended and the dolly
+    // converging there too. OFFSET slides the camera and leaves the target on
+    // the room centre, which is what both gestures are expected to mean.
+    controls.mouseButtons.right = CameraControlsImpl.ACTION.OFFSET
+    controls.touches.two = CameraControlsImpl.ACTION.TOUCH_DOLLY_OFFSET
+  }, [])
+
+  const maxOffset = useMemo(() => {
+    if (!scope) return 0
+    const [minX, minY, minZ] = scope.min
+    const [maxX, maxY, maxZ] = scope.max
+    return (Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) / 2) * MAX_OFFSET_RATIO
+  }, [scope])
+
+  // Nothing in camera-controls bounds the focal offset, so without this the view
+  // can be slid until the room leaves the frame with no way back but a preset.
+  useFrame(() => {
+    const controls = controlsRef.current
+    if (!controls || maxOffset <= 0) return
+
+    const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
+    const planar = Math.hypot(offset.x, offset.y)
+    if (planar <= maxOffset) return
+
+    const scale = maxOffset / planar
+    void controls.setFocalOffset(offset.x * scale, offset.y * scale, offset.z, false)
+  })
+
+  useEffect(() => {
+    const controls = controlsRef.current
+    if (!controls) return
+
     const preset =
       moveToTarget ??
       (scope
@@ -146,6 +188,9 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
     // camera-controls accumulates azimuth and never normalizes it itself;
     // without this, setLookAt unwinds every accumulated turn.
     controls.normalizeRotations()
+    // setLookAt leaves the focal offset alone, so a view picked after panning
+    // would arrive with the pan still applied and sit off-centre.
+    void controls.setFocalOffset(0, 0, 0, true)
     void controls.setLookAt(px, py, pz, tx, ty, tz, true)
   }, [camera, scope, viewMode, viewRequestId, moveToTarget])
 

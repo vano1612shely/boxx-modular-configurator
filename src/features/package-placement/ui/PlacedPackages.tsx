@@ -24,6 +24,7 @@ import {
   Raycaster,
   Vector2,
   Vector3,
+  type Camera,
   type Group,
   type Object3D,
 } from 'three'
@@ -168,6 +169,49 @@ type ItemProps = {
 const OUTLINE_VALID = new Color(HIGHLIGHT.selected)
 const OUTLINE_INVALID = new Color(HIGHLIGHT.blocked)
 
+const TOOLBAR_MARGIN_X = 130
+const TOOLBAR_MARGIN_Y = 80
+
+const ANCHOR = new Vector3()
+const CAMERA_POS = new Vector3()
+const CAMERA_DIR = new Vector3()
+const TO_ANCHOR = new Vector3()
+
+/**
+ * drei pins <Html> to a projected world point, so zooming in walks the toolbar
+ * off the edge and out of reach. Same projection, then clamped into the
+ * viewport so it slides along the border instead of leaving.
+ */
+function keepOnScreen(
+  el: Object3D,
+  camera: Camera,
+  size: { width: number; height: number },
+): number[] {
+  const anchor = ANCHOR.setFromMatrixPosition(el.matrixWorld)
+  const cameraPos = CAMERA_POS.setFromMatrixPosition(camera.matrixWorld)
+
+  // Behind the near plane, project() mirrors the point through the origin,
+  // which would pin the bar to the opposite edge from the item it belongs to.
+  const inFront =
+    TO_ANCHOR.subVectors(anchor, cameraPos).dot(camera.getWorldDirection(CAMERA_DIR)) > 0
+
+  const projected = anchor.project(camera)
+  const ndcX = inFront ? projected.x : -projected.x
+  const ndcY = inFront ? projected.y : -projected.y
+
+  const marginX = Math.min(TOOLBAR_MARGIN_X, size.width / 2)
+  const marginY = Math.min(TOOLBAR_MARGIN_Y, size.height / 2)
+
+  return [
+    MathUtils.clamp(ndcX * (size.width / 2) + size.width / 2, marginX, size.width - marginX),
+    MathUtils.clamp(
+      -(ndcY * (size.height / 2)) + size.height / 2,
+      marginY,
+      size.height - marginY,
+    ),
+  ]
+}
+
 /** Stored 0…360 rotation expressed as −180…180. */
 function signedDegrees(rotationYDeg: number): number {
   const wrapped = ((Math.round(rotationYDeg) % 360) + 360) % 360
@@ -239,7 +283,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
   const floorY = roomFloorTopY(room)
 
-  const { object, outline } = useMemo(() => {
+  const { object, outline, height } = useMemo(() => {
     const clone = scene.clone(true)
 
     const bounds = new Box3().setFromObject(clone)
@@ -253,7 +297,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
     setMeasuredFootprint(pkg.id, { width: size.x, depth: size.z })
 
-    return { object: clone, outline: buildOutline(clone, floorY) }
+    return { object: clone, outline: buildOutline(clone, floorY), height: size.y }
   }, [scene, pkg.id, floorY])
 
   useEffect(() => outline.dispose, [outline])
@@ -363,7 +407,12 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
       </group>
 
       <Show when={isSelected && !isDragging}>
-        <Html position={[0, 2, 0]} center zIndexRange={[20, 0]}>
+        <Html
+          position={[0, height + 0.3, 0]}
+          center
+          zIndexRange={[20, 0]}
+          calculatePosition={keepOnScreen}
+        >
           <div
             className="flex flex-col items-center gap-2"
             onClick={(event) => event.stopPropagation()}

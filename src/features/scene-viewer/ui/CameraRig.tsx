@@ -20,6 +20,7 @@ import {
 } from '@/entities/configurator-session'
 
 import { cameraLimits } from '../lib/camera-limits'
+import { resistPan } from '../lib/pan-resistance'
 
 type Props = {
   building: BuildingScene
@@ -104,10 +105,11 @@ function viewModePreset(mode: ViewMode, scope: ViewScope): CameraPreset {
 const OFFSET_SCRATCH = new Vector3()
 
 /** How far the view may slide off the subject, as a fraction of its radius. */
-const MAX_OFFSET_RATIO = 0.6
+const MAX_OFFSET_RATIO = 0.72
 
 export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
   const controlsRef = useRef<CameraControls>(null)
+  const panRef = useRef({ rawX: 0, rawY: 0, shownX: 0, shownY: 0 })
   const viewMode = useConfiguratorSession((s) => s.viewMode)
   const viewRequestId = useConfiguratorSession((s) => s.viewRequestId)
   const buildingBounds = useConfiguratorSession((s) => s.buildingBounds)
@@ -169,12 +171,23 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
     const controls = controlsRef.current
     if (!controls || maxOffset <= 0) return
 
+    const pan = panRef.current
+
     const bound = () => {
       const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
-      const x = MathUtils.clamp(offset.x, -maxOffset, maxOffset)
-      const y = MathUtils.clamp(offset.y, -maxOffset, maxOffset)
-      if (x === offset.x && y === offset.y) return
 
+      // The library adds a delta per pointermove, so the raw travel is tracked
+      // apart from what is shown: re-easing an already-eased value would keep
+      // compounding and the view would creep back on its own.
+      pan.rawX += offset.x - pan.shownX
+      pan.rawY += offset.y - pan.shownY
+
+      const x = resistPan(pan.rawX, maxOffset)
+      const y = resistPan(pan.rawY, maxOffset)
+      pan.shownX = x
+      pan.shownY = y
+
+      if (x === offset.x && y === offset.y) return
       void controls.setFocalOffset(x, y, offset.z, false)
     }
 
@@ -204,6 +217,10 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
     controls.normalizeRotations()
     // setLookAt leaves the focal offset alone, so a view picked after panning
     // would arrive with the pan still applied and sit off-centre.
+    panRef.current.rawX = 0
+    panRef.current.rawY = 0
+    panRef.current.shownX = 0
+    panRef.current.shownY = 0
     void controls.setFocalOffset(0, 0, 0, true)
     void controls.setLookAt(px, py, pz, tx, ty, tz, true)
   }, [camera, scope, viewMode, viewRequestId, moveToTarget])

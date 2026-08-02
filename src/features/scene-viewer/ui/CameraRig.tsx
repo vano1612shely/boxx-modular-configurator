@@ -156,16 +156,23 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
 
   // Nothing in camera-controls bounds the focal offset, so without this the view
   // can be slid until the room leaves the frame with no way back but a preset.
+  //
+  // Only once the gesture is over. The offset drag adds a delta per pointermove,
+  // and setFocalOffset both snaps the current value and clears the library's
+  // "user is controlling" flag — which also picks the smoothing time — so
+  // clamping mid-drag fights the incoming deltas and the view stutters at the
+  // limit instead of stopping at it. Left to settle afterwards it eases back.
   useFrame(() => {
     const controls = controlsRef.current
     if (!controls || maxOffset <= 0) return
+    if (controls.currentAction !== CameraControlsImpl.ACTION.NONE) return
 
     const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
     const planar = Math.hypot(offset.x, offset.y)
     if (planar <= maxOffset) return
 
     const scale = maxOffset / planar
-    void controls.setFocalOffset(offset.x * scale, offset.y * scale, offset.z, false)
+    void controls.setFocalOffset(offset.x * scale, offset.y * scale, offset.z, true)
   })
 
   useEffect(() => {

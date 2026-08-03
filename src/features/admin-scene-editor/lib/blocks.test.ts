@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { blockRefKey, nextStoreyBox, sameBlockRef, type EditorBox } from './blocks'
+import { blockRefKey, nextStoreyBox, planCutY, sameBlockRef, type EditorBox } from './blocks'
 
 const FOOTPRINT = { minX: -4, minZ: -3, maxX: 4, maxZ: 3 }
 
@@ -15,6 +15,23 @@ describe('sameBlockRef', () => {
     expect(blockRefKey({ scope: 'roof', index: 0 })).not.toBe(
       blockRefKey({ scope: 'floor', index: 0 }),
     )
+  })
+})
+
+describe('planCutY', () => {
+  it('cuts at chest height on a normal storey', () => {
+    expect(planCutY(0, 3.2)).toBeCloseTo(1.6)
+  })
+
+  // Upstairs the cut has to rise with the floor, or the plan of the second
+  // storey is taken somewhere around its slab.
+  it('rides with the storey it is drawn on', () => {
+    expect(planCutY(3, 3)).toBeCloseTo(4.5)
+  })
+
+  it('stays between waist and head however short or tall the storey', () => {
+    expect(planCutY(0, 0.4) - 0).toBeCloseTo(1.2)
+    expect(planCutY(0, 40) - 0).toBeCloseTo(1.6)
   })
 })
 

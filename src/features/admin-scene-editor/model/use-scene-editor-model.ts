@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   computeSideAxes,
   containingFloor,
+  floorForY,
   autoAssignSides,
   reanchorOpenings,
   rectifyPolygon,
@@ -82,8 +83,9 @@ export function useSceneEditorModel() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [mode, setMode] = useState<EditorMode>('select')
   const [drawingPoints, setDrawingPoints] = useState<Array<{ x: number; z: number }>>([])
+  // Per storey, keyed by its key; '' is the level used while none is picked.
   // y = 0 is the underside of the glb chassis, not a floor anybody walks on.
-  const [drawFloorY, setDrawFloorY] = useState(0)
+  const [drawFloorByStorey, setDrawFloorByStorey] = useState<Record<string, number>>({})
   const [selectedRoomIndex, setSelectedRoomIndex] = useState<number | null>(null)
   const roomMode = selectedRoomIndex !== null
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null)
@@ -103,6 +105,8 @@ export function useSceneEditorModel() {
   const [previewFloorIndex, setPreviewFloorIndex] = useState<number | null>(null)
   const [ghostModel, setGhostModel] = useState(true)
   const [planMode, setPlanMode] = useState(false)
+  /** Bumped to send the viewport camera home; the canvas owns how. */
+  const [viewResetId, setViewResetId] = useState(0)
   const [modelBox, setModelBox] = useState<{ height: number; footprint: PlaneBounds } | null>(null)
   const modelHeight = modelBox?.height ?? 3.2
   const modelFootprint = modelBox?.footprint ?? null
@@ -373,6 +377,30 @@ export function useSceneEditorModel() {
     ? roomLevels.filter((room) => containingFloor(entityFloors, room.y) === null).map((r) => r.name)
     : []
 
+  const previewedStorey = previewFloorIndex === null ? null : entityFloors[previewFloorIndex]
+
+  /**
+   * Rooms the previewed storey holds, or null while the whole building is up.
+   *
+   * Outlines are overlays, not model geometry, so nothing cuts them: without
+   * this the storey below shows its rooms straight through the floor that was
+   * cut away, which is exactly what makes a plan unreadable.
+   */
+  const previewRoomIndexes = previewedStorey
+    ? new Set(
+        roomLevels.flatMap((room, index) =>
+          floorForY(entityFloors, room.y)?.key === previewedStorey.key ? [index] : [],
+        ),
+      )
+    : null
+
+  // A storey the admin is standing on owns its own drawing level, so rooms
+  // traced upstairs do not land on the ground. With no storeys there is one
+  // level and it behaves exactly as it always did.
+  const storeyLevelKey = previewedStorey?.key ?? ''
+  const storeyBaseY = previewedStorey?.box.min[1] ?? 0
+  const drawFloorY = drawFloorByStorey[storeyLevelKey] ?? storeyBaseY
+
   const renameFloor = (index: number, name: string) =>
     patchDraft((d) =>
       writeFloors(
@@ -469,52 +497,6 @@ export function useSceneEditorModel() {
     setSelectedBlock({ scope: 'roof', index })
   }
 
-  const addRoomFromNode = (pathOverride?: string) => {
-    // typeof guard: DOM onClick handlers pass the event object as the arg.
-    const path = typeof pathOverride === 'string' ? pathOverride : selectedNode?.path
-    const box = path ? modelNodes.find((n) => n.path === path)?.box : null
-    if (!box) return
-
-    const nextIndex = draft?.rooms?.length ?? 0
-    const polygon = [
-      { x: box.min.x, z: box.min.z },
-      { x: box.max.x, z: box.min.z },
-      { x: box.max.x, z: box.max.z },
-      { x: box.min.x, z: box.max.z },
-    ]
-    const centerX = (box.min.x + box.max.x) / 2
-    const centerZ = (box.min.z + box.max.z) / 2
-
-    patchDraft((d) => ({
-      ...d,
-      rooms: [
-        ...(d.rooms ?? []),
-        {
-          key: `room-${nextIndex + 1}`,
-          name: `Room ${nextIndex + 1}`,
-          roomType: 'office' as const,
-          floorPolygon: polygon.map((p, i) => ({ ...p, side: autoAssignSides(polygon)[i] })),
-          shell: {
-            floorY: box.max.y,
-            wallHeight: SHELL_DEFAULTS.wallHeight,
-            wallThickness: SHELL_DEFAULTS.wallThickness,
-            floorThickness: SHELL_DEFAULTS.floorThickness,
-            ceilingThickness: SHELL_DEFAULTS.ceilingThickness,
-            sideAxes: null,
-          },
-          openings: [],
-          cameraPreset: {
-            position: { x: centerX, y: box.max.y + 5.5, z: centerZ + 4 },
-            target: { x: centerX, y: box.max.y + 0.6, z: centerZ },
-          },
-        },
-      ],
-    }))
-    setSelectedRoomIndex(nextIndex)
-    setSelectedBlock(null)
-    setMode('select')
-  }
-
   const handleFloorClick = (x: number, z: number) => {
     if (mode === 'draw-room') {
       setDrawingPoints((points) => {
@@ -557,7 +539,7 @@ export function useSceneEditorModel() {
         shell: { ...(room.shell ?? {}), floorY: level },
       }))
     }
-    setDrawFloorY(level)
+    setDrawFloorByStorey((current) => ({ ...current, [storeyLevelKey]: level }))
   }
 
   return {
@@ -584,6 +566,9 @@ export function useSceneEditorModel() {
     floors,
     storeyRoomCounts,
     roomsOffStoreys,
+    previewRoomIndexes,
+    previewFloorName: previewedStorey?.name ?? null,
+    previewFloorBaseY: storeyBaseY,
     previewFloorIndex,
     previewFloorBox: previewFloorIndex === null ? null : boxAt(draft, {
       scope: 'floor',
@@ -608,6 +593,8 @@ export function useSceneEditorModel() {
       }
     },
     onSetPlanMode: setPlanMode,
+    viewResetId,
+    onResetView: () => setViewResetId((id) => id + 1),
     onUndo: undo,
     onEscape: () => {
       setDrawingPoints([])
@@ -653,7 +640,6 @@ export function useSceneEditorModel() {
     onHideNode: (path: string) => setNodeHidden(path, true),
     onShowNode: (path: string) => setNodeHidden(path, false),
     onAddBlockFromNodes: addBlockFromNodes,
-    onAddRoomFromNode: addRoomFromNode,
     onSetRoofHidden: setRoofHidden,
     onSetGhostModel: setGhostModel,
     onFloorClick: handleFloorClick,

@@ -31,6 +31,7 @@ import {
 } from 'three'
 
 import {
+  fitDistance,
   locateOnWalls,
   mapRoomZone,
   planOpeningPlacements,
@@ -46,7 +47,7 @@ import { createNodeResolver, isTreeVisible, nodePathOf } from '@/shared/three/no
 import { applyOverviewClipping } from '@/shared/three/overview-clipping'
 import { For, Show } from '@/shared/ui/control-flow'
 
-import { defaultYRange } from '../lib/blocks'
+import { defaultYRange, planCutY } from '../lib/blocks'
 import { floorPlaneBounds } from '../lib/floor-plane'
 
 import { SIDE_COLORS } from './editor-styles'
@@ -78,6 +79,11 @@ type VmProps = { vm: SceneEditorVm }
 
 const ROOF_COLOR = '#ef4444'
 const STOREY_COLOR = '#f59e0b'
+
+/** Matches the Canvas below, so a reset frames what the lens actually sees. */
+const EDITOR_FOV = 50
+/** The three-quarter direction the editor opens on. */
+const HOME_VIEW_DIR = new Vector3(1, 0.85, 1.15).normalize()
 
 /** Stays raycastable: the floor-level pick needs a surface to hit. */
 const GHOST_MATERIAL = new MeshBasicMaterial({
@@ -379,7 +385,9 @@ function BuildingGlb({
     if (vm.roomMode) return
 
     if (vm.planMode) {
-      const cutY = Math.min(1.6, Math.max(1.2, vm.modelHeight * 0.5))
+      const cutY = storey
+        ? planCutY(storey.min.y, storey.max.y - storey.min.y)
+        : planCutY(0, vm.modelHeight)
       controller.setHideBoxes([{ min: [-500, cutY, -500], max: [500, 500, 500] }])
       return
     }
@@ -654,13 +662,17 @@ function BlockHandles({
 
 const PlanCamera = memo(function PlanCamera({
   rootRef,
+  resetId,
 }: {
   rootRef: MutableRefObject<Object3D | null>
+  resetId: number
 }) {
   const cameraRef = useRef<ThreeOrthographicCamera>(null)
   const { gl } = useThree()
   const [frame, setFrame] = useState<{ x: number; z: number; span: number } | null>(null)
 
+  // A fresh object every time, so a reset re-applies the pose below even when
+  // the framing itself has not moved.
   useEffect(() => {
     const root = rootRef.current
     const box = root ? new Box3().setFromObject(root) : null
@@ -673,7 +685,7 @@ const PlanCamera = memo(function PlanCamera({
     } else {
       setFrame({ x: 0, z: 0, span: 30 })
     }
-  }, [rootRef])
+  }, [rootRef, resetId])
 
   useEffect(() => {
     const camera = cameraRef.current
@@ -808,6 +820,31 @@ function EditorScene({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // The editor deliberately lets the camera go anywhere, which means it can be
+  // taken somewhere useless. This is the way back, without a reload.
+  const viewResetId = vm.viewResetId
+  useEffect(() => {
+    if (viewResetId === 0) return
+    // Null in plan mode, where the orthographic camera resets itself instead.
+    const controls = controlsRef.current
+    if (!controls) return
+
+    const root = buildingRootRef.current
+    const box = root ? new Box3().setFromObject(root) : null
+    if (!box || box.isEmpty()) {
+      void controls.setLookAt(14, 12, 16, 0, 0, 0, true)
+      return
+    }
+
+    const center = box.getCenter(new Vector3())
+    const size = box.getSize(new Vector3())
+    const eye = center
+      .clone()
+      .addScaledVector(HOME_VIEW_DIR, fitDistance(Math.max(size.length() / 2, 1), EDITOR_FOV))
+
+    void controls.setLookAt(eye.x, eye.y, eye.z, center.x, center.y, center.z, true)
+  }, [viewResetId])
 
   const draft = vm.draft
   const rooms = draft?.rooms ?? []
@@ -1366,6 +1403,10 @@ function EditorScene({
       <For each={rooms} getKey={(_, i) => i}>
         {(room, roomIndex) => {
           if (vm.roomMode && roomIndex !== vm.selectedRoomIndex) return null
+          // Outlines are overlays, so the storey cut does not reach them.
+          if (!vm.roomMode && vm.previewRoomIndexes && !vm.previewRoomIndexes.has(roomIndex)) {
+            return null
+          }
           const polygon = (room.floorPolygon ?? []).map((p) => ({ x: p.x, z: p.z }))
           if (polygon.length < 3) return null
           const isSelected = roomIndex === vm.selectedRoomIndex
@@ -1661,7 +1702,7 @@ function EditorScene({
           />
         }
       >
-        <PlanCamera rootRef={buildingRootRef} />
+        <PlanCamera rootRef={buildingRootRef} resetId={vm.viewResetId} />
       </Show>
     </>
   )
@@ -1694,6 +1735,28 @@ export function EditorCanvas({ vm }: VmProps) {
         <CompassProbe onHeading={onHeading} />
       </Canvas>
       <CompassRose dial={compassDial} />
+      <button
+        type="button"
+        title="Bring the camera back to where it started"
+        onClick={vm.onResetView}
+        style={{
+          position: 'absolute',
+          top: 76,
+          right: 12,
+          zIndex: 3,
+          padding: '6px 10px',
+          borderRadius: 8,
+          border: '1px solid #2a2e34',
+          background: 'rgba(17,18,21,0.72)',
+          backdropFilter: 'blur(4px)',
+          color: '#c8cdd4',
+          font: 'inherit',
+          fontSize: 11,
+          cursor: 'pointer',
+        }}
+      >
+        ⟲ Reset view
+      </button>
       <EditorMenuPopup menu={menu} onClose={() => setMenu(null)} />
     </div>
   )

@@ -42,6 +42,17 @@ export function defaultYRange(modelHeight: number): [number, number] {
   return [h * 0.82, h + 0.6]
 }
 
+/**
+ * Where the 2D plan slices, measured from the level being drawn on.
+ *
+ * Chest height on a normal storey: above the sills, below the heads, so walls
+ * read as a plan. Anchored to the storey's own base rather than to the model,
+ * or a plan of the upper storey would be cut somewhere around its floor.
+ */
+export function planCutY(baseY: number, height: number): number {
+  return baseY + Math.min(1.6, Math.max(1.2, height * 0.5))
+}
+
 export type PlaneRect = { minX: number; minZ: number; maxX: number; maxZ: number }
 
 /** Metres a storey volume reaches past the model, so its sides cut no wall. */

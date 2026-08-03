@@ -35,10 +35,6 @@ export function nodeMenuItems(
     onClick: () => vm.onAddBlockFromNodes(paths),
   })
 
-  if (!many) {
-    items.push({ label: '⬒ New room from object', onClick: () => vm.onAddRoomFromNode(path) })
-  }
-
   return items
 }
 

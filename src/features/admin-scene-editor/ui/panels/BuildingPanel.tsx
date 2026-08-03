@@ -98,7 +98,13 @@ export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
         <Show when={vm.mode === 'floor-level'}>
           <FloorLevelCard
             vm={vm}
-            hint="Sets the height rooms you draw next will start at. Rooms already drawn keep their own."
+            hint={
+              vm.previewFloorName
+                ? `The height rooms you draw next on ${vm.previewFloorName} will start at — every storey keeps its own. Rooms already drawn keep theirs.`
+                : vm.floors.length > 0
+                  ? 'The height rooms you draw next will start at. Pick a storey above first and this follows it.'
+                  : 'The height rooms you draw next will start at. Rooms already drawn keep their own.'
+            }
           />
         </Show>
 

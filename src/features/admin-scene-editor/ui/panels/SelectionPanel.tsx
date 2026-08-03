@@ -176,15 +176,6 @@ export function SelectionPanel({ vm }: { vm: SceneEditorVm }) {
                 >
                   ▩ Roof volume
                 </button>
-                <button
-                  type="button"
-                  disabled={!selectedNode.box}
-                  title="Creates a NEW room traced from this object's footprint"
-                  style={{ ...button(), opacity: selectedNode.box ? 1 : 0.4 }}
-                  onClick={() => vm.onAddRoomFromNode(selectedNode.path)}
-                >
-                  ⬒ New room from object
-                </button>
               </div>
             </div>
           )

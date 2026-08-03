@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react'
 
 import type { RoomZone } from '@/entities/building'
 import { polygonCentroid, roomFloorTopY } from '@/entities/building'
+import { cn } from '@/shared/lib'
 import { Chip } from '@/shared/ui/boxx'
 import { For } from '@/shared/ui/control-flow'
 
@@ -19,9 +20,10 @@ function roomCenter(room: RoomZone): [number, number, number] {
   return [centroid.x, roomFloorTopY(room) + 1.1, centroid.z]
 }
 
+// Hidden in CSS rather than unmounted: every drei <Html> runs a full
+// scene.updateMatrixWorld() and spins up its own React root when it mounts, so
+// unmounting these on room entry made leaving one cost a traversal per room.
 export function RoomHotspots({ rooms, visible, onFocusRoom }: Props) {
-  if (!visible) return null
-
   return (
     <For each={rooms} getKey={(room) => room.key}>
       {(room) => (
@@ -33,7 +35,10 @@ export function RoomHotspots({ rooms, visible, onFocusRoom }: Props) {
               event.stopPropagation()
               onFocusRoom(room.key)
             }}
-            className="group flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={cn(
+              'group flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              !visible && 'hidden',
+            )}
           >
             <Chip
               tone="glass"

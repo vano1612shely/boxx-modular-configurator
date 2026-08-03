@@ -44,9 +44,14 @@ export function PackagePanel({ building, packages }: Props) {
   }
 
   return (
-    <Show when={vm.isPanelOpen}>
+    <>
+      {/* Outside the panel's own mount: it owns a second WebGL context, and
+          tying that to room focus meant tearing a GPU context down and standing
+          a new one up — with a fresh environment map — on every room the
+          visitor entered or left. */}
       <ModelThumbnailFactory urls={vm.offers.map((offer) => offer.pkg.modelUrl)} />
 
+      <Show when={vm.isPanelOpen}>
       <Show when={expanded}>
         <SceneOverlay corner="bottom-sheet" z="panel" className="top-0 desktop:hidden">
           <button
@@ -124,7 +129,8 @@ export function PackagePanel({ building, packages }: Props) {
           <PanelBody vm={vm} addError={addError} onAdd={handleAdd} />
         </div>
       </aside>
-    </Show>
+      </Show>
+    </>
   )
 }
 

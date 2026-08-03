@@ -61,6 +61,35 @@ type Obstacle = {
   footprint: FurniturePackageEntity['footprint']
 }
 
+/**
+ * Obstacles grouped by room, built once per list render.
+ *
+ * Asking each item to scan the whole placement array for its neighbours made
+ * the list quadratic in furniture, on every session change.
+ */
+function obstaclesByRoom(
+  placed: PlacedPackage[],
+  packagesById: Map<number, FurniturePackageEntity>,
+): Map<string, Array<Obstacle & { instanceId: string }>> {
+  const rooms = new Map<string, Array<Obstacle & { instanceId: string }>>()
+
+  for (const p of placed) {
+    const pkg = packagesById.get(p.packageId)
+    if (!pkg) continue
+    const room = rooms.get(p.roomKey) ?? []
+    room.push({
+      instanceId: p.instanceId,
+      x: p.x,
+      z: p.z,
+      rotationYDeg: p.rotationYDeg,
+      footprint: footprintOf(p.packageId, pkg.footprint),
+    })
+    rooms.set(p.roomKey, room)
+  }
+
+  return rooms
+}
+
 function obstaclesFor(
   placed: PlacedPackage[],
   packagesById: Map<number, FurniturePackageEntity>,
@@ -103,6 +132,10 @@ export function PlacedPackages({ building, packages }: Props) {
     () => new Set(roomsOnFloor(building.rooms, building.floors, selectedFloorKey).map((r) => r.key)),
     [building.rooms, building.floors, selectedFloorKey],
   )
+  const neighbours = useMemo(
+    () => obstaclesByRoom(placed, packagesById),
+    [placed, packagesById],
+  )
 
   return (
     <>
@@ -126,7 +159,9 @@ export function PlacedPackages({ building, packages }: Props) {
                 pkg={pkg}
                 room={room}
                 grabOffsetRef={grabOffsetRef}
-                obstacles={obstaclesFor(placed, packagesById, placement.roomKey, placement.instanceId)}
+                obstacles={(neighbours.get(placement.roomKey) ?? []).filter(
+                  (other) => other.instanceId !== placement.instanceId,
+                )}
               />
             </Suspense>
           )
@@ -295,7 +330,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
   const floorY = roomFloorTopY(room)
 
-  const { object, outline, height } = useMemo(() => {
+  const { object, height } = useMemo(() => {
     const clone = scene.clone(true)
 
     const bounds = new Box3().setFromObject(clone)
@@ -309,10 +344,8 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
     setMeasuredFootprint(pkg.id, { width: size.x, depth: size.z })
 
-    return { object: clone, outline: buildOutline(clone, floorY), height: size.y }
-  }, [scene, pkg.id, floorY])
-
-  useEffect(() => outline.dispose, [outline])
+    return { object: clone, height: size.y }
+  }, [scene, pkg.id])
 
   const selectedInstanceId = useConfiguration((s) => s.selectedInstanceId)
   const draggingInstanceId = useConfiguration((s) => s.draggingInstanceId)
@@ -329,8 +362,24 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const isDragging = draggingInstanceId === placement.instanceId
   const isInvalid = isDragging && !dragValid
 
+  // Two more deep clones of the model, and it is only ever drawn around the
+  // item under the pointer — building one per placement meant leaving a room
+  // paid for the whole storey's worth at once.
+  const outline = useMemo(
+    () => (isSelected || isDragging ? buildOutline(object, floorY) : null),
+    [isSelected, isDragging, object, floorY],
+  )
+
+  useEffect(() => () => outline?.dispose(), [outline])
+
   const tint = isInvalid ? OUTLINE_INVALID : OUTLINE_VALID
-  for (const layer of outline.layers) layer.material.color.copy(tint)
+
+  // In an effect, not the render body: mutating three objects while rendering
+  // is a hazard under a concurrent renderer.
+  useEffect(() => {
+    if (!outline) return
+    for (const layer of outline.layers) layer.material.color.copy(tint)
+  }, [outline, tint])
 
   const introPlayedRef = useRef(false)
 
@@ -405,8 +454,9 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
         >
           <primitive object={object} />
         </group>
-        <Show when={isSelected}>
-          <For each={outline.layers} getKey={(_, index) => index}>
+        <Show when={isSelected && outline ? outline : null}>
+          {(shells) => (
+          <For each={shells.layers} getKey={(_, index) => index}>
             {(layer) => (
               // Scaled by a group: the shell carries the recentring offset in
               // its own transform, which scaling it directly would multiply too.
@@ -415,6 +465,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
               </group>
             )}
           </For>
+          )}
         </Show>
       </group>
 

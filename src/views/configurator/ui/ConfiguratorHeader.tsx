@@ -1,6 +1,7 @@
 'use client'
 
 import { ArrowLeft, DoorOpen } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
@@ -16,6 +17,17 @@ export function ConfiguratorHeader({
 }) {
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
   const clearFocus = useConfiguratorSession((s) => s.exitRoomFocus)
+  // "Change selection" takes the exact place of "Back to building" — same
+  // component, same index, so React keeps the row and swaps the control under
+  // the pointer. A press queued while the scene was busy would then land on the
+  // link and throw away everything the visitor had configured. An input made
+  // before the link existed cannot have meant it; `timeStamp` records when the
+  // press happened, not when it was dispatched, so the two are tellable apart.
+  const shownAt = useRef(0)
+
+  useEffect(() => {
+    shownAt.current = focusedRoomKey === null ? performance.now() : 0
+  }, [focusedRoomKey])
 
   const room = building.rooms.find((r) => r.key === focusedRoomKey) ?? null
 
@@ -44,6 +56,9 @@ export function ConfiguratorHeader({
               variant="secondary"
               leadingIcon={<ArrowLeft size={16} />}
               labelFrom="desktop"
+              onClick={(event) => {
+                if (event.timeStamp < shownAt.current) event.preventDefault()
+              }}
             >
               Change selection
             </PillLink>

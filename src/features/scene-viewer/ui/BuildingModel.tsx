@@ -3,7 +3,7 @@
 import { useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Box3, type Mesh, type Object3D } from 'three'
+import { Box3, type Material, type Mesh, type Object3D } from 'three'
 
 import {
   extentWithoutSite,
@@ -35,6 +35,20 @@ export function BuildingModel({ building }: Props) {
       if (!mesh.isMesh) return
       mesh.castShadow = true
       mesh.receiveShadow = true
+
+      // A single transmissive material — a plastic diffuser, a few thousand
+      // triangles — makes three draw the whole scene a second time every frame,
+      // into a full-resolution multisampled half-float target. Ordinary
+      // translucency looks near enough on a part that size and costs nothing.
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const physical = material as Material & { transmission?: number }
+        if (!physical || typeof physical.transmission !== 'number') continue
+        if (physical.transmission <= 0) continue
+        physical.transmission = 0
+        physical.transparent = true
+        physical.opacity = Math.min(physical.opacity, 0.65)
+        physical.needsUpdate = true
+      }
     })
 
     return {

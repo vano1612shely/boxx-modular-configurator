@@ -1,4 +1,5 @@
 export type {
+  BuildingFloor,
   BuildingLineInfo,
   BuildingLineRules,
   BuildingScene,
@@ -34,9 +35,19 @@ export {
 } from './lib/map-building'
 export { roomFloorTopY } from './lib/floor'
 export {
+  containingFloor,
+  findFloor,
+  floorExtent,
+  floorForY,
+  roomsOffEveryFloor,
+  roomsOnFloor,
+  sortFloors,
+} from './lib/building-floors'
+export {
   extentWithoutSite,
   fitDistance,
   frameBuilding,
+  frameExtent,
   frameRoom,
   orbitable,
   orbitRadius,

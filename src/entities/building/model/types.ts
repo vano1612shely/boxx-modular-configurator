@@ -32,6 +32,14 @@ export type RoofConfig = {
   scale: number
 }
 
+/** One storey of a multi-storey building. */
+export type BuildingFloor = {
+  key: string
+  name: string
+  /** The volume that stays visible when this storey is picked. */
+  box: ZoneBox
+}
+
 /** Floor outline vertex; `side` owns the edge that STARTS at this vertex. */
 export type RoomVertex = Point2 & { side: WallSide }
 
@@ -132,6 +140,8 @@ export type BuildingScene = {
   dimensions: string | null
   modelUrl: string
   camera: CameraConfig
+  /** Ascending by height; empty for a single-storey building. */
+  floors: BuildingFloor[]
   roofBlocks: ZoneBox[]
   roofModel: RoofConfig | null
   hiddenNodePaths: string[]

@@ -30,7 +30,12 @@ import {
 } from 'three'
 
 import type { BuildingScene, RoomZone } from '@/entities/building'
-import { clampPoseToPolygon, progressiveEdgeSnap, roomFloorTopY } from '@/entities/building'
+import {
+  clampPoseToPolygon,
+  progressiveEdgeSnap,
+  roomFloorTopY,
+  roomsOnFloor,
+} from '@/entities/building'
 import { useConfiguration, type PlacedPackage } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
@@ -87,10 +92,16 @@ export function PlacedPackages({ building, packages }: Props) {
   const grabOffsetRef = useRef<GrabOffset>({ instanceId: null, x: 0, z: 0 })
   const placed = useConfiguration((s) => s.placed)
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
+  const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)
   const packagesById = useMemo(() => new Map(packages.map((pkg) => [pkg.id, pkg])), [packages])
   const roomsByKey = useMemo(
     () => new Map(building.rooms.map((room) => [room.key, room])),
     [building.rooms],
+  )
+  // Furniture on a storey that has been cut away would otherwise hang in the air.
+  const roomsOnView = useMemo(
+    () => new Set(roomsOnFloor(building.rooms, building.floors, selectedFloorKey).map((r) => r.key)),
+    [building.rooms, building.floors, selectedFloorKey],
   )
 
   return (
@@ -102,6 +113,7 @@ export function PlacedPackages({ building, packages }: Props) {
           if (!pkg || !room) return null
 
           if (focusedRoomKey && placement.roomKey !== focusedRoomKey) return null
+          if (!focusedRoomKey && !roomsOnView.has(placement.roomKey)) return null
 
           return (
             <Suspense

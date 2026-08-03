@@ -5,7 +5,13 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, type Mesh, type Object3D } from 'three'
 
-import { extentWithoutSite, type BuildingScene, type PartExtent } from '@/entities/building'
+import {
+  extentWithoutSite,
+  findFloor,
+  type BuildingScene,
+  type PartExtent,
+  type ZoneBox,
+} from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 
 import { createNodeResolver } from '@/shared/three/node-path'
@@ -14,6 +20,9 @@ import { applyOverviewClipping } from '@/shared/three/overview-clipping'
 type Props = {
   building: BuildingScene
 }
+
+/** Hoisted: a fresh literal would be a new value on every frame. */
+const NOTHING_HIDDEN: ZoneBox[] = []
 
 export function BuildingModel({ building }: Props) {
   const { scene } = useGLTF(building.modelUrl, false, true)
@@ -89,19 +98,30 @@ export function BuildingModel({ building }: Props) {
     }
   }, [hiddenNodePaths, resolveNode])
 
+  const showCeiling = useConfiguratorSession((s) => s.showCeiling)
+  const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)
+
+  const floor = useMemo(
+    () => findFloor(building.floors, selectedFloorKey),
+    [building.floors, selectedFloorKey],
+  )
+
   const rootRef = useRef<Object3D>(null)
 
   useFrame(() => {
     const root = rootRef.current
     if (!root) return
 
-    const { focusedRoomKey, showCeiling } = useConfiguratorSession.getState()
-    const focused = focusedRoomKey !== null
+    const focused = useConfiguratorSession.getState().focusedRoomKey !== null
 
     root.visible = !focused
     if (focused) return
 
-    controller.setHideBoxes(showCeiling ? [] : building.roofBlocks)
+    // A storey is stated as what stays, not as what goes: the cut has to reach
+    // the shadow map, and only clipping planes do.
+    controller.setKeepBox(floor?.box ?? null)
+    // Everything above the storey is already outside it, roof included.
+    controller.setHideBoxes(floor || showCeiling ? NOTHING_HIDDEN : building.roofBlocks)
   })
 
   return <primitive ref={rootRef} object={preparedScene} />

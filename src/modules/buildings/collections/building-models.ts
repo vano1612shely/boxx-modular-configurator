@@ -141,6 +141,25 @@ export const BuildingModels: CollectionConfig = {
                   fields: zoneBoxFields(),
                 },
                 {
+                  name: 'floors',
+                  type: 'array',
+                  labels: { singular: 'Storey', plural: 'Storeys' },
+                  admin: {
+                    description:
+                      'Storeys of a multi-storey building. Each one is the volume that stays visible when the visitor picks it — everything outside is hidden. The visitor only gets a picker once there are two, so a single-storey building needs none of this.',
+                  },
+                  fields: [
+                    {
+                      type: 'row',
+                      fields: [
+                        { name: 'key', type: 'text', required: true },
+                        { name: 'name', type: 'text', required: true },
+                      ],
+                    },
+                    { name: 'box', type: 'group', fields: zoneBoxFields() },
+                  ],
+                },
+                {
                   name: 'roofModel',
                   type: 'group',
                   admin: {

@@ -13,6 +13,7 @@ import { RoofModelSection } from './RoofModelSection'
 import { RoofVolumesSection } from './RoofVolumesSection'
 import { RoomListSection } from './RoomListSection'
 import { SelectionPanel } from './SelectionPanel'
+import { StoreysSection } from './StoreysSection'
 import type { PanelProps } from './shared'
 
 const VIEW_OPTIONS = [
@@ -28,6 +29,15 @@ const ROOF_OPTIONS = [
 export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
   const rooms = vm.draft?.rooms ?? []
   const volumes = vm.draft?.sceneConfig?.roofBlocks ?? []
+
+  const storeyOptions = [
+    { value: 'all', label: 'All', title: 'The whole building, as it is today' },
+    ...vm.floors.map((floor, index) => ({
+      value: String(index),
+      label: String(index + 1),
+      title: floor.name,
+    })),
+  ]
 
   return (
     <>
@@ -75,6 +85,16 @@ export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
           />
         </div>
 
+        {/* Cuts the model exactly as the visitor's storey picker will. */}
+        <Show when={vm.floors.length > 0}>
+          <SegmentedControl
+            label="Storey"
+            value={vm.previewFloorIndex === null ? 'all' : String(vm.previewFloorIndex)}
+            options={storeyOptions}
+            onChange={(value) => vm.onPreviewFloor(value === 'all' ? null : Number(value))}
+          />
+        </Show>
+
         <Show when={vm.mode === 'floor-level'}>
           <FloorLevelCard
             vm={vm}
@@ -100,6 +120,10 @@ export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
 
       <Accordion title="Rooms" badge={rooms.length} defaultOpen>
         <RoomListSection vm={vm} onOpenMenu={onOpenMenu} />
+      </Accordion>
+
+      <Accordion title="Storeys" badge={vm.floors.length}>
+        <StoreysSection vm={vm} onOpenMenu={onOpenMenu} />
       </Accordion>
 
       <Accordion title="Roof — from the model" badge={volumes.length}>

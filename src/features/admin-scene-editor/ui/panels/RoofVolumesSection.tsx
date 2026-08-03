@@ -22,7 +22,7 @@ export function RoofVolumesSection({ vm, onOpenMenu }: PanelProps) {
         fallback={<p style={s.hint}>No roof volumes yet.</p>}
       >
         {(_, index) => {
-          const ref: BlockRef = { index }
+          const ref: BlockRef = { scope: 'roof', index }
           const selected = vm.selectedBlocks.some((r) => sameBlockRef(r, ref))
           return (
             <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>

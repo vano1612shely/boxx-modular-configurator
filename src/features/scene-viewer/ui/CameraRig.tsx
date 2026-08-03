@@ -6,8 +6,15 @@ import CameraControlsImpl from 'camera-controls'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, MathUtils, Spherical, Vector3 } from 'three'
 
-import type { BuildingScene, RoomZone } from '@/entities/building'
-import { frameBuilding, frameRoom, orbitable, polygonBounds } from '@/entities/building'
+import type { BuildingFloor, BuildingScene, RoomZone } from '@/entities/building'
+import {
+  floorExtent,
+  frameBuilding,
+  frameExtent,
+  frameRoom,
+  orbitable,
+  polygonBounds,
+} from '@/entities/building'
 import { useConfiguratorSession, type BuildingBounds } from '@/entities/configurator-session'
 
 import { applyPreset } from '../lib/apply-preset'
@@ -22,6 +29,7 @@ import { dollySpeedFor } from '../lib/wheel-dolly'
 type Props = {
   building: BuildingScene
   focusedRoom: RoomZone | null
+  floor: BuildingFloor | null
   enabled?: boolean
 }
 
@@ -29,6 +37,7 @@ function scopeFor(
   building: BuildingScene,
   focusedRoom: RoomZone | null,
   buildingBounds: BuildingBounds | null,
+  floor: BuildingFloor | null,
 ): ViewScope | null {
   const fov = building.camera.fov
 
@@ -46,6 +55,14 @@ function scopeFor(
   }
 
   if (!buildingBounds) return null
+
+  // A storey gets a fresh frame rather than the authored pose: that pose was
+  // aimed at the whole building, and reusing it would leave the visitor's pick
+  // looking like nothing happened.
+  if (floor) {
+    const { min, max } = floorExtent(floor, buildingBounds)
+    return { min, max, dollhouse: frameExtent(min, max, fov), fov }
+  }
 
   const { min, max } = buildingBounds
 
@@ -70,7 +87,7 @@ const PAN_SPEED = 2
 const SMOOTH_TIME = 0.3
 const DRAGGING_SMOOTH_TIME = 0.12
 
-export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
+export function CameraRig({ building, focusedRoom, floor, enabled = true }: Props) {
   const controlsRef = useRef<CameraControls>(null)
   const hasFlownRef = useRef(false)
   const viewMode = useConfiguratorSession((s) => s.viewMode)
@@ -82,8 +99,8 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
   const { camera } = building
 
   const scope = useMemo(
-    () => scopeFor(building, focusedRoom, buildingBounds),
-    [building, focusedRoom, buildingBounds],
+    () => scopeFor(building, focusedRoom, buildingBounds, floor),
+    [building, focusedRoom, buildingBounds, floor],
   )
 
   const limits = useMemo(

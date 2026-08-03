@@ -9,6 +9,7 @@ import {
 import type { BuildingLine, BuildingModel, Model } from '@/payload-types'
 
 import type {
+  BuildingFloor,
   BuildingScene,
   OpeningFit,
   OpeningKind,
@@ -25,6 +26,7 @@ import type {
   WallSide,
   ZoneBox,
 } from '../model/types'
+import { sortFloors } from './building-floors'
 import { autoAssignSides, computeSideAxes } from './room-shell'
 
 type Vec3Group = { x?: number | null; y?: number | null; z?: number | null } | null | undefined
@@ -48,6 +50,20 @@ function toZoneBox(value: ZoneBoxGroup): ZoneBox {
     min: [Math.min(min[0], max[0]), Math.min(min[1], max[1]), Math.min(min[2], max[2])],
     max: [Math.max(min[0], max[0]), Math.max(min[1], max[1]), Math.max(min[2], max[2])],
   }
+}
+
+type FloorDoc = NonNullable<NonNullable<BuildingModel['sceneConfig']>['floors']>[number]
+
+// Payload regenerates array row ids on every save, so the key is the identity —
+// a storey the visitor has picked must survive the admin editing another one.
+function mapFloors(value: FloorDoc[] | null | undefined): BuildingFloor[] {
+  const floors = (value ?? []).map((floor, index) => ({
+    key: floor.key || `floor-${index + 1}`,
+    name: floor.name || `Floor ${index + 1}`,
+    box: toZoneBox(floor.box),
+  }))
+
+  return sortFloors(floors)
 }
 
 function mapRoofModel(
@@ -286,6 +302,7 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
       minPolarDeg: camera?.minPolarDeg ?? 15,
       maxPolarDeg: camera?.maxPolarDeg ?? 85,
     },
+    floors: mapFloors(doc.sceneConfig?.floors),
     roofBlocks: (doc.sceneConfig?.roofBlocks ?? []).map(toZoneBox),
     roofModel: mapRoofModel(doc.sceneConfig?.roofModel),
     hiddenNodePaths,

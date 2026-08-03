@@ -3,6 +3,7 @@ import {
   DoubleSide,
   Material,
   Mesh,
+  Plane,
   Vector3,
   type Object3D,
   type WebGLProgramParametersWithUniforms,
@@ -13,6 +14,16 @@ import type { ZoneBox } from '@/entities/building'
 import { CUT_FACE } from './scene-tokens'
 
 export const MAX_HIDE_BOXES = 24
+
+/**
+ * Metres the keep volume is grown by, so a face lying exactly on it survives.
+ * A clip test is strict, and a floor slab's top sits precisely on the storey's
+ * lower bound.
+ */
+const KEEP_EDGE = 1e-4
+
+/** Wide enough to keep everything, without leaving float32. */
+const UNBOUNDED: ZoneBox = { min: [-1e5, -1e5, -1e5], max: [1e5, 1e5, 1e5] }
 
 type SharedUniforms = {
   uHideCount: { value: number }
@@ -26,6 +37,17 @@ export const CAP_COLOR = CUT_FACE
 
 export type OverviewClippingController = {
   setHideBoxes: (boxes: ZoneBox[]) => void
+  /**
+   * Keeps only what is inside the box, and hides the rest from the shadow map
+   * too. Pass null to keep everything.
+   *
+   * This is not the hide path inverted. Hiding is a discard in the patched
+   * fragment shader, which the shadow pass never runs — it builds its own depth
+   * material and copies only a handful of fields across, `clipShadows` and
+   * `clippingPlanes` among them. A storey cut with a discard would go on
+   * shading the storey below it.
+   */
+  setKeepBox: (box: ZoneBox | null) => void
   patchMaterial: (material: Material) => void
   readonly materialCount: number
 }
@@ -54,9 +76,28 @@ export function applyOverviewClipping(root: Object3D): OverviewClippingControlle
 
   const patched = new Set<Material>()
 
+  // Inward faces, in min-x, max-x, min-y, max-y, min-z, max-z order. Mutated in
+  // place: three reads the plane values every frame, so once the array is on a
+  // material, moving the volume costs no recompile — only mounting them does.
+  const keepPlanes = [
+    new Plane(new Vector3(1, 0, 0), 0),
+    new Plane(new Vector3(-1, 0, 0), 0),
+    new Plane(new Vector3(0, 1, 0), 0),
+    new Plane(new Vector3(0, -1, 0), 0),
+    new Plane(new Vector3(0, 0, 1), 0),
+    new Plane(new Vector3(0, 0, -1), 0),
+  ]
+  let keepMounted = false
+
+  const mountKeepPlanes = (material: Material) => {
+    material.clippingPlanes = keepPlanes
+    material.clipShadows = true
+  }
+
   const patchMaterial = (material: Material) => {
     if (!material || patched.has(material)) return
     patched.add(material)
+    if (keepMounted) mountKeepPlanes(material)
 
     // Shells are hollow: cut openings show backfaces, painted flat so they read
     // as solid. Transparent materials (glass) stay single-sided.
@@ -116,6 +157,27 @@ uniform vec3 uCapColor;`,
         uniforms.uHideMax.value[i].set(...boxes[i].max)
       }
       uniforms.uHideCount.value = count
+    },
+    setKeepBox: (box) => {
+      // Mounting the planes recompiles every material, so a scene that never
+      // asks for a keep volume must never pay for one. Once mounted they stay,
+      // opened out to everything — switching storeys is then free.
+      if (box === null && !keepMounted) return
+
+      const { min, max } = box ?? UNBOUNDED
+      keepPlanes[0].constant = -(min[0] - KEEP_EDGE)
+      keepPlanes[1].constant = max[0] + KEEP_EDGE
+      keepPlanes[2].constant = -(min[1] - KEEP_EDGE)
+      keepPlanes[3].constant = max[1] + KEEP_EDGE
+      keepPlanes[4].constant = -(min[2] - KEEP_EDGE)
+      keepPlanes[5].constant = max[2] + KEEP_EDGE
+
+      if (keepMounted) return
+      keepMounted = true
+      for (const material of patched) {
+        mountKeepPlanes(material)
+        material.needsUpdate = true
+      }
     },
     patchMaterial,
     get materialCount() {

@@ -2,10 +2,11 @@
 
 import { ContactShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { Suspense, type ReactNode } from 'react'
+import { Suspense, useMemo, type ReactNode } from 'react'
 
 import { useConfiguration } from '@/entities/configuration'
 import {
+  floorExtent,
   preloadOpeningModels,
   preloadRoomTextures,
   RoofModel,
@@ -37,6 +38,13 @@ export function SceneViewer({ building, children }: Props) {
   const bounds = useConfiguratorSession((s) => s.buildingBounds)
   const showCeiling = useConfiguratorSession((s) => s.showCeiling)
   const transition = useRoomTransition(vm.focusedRoom)
+
+  // Framing the storey rather than the building keeps the shadow map's
+  // resolution on what is actually on screen.
+  const litBounds = useMemo(
+    () => (vm.selectedFloor ? floorExtent(vm.selectedFloor, bounds) : bounds),
+    [vm.selectedFloor, bounds],
+  )
 
   preloadRoomTextures(building.rooms.map((room) => room.surfaces))
   preloadOpeningModels(building.rooms)
@@ -72,18 +80,23 @@ export function SceneViewer({ building, children }: Props) {
         onPointerMissed={() => useConfiguration.getState().selectPackage(null)}
       >
         <color attach="background" args={[SCENE_BACKGROUND]} />
-        <SceneLighting bounds={bounds} focusedRoom={vm.focusedRoom} />
+        <SceneLighting bounds={litBounds} focusedRoom={vm.focusedRoom} />
         <Show when={building.roofModel}>
           {(roof) => (
             <Suspense fallback={null}>
-              <RoofModel roof={roof} visible={showCeiling && !vm.isRoomFocused} />
+              <RoofModel
+                roof={roof}
+                visible={showCeiling && !vm.isRoomFocused && vm.selectedFloor === null}
+              />
             </Suspense>
           )}
         </Show>
 
         <Suspense fallback={null}>
           <BuildingModel building={building} />
-          <Show when={!vm.isRoomFocused}>
+          {/* A storey is cut out mid-air; a ground shadow under it would say it
+              were standing on something. */}
+          <Show when={!vm.isRoomFocused && vm.selectedFloor === null}>
             <ContactShadows
               position={[0, (bounds?.min[1] ?? 0) - 0.01, 0]}
               opacity={0.4}
@@ -97,11 +110,20 @@ export function SceneViewer({ building, children }: Props) {
         <Suspense fallback={null}>
           <Show when={transition.staged}>{(room) => <RoomShell room={room} />}</Show>
         </Suspense>
-        <RoomHotspots rooms={vm.rooms} visible={!vm.isRoomFocused} onFocusRoom={vm.onFocusRoom} />
-        <CameraRig building={building} focusedRoom={vm.focusedRoom} enabled={!vm.interactionLock} />
+        <RoomHotspots
+          rooms={vm.visibleRooms}
+          visible={!vm.isRoomFocused}
+          onFocusRoom={vm.onFocusRoom}
+        />
+        <CameraRig
+          building={building}
+          focusedRoom={vm.focusedRoom}
+          floor={vm.selectedFloor}
+          enabled={!vm.interactionLock}
+        />
       </Canvas>
 
-      <ViewModeBar />
+      <ViewModeBar floors={building.floors} />
 
       {/* `settling` is true for only two frames, so the veil cannot fade in. */}
       <div

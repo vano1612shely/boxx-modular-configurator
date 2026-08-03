@@ -132,26 +132,15 @@ function withinBounds(point: Vec3Tuple, min: Vec3Tuple, max: Vec3Tuple, slack: n
   return point.every((value, axis) => value >= min[axis] - slack && value <= max[axis] + slack)
 }
 
-export function frameBuilding(
-  min: Vec3Tuple,
-  max: Vec3Tuple,
-  fovDeg: number,
-  stored: CameraPreset,
-): CameraPreset {
+/** A three-quarter view that fits the box, owing nothing to an authored pose. */
+export function frameExtent(min: Vec3Tuple, max: Vec3Tuple, fovDeg: number): CameraPreset {
   const size: Vec3Tuple = [max[0] - min[0], max[1] - min[1], max[2] - min[2]]
-  const radius = Math.hypot(size[0], size[1], size[2]) / 2
-  if (radius < 1e-3) return stored
-
-  const orbit = orbitRadius(stored)
-  const aimed = withinBounds(stored.target, min, max, radius * 0.5)
-  if (aimed && orbit >= radius * MIN_ORBIT_FRACTION) return stored
-
   const target: Vec3Tuple = [
     (min[0] + max[0]) / 2,
     min[1] + size[1] * EYE,
     (min[2] + max[2]) / 2,
   ]
-  const distance = fitDistance(radius, fovDeg)
+  const distance = fitDistance(Math.hypot(size[0], size[1], size[2]) / 2, fovDeg)
   const ground = distance * Math.cos(ELEVATION)
   const yaw = Math.PI * 0.25
 
@@ -163,4 +152,20 @@ export function frameBuilding(
     ],
     target,
   }
+}
+
+export function frameBuilding(
+  min: Vec3Tuple,
+  max: Vec3Tuple,
+  fovDeg: number,
+  stored: CameraPreset,
+): CameraPreset {
+  const radius = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2
+  if (radius < 1e-3) return stored
+
+  const orbit = orbitRadius(stored)
+  const aimed = withinBounds(stored.target, min, max, radius * 0.5)
+  if (aimed && orbit >= radius * MIN_ORBIT_FRACTION) return stored
+
+  return frameExtent(min, max, fovDeg)
 }

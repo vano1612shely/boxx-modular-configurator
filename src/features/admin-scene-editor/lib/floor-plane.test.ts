@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { defaultYRange, sameBlockRef } from './blocks'
+import { defaultYRange } from './blocks'
 import { floorPlaneBounds } from './floor-plane'
 
 const FALLBACK = { minX: -6, minZ: -6, maxX: 6, maxZ: 6 }
@@ -38,12 +38,5 @@ describe('defaultYRange', () => {
     const [min, max] = defaultYRange(0)
 
     expect(max).toBeGreaterThan(min)
-  })
-})
-
-describe('sameBlockRef', () => {
-  it('compares roof volumes by index alone', () => {
-    expect(sameBlockRef({ index: 2 }, { index: 2 })).toBe(true)
-    expect(sameBlockRef({ index: 2 }, { index: 3 })).toBe(false)
   })
 })

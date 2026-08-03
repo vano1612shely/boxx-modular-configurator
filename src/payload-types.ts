@@ -252,6 +252,28 @@ export interface BuildingModel {
         }[]
       | null;
     /**
+     * Storeys of a multi-storey building. Each one is the volume that stays visible when the visitor picks it — everything outside is hidden. The visitor only gets a picker once there are two, so a single-storey building needs none of this.
+     */
+    floors?:
+      | {
+          key: string;
+          name: string;
+          box: {
+            min: {
+              x: number;
+              y: number;
+              z: number;
+            };
+            max: {
+              x: number;
+              y: number;
+              z: number;
+            };
+          };
+          id?: string | null;
+        }[]
+      | null;
+    /**
      * A roof supplied as its own model. Placed visually in the Scene Editor.
      */
     roofModel?: {
@@ -830,6 +852,31 @@ export interface BuildingModelsSelect<T extends boolean = true> {
                     x?: T;
                     y?: T;
                     z?: T;
+                  };
+              id?: T;
+            };
+        floors?:
+          | T
+          | {
+              key?: T;
+              name?: T;
+              box?:
+                | T
+                | {
+                    min?:
+                      | T
+                      | {
+                          x?: T;
+                          y?: T;
+                          z?: T;
+                        };
+                    max?:
+                      | T
+                      | {
+                          x?: T;
+                          y?: T;
+                          z?: T;
+                        };
                   };
               id?: T;
             };

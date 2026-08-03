@@ -81,7 +81,7 @@ export function SelectionPanel({ vm }: { vm: SceneEditorVm }) {
 
   const multi = vm.selectedBlocks.length > 1
   const ref = vm.selectedBlock
-  const block = ref ? (draft.sceneConfig?.roofBlocks ?? [])[ref.index] : null
+  const block = ref ? vm.blockBox(ref) : null
   const node = vm.selectedNode
 
   if (!multi && !block && !node) return null
@@ -108,7 +108,11 @@ export function SelectionPanel({ vm }: { vm: SceneEditorVm }) {
       <Show when={!multi && ref && block ? { ref, block } : null}>
         {(sel) => (
           <div style={s.selectionCard}>
-            <h3 style={s.heading}>Roof volume #{sel.ref.index + 1}</h3>
+            <h3 style={s.heading}>
+              {sel.ref.scope === 'floor'
+                ? (vm.floors[sel.ref.index]?.name ?? `Storey #${sel.ref.index + 1}`)
+                : `Roof volume #${sel.ref.index + 1}`}
+            </h3>
             <BlockNumericFields
               box={sel.block}
               onChange={(next) => vm.onUpdateBlock(sel.ref, next)}

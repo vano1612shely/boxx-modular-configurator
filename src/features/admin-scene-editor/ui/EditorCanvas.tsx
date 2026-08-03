@@ -52,6 +52,7 @@ import { floorPlaneBounds } from '../lib/floor-plane'
 import { SIDE_COLORS } from './editor-styles'
 
 import {
+  blockRefKey,
   sameBlockRef,
   type BlockRef,
   type EditorBox,
@@ -76,6 +77,7 @@ import { blockMenuItems, nodeMenuItems } from './menu-items'
 type VmProps = { vm: SceneEditorVm }
 
 const ROOF_COLOR = '#ef4444'
+const STOREY_COLOR = '#f59e0b'
 
 /** Stays raycastable: the floor-level pick needs a surface to hit. */
 const GHOST_MATERIAL = new MeshBasicMaterial({
@@ -366,7 +368,15 @@ function BuildingGlb({
 
   useFrame(() => {
     const draft = vm.draft
-    if (!draft || vm.roomMode) return
+    if (!draft) return
+
+    // Exactly what the visitor's storey picker does, so what the admin drags is
+    // what the admin sees. Opened back out inside a room: the ghost is there to
+    // snap floor levels against, and a cut one would hide the level being set.
+    const storey = vm.roomMode ? null : vm.previewFloorBox
+    controller.setKeepBox(storey ? toZone(storey) : null)
+
+    if (vm.roomMode) return
 
     if (vm.planMode) {
       const cutY = Math.min(1.6, Math.max(1.2, vm.modelHeight * 0.5))
@@ -375,7 +385,7 @@ function BuildingGlb({
     }
 
     controller.setHideBoxes(
-      vm.roofHidden ? (draft.sceneConfig?.roofBlocks ?? []).map(toZone) : [],
+      !storey && vm.roofHidden ? (draft.sceneConfig?.roofBlocks ?? []).map(toZone) : [],
     )
   })
 
@@ -499,12 +509,17 @@ function RoomShape({
 function ZoneBlockMesh({
   box,
   blockRef,
+  color,
   selected,
+  pickable = true,
   onPick,
 }: {
   box: EditorBox
   blockRef: BlockRef
+  color: string
   selected: boolean
+  /** A storey volume wraps the whole model, so it must not swallow every click. */
+  pickable?: boolean
   onPick: (event: ThreeEvent<MouseEvent>) => void
 }) {
   const size: [number, number, number] = [
@@ -519,17 +534,22 @@ function ZoneBlockMesh({
   ]
 
   return (
-    <mesh position={center} userData={{ blockRef }} onClick={onPick}>
+    <mesh
+      position={center}
+      userData={{ blockRef }}
+      onClick={onPick}
+      raycast={pickable ? undefined : () => {}}
+    >
       <boxGeometry args={size} />
       <meshBasicMaterial
-        color={ROOF_COLOR}
+        color={color}
         transparent
         opacity={selected ? 0.1 : 0.04}
         depthWrite={false}
       />
-      <Edges color={ROOF_COLOR} threshold={15} scale={1} renderOrder={2}>
+      <Edges color={color} threshold={15} scale={1} renderOrder={2}>
         <lineBasicMaterial
-          color={selected ? '#ffffff' : ROOF_COLOR}
+          color={selected ? '#ffffff' : color}
           transparent
           opacity={selected ? 1 : 0.75}
         />
@@ -808,8 +828,7 @@ function EditorScene({
     openingPlacements.find((p) => p.opening.id === vm.selectedOpeningId) ?? null
   const [roofPlaneY, roofTopY] = defaultYRange(vm.modelHeight)
 
-  const blockFor = (ref: BlockRef): EditorBox | null =>
-    (draft?.sceneConfig?.roofBlocks ?? [])[ref.index] ?? null
+  const blockFor = (ref: BlockRef): EditorBox | null => vm.blockBox(ref)
 
   // Capture phase: runs before camera-controls and the R3F event layer.
   const pointerDownRef = useRef<(event: PointerEvent) => void>(() => {})
@@ -1148,7 +1167,7 @@ function EditorScene({
       const blockRef = hit.object.userData.blockRef as BlockRef | undefined
       if (blockRef) {
         if (event.nativeEvent.ctrlKey) continue
-        const key = `b:${blockRef.index}`
+        const key = blockRefKey(blockRef)
         if (!seen.has(key)) {
           seen.add(key)
           candidates.push({ kind: 'block', ref: blockRef, key })
@@ -1454,17 +1473,33 @@ function EditorScene({
         getKey={(_, i) => `r-${i}`}
       >
         {(block, blockIndex) => {
-          const ref: BlockRef = { index: blockIndex }
+          const ref: BlockRef = { scope: 'roof', index: blockIndex }
           return (
             <ZoneBlockMesh
               box={block}
               blockRef={ref}
+              color={ROOF_COLOR}
               selected={vm.selectedBlocks.some((r) => sameBlockRef(r, ref))}
               onPick={handleScenePick}
             />
           )
         }}
       </For>
+
+      {/* Only the storey being previewed: the volumes overlap the whole model,
+          so drawing them all would bury it. */}
+      <Show when={!vm.roomMode && vm.previewFloorIndex !== null ? vm.previewFloorBox : null}>
+        {(box) => (
+          <ZoneBlockMesh
+            box={box}
+            blockRef={{ scope: 'floor', index: vm.previewFloorIndex as number }}
+            color={STOREY_COLOR}
+            selected
+            pickable={false}
+            onPick={handleScenePick}
+          />
+        )}
+      </Show>
 
       <Show when={vm.selectedBlock ? blockFor(vm.selectedBlock) : null}>
         {(box) => (
@@ -1648,6 +1683,11 @@ export function EditorCanvas({ vm }: VmProps) {
         // Without it the glb's pure metals render black.
         scene={{ environmentIntensity: 0.35 }}
         dpr={[1, 2]}
+        // Per-material clipping is off by default; the storey preview cuts the
+        // model with it, shadow map included.
+        onCreated={({ gl }) => {
+          gl.localClippingEnabled = true
+        }}
         className="touch-none"
       >
         <EditorScene vm={vm} onOpenMenu={setMenu} />

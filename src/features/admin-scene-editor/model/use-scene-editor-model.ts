@@ -5,12 +5,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   computeSideAxes,
+  containingFloor,
   autoAssignSides,
   reanchorOpenings,
   rectifyPolygon,
   roomOpenings,
   roomVertices,
   zoneNodePaths,
+  type BuildingFloor,
   type OpeningFit,
   type OpeningKind,
   type RoomOpening,
@@ -24,10 +26,13 @@ import {
 import { SHELL_DEFAULTS } from '@/modules/shared/room-shell'
 
 import {
+  blockRefKey,
   defaultYRange,
+  nextStoreyBox,
   normalizeBox,
   sameBlockRef,
   type BlockRef,
+  type BlockScope,
   type EditorBox,
 } from '../lib/blocks'
 import type { PlaneBounds } from '../lib/floor-plane'
@@ -40,8 +45,8 @@ export type EditorMode =
   | 'place-opening'
   | 'floor-level'
 
-export { defaultYRange, sameBlockRef }
-export type { BlockRef, EditorBox }
+export { blockRefKey, defaultYRange, sameBlockRef }
+export type { BlockRef, BlockScope, EditorBox }
 
 export type CameraSnapshot = {
   position: { x: number; y: number; z: number }
@@ -94,6 +99,8 @@ export function useSceneEditorModel() {
   const [modelNodes, setModelNodes] = useState<ModelNode[]>([])
   const [selectedNodePaths, setSelectedNodePaths] = useState<string[]>([])
   const [roofHidden, setRoofHidden] = useState(true)
+  /** Storey the viewport is cut down to, exactly as the visitor would see it. */
+  const [previewFloorIndex, setPreviewFloorIndex] = useState<number | null>(null)
   const [ghostModel, setGhostModel] = useState(true)
   const [planMode, setPlanMode] = useState(false)
   const [modelBox, setModelBox] = useState<{ height: number; footprint: PlaneBounds } | null>(null)
@@ -249,12 +256,26 @@ export function useSceneEditorModel() {
     return opening
   }
 
+  type DraftFloor = NonNullable<NonNullable<Draft['sceneConfig']>['floors']>[number]
+
   const roofBlocks = (d: Draft): EditorBox[] => (d.sceneConfig?.roofBlocks ?? []) as EditorBox[]
+  const draftFloors = (d: Draft): DraftFloor[] => d.sceneConfig?.floors ?? []
 
   const writeBlocks = (d: Draft, blocks: EditorBox[]): Draft => ({
     ...d,
     sceneConfig: { ...d.sceneConfig, roofBlocks: blocks },
   })
+
+  const writeFloors = (d: Draft, floors: DraftFloor[]): Draft => ({
+    ...d,
+    sceneConfig: { ...d.sceneConfig, floors },
+  })
+
+  const boxAt = (d: Draft | null, ref: BlockRef): EditorBox | null => {
+    if (!d) return null
+    if (ref.scope === 'roof') return roofBlocks(d)[ref.index] ?? null
+    return (draftFloors(d)[ref.index]?.box as EditorBox | undefined) ?? null
+  }
 
   const addBlock = (rect: { minX: number; minZ: number; maxX: number; maxZ: number }) => {
     const [yMin, yMax] = defaultYRange(modelHeight)
@@ -263,24 +284,102 @@ export function useSceneEditorModel() {
       max: { x: rect.maxX, y: yMax, z: rect.maxZ },
     })
 
+    const index = roofBlocks(draftRef.current ?? ({} as Draft)).length
     patchDraft((d) => writeBlocks(d, [...roofBlocks(d), box]))
-    setSelectedBlock({ index: roofBlocks(draft!).length })
+    setSelectedBlock({ scope: 'roof', index })
     setMode('select')
   }
 
   const updateBlock = (ref: BlockRef, box: EditorBox) => {
+    const next = normalizeBox(box)
     patchDraft((d) =>
-      writeBlocks(
-        d,
-        roofBlocks(d).map((b, i) => (i === ref.index ? { ...b, ...normalizeBox(box) } : b)),
-      ),
+      ref.scope === 'roof'
+        ? writeBlocks(
+            d,
+            roofBlocks(d).map((b, i) => (i === ref.index ? { ...b, ...next } : b)),
+          )
+        : writeFloors(
+            d,
+            draftFloors(d).map((floor, i) => (i === ref.index ? { ...floor, box: next } : floor)),
+          ),
     )
   }
 
   const removeBlock = (ref: BlockRef) => {
-    patchDraft((d) => writeBlocks(d, roofBlocks(d).filter((_, i) => i !== ref.index)))
+    patchDraft((d) =>
+      ref.scope === 'roof'
+        ? writeBlocks(d, roofBlocks(d).filter((_, i) => i !== ref.index))
+        : writeFloors(d, draftFloors(d).filter((_, i) => i !== ref.index)),
+    )
     setSelectedBlock(null)
+    // Every index above the gap has shifted; nothing is worth guessing here.
+    if (ref.scope === 'floor') setPreviewFloorIndex(null)
   }
+
+  const floors = draft ? draftFloors(draft) : []
+
+  const addFloor = () => {
+    const current = floors
+    // The one that reaches highest, not the one authored last: storeys stack in
+    // height, and the array is in whatever order the admin built them.
+    const below = current.reduce<EditorBox | null>((top, floor) => {
+      const box = floor.box as EditorBox
+      return !top || box.max.y > top.max.y ? box : top
+    }, null)
+
+    const used = new Set(current.map((floor) => floor.key))
+    let n = current.length + 1
+    while (used.has(`floor-${n}`)) n++
+
+    const index = current.length
+    patchDraft((d) =>
+      writeFloors(d, [
+        ...draftFloors(d),
+        {
+          key: `floor-${n}`,
+          name: `Floor ${index + 1}`,
+          box: nextStoreyBox(below, modelHeight, modelFootprint),
+        },
+      ]),
+    )
+    setSelectedBlock({ scope: 'floor', index })
+    setPreviewFloorIndex(index)
+  }
+
+  // The client derives a room's storey from its floor level. Doing the same sum
+  // here is what makes that derivation visible: a volume dragged a few
+  // centimetres off shows up as rooms moving between storeys, or falling off
+  // them entirely, rather than as a surprise on the live site.
+  const entityFloors: BuildingFloor[] = floors.map((floor, index) => ({
+    key: floor.key || `floor-${index + 1}`,
+    name: floor.name || `Floor ${index + 1}`,
+    box: {
+      min: [floor.box?.min?.x ?? 0, floor.box?.min?.y ?? 0, floor.box?.min?.z ?? 0],
+      max: [floor.box?.max?.x ?? 0, floor.box?.max?.y ?? 0, floor.box?.max?.z ?? 0],
+    },
+  }))
+
+  const roomLevels = (draft?.rooms ?? []).map((room) => ({
+    name: room.name,
+    y: (room.shell as { floorY?: number | null } | null | undefined)?.floorY ?? 0,
+  }))
+
+  const storeyRoomCounts = entityFloors.map(
+    (floor) =>
+      roomLevels.filter((room) => containingFloor(entityFloors, room.y)?.key === floor.key).length,
+  )
+
+  const roomsOffStoreys = entityFloors.length
+    ? roomLevels.filter((room) => containingFloor(entityFloors, room.y) === null).map((r) => r.name)
+    : []
+
+  const renameFloor = (index: number, name: string) =>
+    patchDraft((d) =>
+      writeFloors(
+        d,
+        draftFloors(d).map((floor, i) => (i === index ? { ...floor, name } : floor)),
+      ),
+    )
 
   type RoofModelPatch = {
     model?: { id: number; url?: string | null } | null
@@ -365,8 +464,9 @@ export function useSceneEditorModel() {
         z: Math.max(acc.max.z, box.max.z),
       },
     }))
+    const index = roofBlocks(draftRef.current ?? ({} as Draft)).length
     patchDraft((d) => writeBlocks(d, [...roofBlocks(d), paddedNodeBox(union)]))
-    setSelectedBlock({ index: roofBlocks(draft!).length })
+    setSelectedBlock({ scope: 'roof', index })
   }
 
   const addRoomFromNode = (pathOverride?: string) => {
@@ -481,6 +581,14 @@ export function useSceneEditorModel() {
     planMode,
     modelHeight,
     modelFootprint,
+    floors,
+    storeyRoomCounts,
+    roomsOffStoreys,
+    previewFloorIndex,
+    previewFloorBox: previewFloorIndex === null ? null : boxAt(draft, {
+      scope: 'floor',
+      index: previewFloorIndex,
+    }),
     dirty,
     saveState,
     onRegisterCameraGetter: (getter: (() => CameraSnapshot | null) | null) => {
@@ -557,6 +665,16 @@ export function useSceneEditorModel() {
     onAddBlock: addBlock,
     onUpdateBlock: updateBlock,
     onRemoveBlock: removeBlock,
+    blockBox: (ref: BlockRef) => boxAt(draft, ref),
+
+    onAddFloor: addFloor,
+    onRenameFloor: renameFloor,
+    // One gesture: previewing a storey is also how you select it to edit, so
+    // the handles are on whatever the cut is showing.
+    onPreviewFloor: (index: number | null) => {
+      setPreviewFloorIndex(index)
+      setSelectedBlock(index === null ? null : { scope: 'floor', index })
+    },
 
     roofModelUrl,
     roofPlacement,

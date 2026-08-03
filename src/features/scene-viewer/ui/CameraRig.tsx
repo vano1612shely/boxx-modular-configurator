@@ -12,6 +12,7 @@ import { useConfiguratorSession, type BuildingBounds } from '@/entities/configur
 
 import { applyPreset } from '../lib/apply-preset'
 import { cameraLimits } from '../lib/camera-limits'
+import { clampOffsetToLimit } from '../lib/clamp-offset'
 import { offsetLimit, panSpeedFactor } from '../lib/pan-resistance'
 import { pinPose } from '../lib/pin-pose'
 import { azimuthRotateSpeed, polarRotateSpeed } from '../lib/rotate-speeds'
@@ -207,6 +208,11 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
         if (gestureFrom === null && from > 0) rescaleOffset(radius / from)
       }
 
+      // Between gestures only: the bound moves with the radius, so a zoom can
+      // leave the offset outside it, and the resistance below is zero there —
+      // which panning cannot undo, panning being what it switches off.
+      if (gestureFrom === null) clampOffsetToLimit(controls, fov)
+
       const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
       const reach = Math.hypot(offset.x, offset.y)
       // The bound is radius-proportional, so a pinch that shrinks the radius
@@ -218,6 +224,9 @@ export function CameraRig({ building, focusedRoom, enabled = true }: Props) {
     }
 
     const onControlStart = () => {
+      // Before the gesture's own radius is latched, so a drag never starts from
+      // outside the bound and spends its whole length at zero speed.
+      clampOffsetToLimit(controls, fov)
       gestureFrom = endRadius()
       // A wheel-tuned dollySpeed must not carry into the pinch after it.
       controls.dollySpeed = 1

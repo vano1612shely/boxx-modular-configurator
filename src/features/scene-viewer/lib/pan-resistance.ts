@@ -37,6 +37,16 @@ export function offsetLimit(radius: number, fovDeg: number): number {
  * guess — integrates to `knee + span·ln(1 + s/span)`, which grows without bound
  * and would sail past the limit given a long enough drag.
  */
+/**
+ * Where to put an offset that ended up outside the bound. The limit itself is
+ * the one place resistance is total, so landing exactly on it would leave the
+ * pan just as stuck as being past it; the knee is the nearest point that pans at
+ * full speed again.
+ */
+export function restingReach(limit: number): number {
+  return Math.max(limit, 0) * KNEE
+}
+
 export function panSpeedFactor(reach: number, limit: number): number {
   if (limit <= 0) return 1
 

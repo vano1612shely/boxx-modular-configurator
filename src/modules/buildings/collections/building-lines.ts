@@ -36,7 +36,8 @@ export const BuildingLines: CollectionConfig = {
       name: 'rules',
       type: 'group',
       admin: {
-        description: 'Sizing/business rules applied when resolving customer input to a model.',
+        description:
+          'Regulatory thresholds for this line. The largest size on offer is not set here — it is read from the published Building Models.',
       },
       fields: [
         {
@@ -52,14 +53,6 @@ export const BuildingLines: CollectionConfig = {
           type: 'number',
           admin: {
             description: 'Unit count at which a second restroom set is required. Leave empty if never.',
-          },
-        },
-        {
-          name: 'maxUnits',
-          type: 'number',
-          admin: {
-            description:
-              'Largest standard size. Requests above this trigger the custom-quote flow instead of a model.',
           },
         },
       ],

@@ -6,6 +6,7 @@ import { Callout, CenteredPanel } from '@/shared/ui/boxx'
 import { getBuildingScene } from '../api/get-building-scene'
 import { getIntakeLines, getIntegrationOptions } from '../api/get-catalog'
 import { getPackagesForLine } from '../api/get-packages'
+import { resolveRegionScope } from '../api/regions'
 import { ConfiguratorScreen } from './ConfiguratorScreen'
 import { OverCapacityScreen } from './OverCapacityScreen'
 
@@ -30,18 +31,21 @@ export async function ConfiguratorView({ searchParams }: Props) {
   const unitsRaw = firstParam(searchParams.offices) ?? firstParam(searchParams.units)
   const units = unitsRaw ? Number.parseInt(unitsRaw, 10) || undefined : undefined
   const restrooms = parseRestrooms(firstParam(searchParams.restrooms))
+  // Set by the host page, e.g. ?region=us. Absent means the whole catalogue.
+  const regionCode = firstParam(searchParams.region)
+  const region = await resolveRegionScope(regionCode)
 
   if (!building) {
-    const lines = await getIntakeLines()
+    const lines = await getIntakeLines(region)
 
     return (
       <main className="flex min-h-dvh items-center justify-center bg-background p-4">
-        <IntakeForm lines={lines} />
+        <IntakeForm lines={lines} region={regionCode} />
       </main>
     )
   }
 
-  const resolution = await getBuildingScene({ building, units, restrooms })
+  const resolution = await getBuildingScene({ building, units, restrooms, region })
 
   if (resolution.status === 'not-found') {
     return (
@@ -74,7 +78,7 @@ export async function ConfiguratorView({ searchParams }: Props) {
   }
 
   const [packages, integration] = await Promise.all([
-    getPackagesForLine(resolution.scene.line.id),
+    getPackagesForLine(resolution.scene.line.id, region),
     getIntegrationOptions(),
   ])
 
@@ -83,6 +87,7 @@ export async function ConfiguratorView({ searchParams }: Props) {
       building={resolution.scene}
       packages={packages}
       integration={integration}
+      region={regionCode}
     />
   )
 }

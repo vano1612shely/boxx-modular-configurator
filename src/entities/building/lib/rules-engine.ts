@@ -31,10 +31,8 @@ export function resolveBuildingSize(
   if (input.requestedUnits < 1) return { status: 'no-match' }
   if (candidates.length === 0) return { status: 'no-match' }
 
-  if (rules.maxUnits !== null && input.requestedUnits > rules.maxUnits) {
-    return { status: 'over-capacity' }
-  }
-
+  // The largest standard size is whatever the published models offer, so there
+  // is nothing to configure: a request no model holds is over capacity.
   const holdsTheRequest = candidates.filter(
     (candidate) => candidate.unitCount >= input.requestedUnits,
   )

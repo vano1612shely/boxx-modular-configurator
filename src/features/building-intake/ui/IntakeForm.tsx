@@ -15,6 +15,8 @@ export type IntakeLine = {
 
 type Props = {
   lines: IntakeLine[]
+  /** Carried straight through, or the next screen forgets which catalogue it is showing. */
+  region?: string
 }
 
 const UNIT_LABEL = { offices: 'Offices', classrooms: 'Classrooms' } as const
@@ -22,7 +24,7 @@ const UNIT_LABEL = { offices: 'Offices', classrooms: 'Classrooms' } as const
 const heading =
   'text-[1.5625rem] leading-[1.3] font-medium text-foreground desktop:text-[2.1875rem]'
 
-export function IntakeForm({ lines }: Props) {
+export function IntakeForm({ lines, region }: Props) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [lineSlug, setLineSlug] = useState(lines[0]?.slug ?? '')
@@ -49,6 +51,7 @@ export function IntakeForm({ lines }: Props) {
       offices: String(units),
       restrooms: String(restrooms),
     })
+    if (region) params.set('region', region)
     router.push(`/configurator?${params.toString()}`)
   }
 

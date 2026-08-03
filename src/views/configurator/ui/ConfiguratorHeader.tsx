@@ -7,7 +7,13 @@ import { useConfiguratorSession } from '@/entities/configurator-session'
 import { Chip, FloatingBar, Pill, PillLink, SceneOverlay } from '@/shared/ui/boxx'
 import { Show } from '@/shared/ui/control-flow'
 
-export function ConfiguratorHeader({ building }: { building: BuildingScene }) {
+export function ConfiguratorHeader({
+  building,
+  region,
+}: {
+  building: BuildingScene
+  region?: string
+}) {
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
   const clearFocus = useConfiguratorSession((s) => s.exitRoomFocus)
 
@@ -34,7 +40,7 @@ export function ConfiguratorHeader({ building }: { building: BuildingScene }) {
         fallback={
           <FloatingBar shape="panel" className="min-w-0">
             <PillLink
-              href="/configurator"
+              href={region ? `/configurator?region=${encodeURIComponent(region)}` : '/configurator'}
               variant="secondary"
               leadingIcon={<ArrowLeft size={16} />}
               labelFrom="desktop"

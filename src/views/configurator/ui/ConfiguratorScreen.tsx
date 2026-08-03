@@ -16,6 +16,7 @@ type Props = {
   building: BuildingScene
   packages: FurniturePackageEntity[]
   integration: IntegrationOptions
+  region?: string
 }
 
 type SceneProps = Pick<Props, 'building' | 'packages'>
@@ -46,12 +47,12 @@ const SafeSceneViewer = withModule(Scene, {
   ),
 })
 
-export function ConfiguratorScreen({ building, packages, integration }: Props) {
+export function ConfiguratorScreen({ building, packages, integration, region }: Props) {
   return (
     <main className="relative h-dvh w-full overflow-hidden">
       <SafeSceneViewer building={building} packages={packages} />
 
-      <ConfiguratorHeader building={building} />
+      <ConfiguratorHeader building={building} region={region} />
 
       <PackagePanel building={building} packages={packages} />
       <QuoteDialog building={building} packages={packages} integration={integration} />

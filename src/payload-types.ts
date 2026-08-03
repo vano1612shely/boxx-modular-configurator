@@ -170,7 +170,7 @@ export interface BuildingLine {
   unitLabel: 'offices' | 'classrooms';
   description?: string | null;
   /**
-   * Sizing/business rules applied when resolving customer input to a model.
+   * Regulatory thresholds for this line. The largest size on offer is not set here — it is read from the published Building Models.
    */
   rules?: {
     /**
@@ -181,10 +181,6 @@ export interface BuildingLine {
      * Unit count at which a second restroom set is required. Leave empty if never.
      */
     secondRestroomSetAt?: number | null;
-    /**
-     * Largest standard size. Requests above this trigger the custom-quote flow instead of a model.
-     */
-    maxUnits?: number | null;
   };
   regions?: (number | Region)[] | null;
   updatedAt: string;
@@ -773,7 +769,6 @@ export interface BuildingLinesSelect<T extends boolean = true> {
     | {
         restroomsRequiredAt?: T;
         secondRestroomSetAt?: T;
-        maxUnits?: T;
       };
   regions?: T;
   updatedAt?: T;

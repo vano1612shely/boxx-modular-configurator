@@ -105,10 +105,13 @@ export type RoomZone = {
   cameraPreset: CameraPreset
 }
 
+/**
+ * Regulatory thresholds only. What sizes exist is a fact about the published
+ * models, not something to restate here.
+ */
 export type BuildingLineRules = {
   restroomsRequiredAt: number | null
   secondRestroomSetAt: number | null
-  maxUnits: number | null
 }
 
 export type BuildingLineInfo = {

@@ -12,7 +12,7 @@ const LINE = {
   name: 'BOXXPlex',
   slug: 'boxxplex',
   unitLabel: 'offices',
-  rules: { restroomsRequiredAt: 4, secondRestroomSetAt: 8, maxUnits: 12 },
+  rules: { restroomsRequiredAt: 4, secondRestroomSetAt: 8 },
 }
 
 const MODEL = { id: 2, url: '/api/models/file/demo.glb' }

@@ -270,7 +270,6 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
       rules: {
         restroomsRequiredAt: line.rules?.restroomsRequiredAt ?? null,
         secondRestroomSetAt: line.rules?.secondRestroomSetAt ?? null,
-        maxUnits: line.rules?.maxUnits ?? null,
       },
     },
     unitCount: doc.unitCount,

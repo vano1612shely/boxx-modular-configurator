@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveBuildingSize } from './rules-engine'
 
-const rules = { restroomsRequiredAt: 5, secondRestroomSetAt: 10, maxUnits: 18 }
+const rules = { restroomsRequiredAt: 5, secondRestroomSetAt: 10 }
 
 const catalog = [
   { id: 1, unitCount: 4, restroomCount: 0 },
@@ -13,7 +13,7 @@ const catalog = [
   { id: 6, unitCount: 18, restroomCount: 4 },
 ]
 
-const open = { restroomsRequiredAt: null, secondRestroomSetAt: null, maxUnits: null }
+const open = { restroomsRequiredAt: null, secondRestroomSetAt: null }
 
 describe('resolveBuildingSize — size', () => {
   it('resolves the closest size at least as large as the request', () => {

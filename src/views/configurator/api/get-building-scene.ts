@@ -8,11 +8,14 @@ import {
   type BuildingScene,
 } from '@/entities/building'
 
+import { regionClauses, whereAll, type RegionScope } from './regions'
+
 type Query = {
   /** Building line slug, e.g. "boxxplex". */
   building?: string
   units?: number
   restrooms?: number
+  region?: RegionScope
 }
 
 export type BuildingResolution =
@@ -23,12 +26,31 @@ export type BuildingResolution =
 export async function getBuildingScene(query: Query): Promise<BuildingResolution> {
   const payload = await getPayload({ config })
 
+  // A model inherits its line's availability. Without this a direct link to a
+  // line that is not sold in the region would still open it, because the models
+  // themselves usually carry no regions of their own.
+  if (query.region != null && query.building) {
+    const available = await payload.find({
+      collection: 'building-lines',
+      limit: 1,
+      depth: 0,
+      where: whereAll([
+        { slug: { equals: query.building } },
+        ...regionClauses(query.region),
+      ]),
+    })
+    if (available.docs.length === 0) return { status: 'not-found' }
+  }
+
   const models = await payload.find({
     collection: 'building-models',
     depth: 1,
     limit: 100,
     sort: 'unitCount',
-    where: query.building ? { 'line.slug': { equals: query.building } } : {},
+    where: whereAll([
+      ...(query.building ? [{ 'line.slug': { equals: query.building } }] : []),
+      ...regionClauses(query.region ?? null),
+    ]),
   })
 
   if (models.docs.length === 0) return { status: 'not-found' }

@@ -26,6 +26,8 @@ import type {
   WallSide,
   ZoneBox,
 } from '../model/types'
+import { assetUrl, type UploadDoc } from '@/shared/lib'
+
 import { sortFloors } from './building-floors'
 import { autoAssignSides, computeSideAxes } from './room-shell'
 
@@ -157,8 +159,7 @@ function isOpeningFit(value: unknown): value is OpeningFit {
 
 function optionalModelUrl(value: unknown): string | null {
   if (!value || typeof value !== 'object') return null
-  const url = (value as { url?: unknown }).url
-  return typeof url === 'string' && url.length > 0 ? url : null
+  return assetUrl(value as UploadDoc)
 }
 
 function roomOpeningModels(doc: RoomDoc): Record<OpeningKind, OpeningModelStyle> {
@@ -213,8 +214,7 @@ function roomShell(doc: RoomDoc, polygon: RoomVertex[]): RoomShellConfig {
 
 function optionalTextureUrl(value: unknown): string | null {
   if (!value || typeof value !== 'object') return null
-  const url = (value as { url?: unknown }).url
-  return typeof url === 'string' && url.length > 0 ? url : null
+  return assetUrl(value as UploadDoc)
 }
 
 // Only TEXTURED_SURFACES are stored, but the planner needs a tile size for every
@@ -272,7 +272,8 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
   const line = assertDoc<BuildingLine>(doc.line, 'line')
   const model = assertDoc<Model>(doc.model, 'model')
 
-  if (!model.url) {
+  const modelUrl = assetUrl(model)
+  if (!modelUrl) {
     throw new Error(`Building model "${doc.title}" has no file URL.`)
   }
 
@@ -298,7 +299,7 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
     restroomCount: doc.restroomCount ?? 0,
     sqft: doc.sqft ?? null,
     dimensions: doc.dimensions ?? null,
-    modelUrl: model.url,
+    modelUrl,
     camera: {
       position: toTuple(camera?.position, [10, 8, 12]),
       target: toTuple(camera?.target, [0, 1, 0]),

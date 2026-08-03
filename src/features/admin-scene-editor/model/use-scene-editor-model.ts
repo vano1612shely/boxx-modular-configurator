@@ -25,6 +25,7 @@ import {
   type WallSide,
 } from '@/entities/building'
 import { SHELL_DEFAULTS } from '@/modules/shared/room-shell'
+import { assetUrl } from '@/shared/lib'
 
 import {
   blockRefKey,
@@ -72,7 +73,7 @@ export type ModelNode = {
 }
 
 function modelUrlOf(model: number | Model | null | undefined): string | null {
-  return typeof model === 'object' && model?.url ? model.url : null
+  return typeof model === 'object' ? assetUrl(model) : null
 }
 
 
@@ -85,7 +86,6 @@ export function useSceneEditorModel() {
   const [drawingPoints, setDrawingPoints] = useState<Array<{ x: number; z: number }>>([])
   // Only for a building with no storeys — a storey keeps its own level on the
   // document. y = 0 is the underside of the glb chassis, not a walkable floor.
-  const [looseFloorY, setLooseFloorY] = useState(0)
   const [selectedRoomIndex, setSelectedRoomIndex] = useState<number | null>(null)
   const roomMode = selectedRoomIndex !== null
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null)
@@ -397,7 +397,15 @@ export function useSceneEditorModel() {
   // after a reload, and furniture stands on whatever the room was given. With
   // no storeys there is one level and it behaves exactly as it always did.
   const storeyBaseY = previewedStorey?.box.min[1] ?? 0
+  // Held on the document, not in this hook: a level that lived only in the
+  // session came back at zero after a reload, and every room drawn afterwards
+  // started on the wrong plane.
+  const looseFloorY =
+    typeof draft?.sceneConfig?.floorY === 'number' ? draft.sceneConfig.floorY : 0
   const drawFloorY = previewedStorey ? previewedStorey.floorY : looseFloorY
+
+  const setLooseFloorY = (level: number) =>
+    patchDraft((d) => ({ ...d, sceneConfig: { ...d.sceneConfig, floorY: level } }))
 
   const renameFloor = (index: number, name: string) =>
     patchDraft((d) =>

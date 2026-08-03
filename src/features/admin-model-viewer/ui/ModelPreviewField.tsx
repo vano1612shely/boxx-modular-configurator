@@ -5,6 +5,7 @@ import { CameraControls, useGLTF } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 
+import { assetUrl } from '@/shared/lib'
 import { FitOnce, ModelStage, previewUrl } from '@/shared/three/ModelStage'
 
 function Preview({ url }: { url: string }) {
@@ -23,6 +24,7 @@ function Preview({ url }: { url: string }) {
 function useRelatedModelUrl(value: unknown): string | null {
   const [resolved, setResolved] = useState<{ id: number; url: string | null } | null>(null)
 
+
   const id =
     typeof value === 'number'
       ? value
@@ -37,8 +39,8 @@ function useRelatedModelUrl(value: unknown): string | null {
     const load = async () => {
       const response = await fetch(`/api/models/${id}?depth=0`, { credentials: 'include' })
       if (!response.ok) return
-      const doc = (await response.json()) as { url?: string | null }
-      if (live) setResolved({ id, url: doc.url ?? null })
+      const doc = (await response.json()) as { url?: string | null; updatedAt?: string | null }
+      if (live) setResolved({ id, url: assetUrl(doc) })
     }
 
     void load()
@@ -53,10 +55,15 @@ function useRelatedModelUrl(value: unknown): string | null {
 export function ModelPreviewField() {
   const [hovered, setHovered] = useState(false)
   const filename = useFormFields(([fields]) => fields.filename?.value as string | undefined)
+  const updatedAt = useFormFields(([fields]) => fields.updatedAt?.value as string | undefined)
   const related = useFormFields(([fields]) => fields.model?.value)
   const relatedUrl = useRelatedModelUrl(related)
 
-  const url = filename ? `/api/models/file/${encodeURIComponent(filename)}` : relatedUrl
+  // Replacing a file keeps its name, so without the stamp the preview kept
+  // showing the parse of whatever was uploaded under that name first.
+  const url = filename
+    ? assetUrl({ url: `/api/models/file/${encodeURIComponent(filename)}`, updatedAt })
+    : relatedUrl
 
   if (!url) {
     return (

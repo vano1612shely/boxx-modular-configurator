@@ -252,6 +252,10 @@ export interface BuildingModel {
         }[]
       | null;
     /**
+     * Walkable level rooms are drawn at while the building has no storeys. Each storey below carries its own instead.
+     */
+    floorY?: number | null;
+    /**
      * Storeys of a multi-storey building. Each one is the volume that stays visible when the visitor picks it — everything outside is hidden. The visitor only gets a picker once there are two, so a single-storey building needs none of this.
      */
     floors?:
@@ -859,6 +863,7 @@ export interface BuildingModelsSelect<T extends boolean = true> {
                   };
               id?: T;
             };
+        floorY?: T;
         floors?:
           | T
           | {

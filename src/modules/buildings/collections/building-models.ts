@@ -141,6 +141,15 @@ export const BuildingModels: CollectionConfig = {
                   fields: zoneBoxFields(),
                 },
                 {
+                  name: 'floorY',
+                  type: 'number',
+                  defaultValue: 0,
+                  admin: {
+                    description:
+                      'Walkable level rooms are drawn at while the building has no storeys. Each storey below carries its own instead.',
+                  },
+                },
+                {
                   name: 'floors',
                   type: 'array',
                   labels: { singular: 'Storey', plural: 'Storeys' },

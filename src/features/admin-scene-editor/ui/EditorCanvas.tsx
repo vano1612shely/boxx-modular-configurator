@@ -103,7 +103,7 @@ type DragState =
   | { kind: 'create-block'; startX: number; startZ: number }
   | { kind: 'floor-plane'; cx: number; cz: number }
   | { kind: 'roof-move'; grabDX: number; grabDZ: number; y: number }
-  | { kind: 'roof-height'; cx: number; cz: number; cy: number }
+  | { kind: 'roof-height'; cx: number; cz: number; grabDY: number }
   | {
       kind: 'opening'
       id: string
@@ -983,9 +983,10 @@ function EditorScene({
       const y = rayAtVertical(ray, drag.cx, drag.cz)
       if (y === null) return
       const { position } = vm.roofPlacement
-      // Relative to the grab: the grip sits above the roof, so moving TO the pointer would jump it.
-      vm.onMoveRoofModel(position.x, snap(position.y + (y - drag.cy)), position.z)
-      setDrag({ ...drag, cy: y })
+      // Absolute, against the offset measured once when the grip was taken. The
+      // old form added a delta and rewrote the drag state every pointermove,
+      // which re-rendered the scene mid-gesture and let the error accumulate.
+      vm.onMoveRoofModel(position.x, snap(y - drag.grabDY), position.z)
       return
     }
 
@@ -1629,17 +1630,21 @@ function EditorScene({
               visible={!vm.roomMode && !vm.roofHidden}
               register={registerHandle}
               onMeasured={vm.onRoofModelBounds}
-              onStartMove={(grabDX, grabDZ) =>
-                setDrag({ kind: 'roof-move', grabDX, grabDZ, y: vm.roofPlacement.position.y })
+              // The grab plane is the puck's own, not the model origin's: those
+              // are metres apart on a roof, and the mismatch slid it sideways.
+              onStartMove={(grabDX, grabDZ, planeY) =>
+                setDrag({ kind: 'roof-move', grabDX, grabDZ, y: planeY })
               }
-              onStartHeight={() => {
-                const { position } = vm.roofPlacement
-                const y = rayAtVertical(raycaster.ray, position.x, position.z)
+              // The drag plane runs through the grip the pointer actually took,
+              // not through the model origin — on a roof those are metres apart,
+              // and the mismatch skews how fast the height follows the cursor.
+              onStartHeight={(ray, grip) => {
+                const y = rayAtVertical(ray, grip[0], grip[2])
                 setDrag({
                   kind: 'roof-height',
-                  cx: position.x,
-                  cz: position.z,
-                  cy: y ?? position.y,
+                  cx: grip[0],
+                  cz: grip[2],
+                  grabDY: (y ?? grip[1]) - vm.roofPlacement.position.y,
                 })
               }}
             />

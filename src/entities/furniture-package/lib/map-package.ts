@@ -1,17 +1,19 @@
 import type { FurniturePackage, Image, Model } from '@/payload-types'
+import { assetUrl } from '@/shared/lib'
 
 import type { FurniturePackageEntity } from '../model/types'
 
 function modelUrl(value: number | Model): string {
-  if (typeof value === 'number' || !value.url) {
+  const url = typeof value === 'number' ? null : assetUrl(value)
+  if (!url) {
     throw new Error('Expected populated furniture package model — fetch with depth >= 1.')
   }
-  return value.url
+  return url
 }
 
 function thumbnailUrl(value: number | Image | null | undefined): string | null {
   if (!value || typeof value === 'number') return null
-  return value.url ?? null
+  return assetUrl(value)
 }
 
 export function mapFurniturePackage(doc: FurniturePackage): FurniturePackageEntity {

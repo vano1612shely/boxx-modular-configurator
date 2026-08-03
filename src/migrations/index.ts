@@ -3,6 +3,7 @@ import * as migration_20260802_230549_schema_since_initial from './20260802_2305
 import * as migration_20260803_074948_drop_line_max_units from './20260803_074948_drop_line_max_units';
 import * as migration_20260803_091726_add_building_floors from './20260803_091726_add_building_floors';
 import * as migration_20260803_122643_add_storey_floor_level from './20260803_122643_add_storey_floor_level';
+import * as migration_20260803_232420_add_scene_floor_y from './20260803_232420_add_scene_floor_y';
 
 export const migrations = [
   {
@@ -28,6 +29,11 @@ export const migrations = [
   {
     up: migration_20260803_122643_add_storey_floor_level.up,
     down: migration_20260803_122643_add_storey_floor_level.down,
-    name: '20260803_122643_add_storey_floor_level'
+    name: '20260803_122643_add_storey_floor_level',
+  },
+  {
+    up: migration_20260803_232420_add_scene_floor_y.up,
+    down: migration_20260803_232420_add_scene_floor_y.down,
+    name: '20260803_232420_add_scene_floor_y'
   },
 ];

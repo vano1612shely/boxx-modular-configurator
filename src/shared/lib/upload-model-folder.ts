@@ -1,3 +1,5 @@
+import { assetUrl } from './asset-url'
+
 export type UploadedModel = { id: number; url: string | null; title: string }
 
 export type UploadStage = 'converting' | 'uploading'
@@ -69,7 +71,13 @@ async function send(files: File[], paths: string[], title?: string): Promise<Upl
   })
 
   const json = (await response.json().catch(() => null)) as {
-    doc?: { id: number; url?: string | null; title?: string | null; filename?: string | null }
+    doc?: {
+      id: number
+      url?: string | null
+      title?: string | null
+      filename?: string | null
+      updatedAt?: string | null
+    }
     errors?: Array<{ message?: string }>
   } | null
 
@@ -79,7 +87,7 @@ async function send(files: File[], paths: string[], title?: string): Promise<Upl
 
   return {
     id: json.doc.id,
-    url: json.doc.url ?? null,
+    url: assetUrl(json.doc),
     title: json.doc.title || json.doc.filename || `#${json.doc.id}`,
   }
 }

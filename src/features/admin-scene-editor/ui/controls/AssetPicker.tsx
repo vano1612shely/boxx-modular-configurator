@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 
-import { uploadModelFolder } from '@/shared/lib'
+import { assetUrl, uploadModelFolder } from '@/shared/lib'
 import { For, Show } from '@/shared/ui/control-flow'
 
 import { button, s, tone } from '../editor-styles'
@@ -82,11 +82,17 @@ export function AssetPicker({
       if (!response.ok) throw new Error(await response.text())
 
       const created = (await response.json()) as {
-        doc: { id: number; url?: string | null; title?: string | null; filename?: string | null }
+        doc: {
+          id: number
+          url?: string | null
+          title?: string | null
+          filename?: string | null
+          updatedAt?: string | null
+        }
       }
       onChange({
         id: created.doc.id,
-        url: created.doc.url ?? null,
+        url: assetUrl(created.doc),
         title: created.doc.title || created.doc.filename || `#${created.doc.id}`,
       })
       onLibraryChange()

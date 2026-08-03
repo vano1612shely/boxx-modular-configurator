@@ -28,6 +28,18 @@ const SIDE_VIEWS: Array<{ mode: ViewMode; label: string }> = [
 
 const WHOLE_BUILDING = 'Whole building'
 
+/**
+ * Props that either put a label on a pill or leave it an icon with a tooltip.
+ *
+ * `labelFrom` has to follow: a "desktop" pill with nothing to show still renders
+ * its label span, and the bar pays a gap for the emptiness.
+ */
+function spellOut(text: string, show: boolean) {
+  return show
+    ? { children: text, labelFrom: 'desktop' as const, title: text }
+    : { children: null, labelFrom: 'always' as const, title: text, 'aria-label': text }
+}
+
 type Props = {
   floors: BuildingFloor[]
 }
@@ -49,6 +61,8 @@ export function ViewModeBar({ floors }: Props) {
   const [open, setOpen] = useState<OpenMenu>(null)
 
   const isSideView = viewMode.startsWith('side-')
+  const activeSide = SIDE_VIEWS.find((view) => view.mode === viewMode) ?? null
+  const overviewLabel = isRoomFocused ? 'Dollhouse' : 'Overview'
   const selected = placed.find((p) => p.instanceId === selectedInstanceId) ?? null
 
   // A storey the building no longer has reads as the whole of it, which is what
@@ -133,28 +147,27 @@ export function ViewModeBar({ floors }: Props) {
         </FloatingBar>
       </Show>
 
+      {/* Only the control that is currently saying something spells itself out.
+          Six labelled pills made a bar wide enough to sit across the building
+          it is meant to be steering. */}
       <FloatingBar>
         <Pill
+          {...spellOut(overviewLabel, viewMode === 'dollhouse')}
           variant="ghost"
-          labelFrom="desktop"
           selected={viewMode === 'dollhouse'}
           leadingIcon={isRoomFocused ? <Box size={16} /> : <Home size={16} />}
           onClick={() => pick('dollhouse')}
-        >
-          {isRoomFocused ? 'Dollhouse' : 'Overview'}
-        </Pill>
+        />
         <Pill
+          {...spellOut('Top view', viewMode === 'top')}
           variant="ghost"
-          labelFrom="desktop"
           selected={viewMode === 'top'}
           leadingIcon={<LayoutGrid size={16} />}
           onClick={() => pick('top')}
-        >
-          Top view
-        </Pill>
+        />
         <Pill
+          {...spellOut(activeSide?.label ?? 'Side views', isSideView)}
           variant="ghost"
-          labelFrom="desktop"
           selected={isSideView}
           aria-expanded={open === 'side'}
           leadingIcon={
@@ -168,17 +181,14 @@ export function ViewModeBar({ floors }: Props) {
             </>
           }
           onClick={() => setOpen((current) => (current === 'side' ? null : 'side'))}
-        >
-          Side views
-        </Pill>
+        />
         <Show when={hasFloors}>
           <FloatingBar.Divider />
           <Pill
+            {...spellOut(currentFloor?.name ?? WHOLE_BUILDING, currentFloor !== null)}
             variant="ghost"
-            labelFrom="desktop"
             selected={currentFloor !== null}
             aria-expanded={open === 'floor'}
-            title={currentFloor ? `Showing ${currentFloor.name}` : 'Showing the whole building'}
             leadingIcon={
               <>
                 <Building2 size={16} />
@@ -193,34 +203,27 @@ export function ViewModeBar({ floors }: Props) {
               </>
             }
             onClick={() => setOpen((current) => (current === 'floor' ? null : 'floor'))}
-          >
-            {currentFloor?.name ?? WHOLE_BUILDING}
-          </Pill>
+          />
         </Show>
         <FloatingBar.Divider />
         <Pill
+          {...spellOut('Move to selected', false)}
           variant="ghost"
-          labelFrom="desktop"
           disabled={!selected}
           leadingIcon={<Footprints size={16} />}
           onClick={moveToSelected}
-        >
-          Move to
-        </Pill>
+        />
         {/* A storey is already cut below its own ceiling, so the toggle has
             nothing left to say while one is picked. */}
         <Show when={!isRoomFocused && currentFloor === null}>
           <FloatingBar.Divider />
           <Pill
+            {...spellOut(showCeiling ? 'Hide ceiling & roof' : 'Show ceiling & roof', false)}
             variant="ghost"
-            labelFrom="desktop"
             selected={showCeiling}
             leadingIcon={<Layers size={16} />}
-            title={showCeiling ? 'Hide ceiling & roof' : 'Show ceiling & roof'}
             onClick={toggleCeiling}
-          >
-            Ceiling
-          </Pill>
+          />
         </Show>
       </FloatingBar>
     </SceneOverlay>

@@ -54,8 +54,8 @@ export function StoreysSection({ vm }: PanelProps) {
 
               <div style={s.row}>
                 <span style={s.mono}>
-                  {metres(box.min.y)} → {metres(box.max.y)} m · {rooms}{' '}
-                  {rooms === 1 ? 'room' : 'rooms'}
+                  {metres(box.min.y)} → {metres(box.max.y)} m · walks at{' '}
+                  {metres(floor.floorY ?? box.min.y)} · {rooms} {rooms === 1 ? 'room' : 'rooms'}
                 </span>
               </div>
 

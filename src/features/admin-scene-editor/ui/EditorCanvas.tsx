@@ -1521,6 +1521,10 @@ function EditorScene({
               blockRef={ref}
               color={ROOF_COLOR}
               selected={vm.selectedBlocks.some((r) => sameBlockRef(r, ref))}
+              // A volume is picked only to select it. Any other tool has to
+              // shoot straight through, or a press meant for the model — or for
+              // a gizmo standing inside one — lands on the box instead.
+              pickable={vm.mode === 'select'}
               onPick={handleScenePick}
             />
           )

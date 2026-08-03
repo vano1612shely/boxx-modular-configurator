@@ -154,6 +154,15 @@ export const BuildingModels: CollectionConfig = {
                       fields: [
                         { name: 'key', type: 'text', required: true },
                         { name: 'name', type: 'text', required: true },
+                        {
+                          name: 'floorY',
+                          type: 'number',
+                          defaultValue: 0,
+                          admin: {
+                            description:
+                              'Walkable level of this storey — where rooms drawn on it start, and what furniture stands on.',
+                          },
+                        },
                       ],
                     },
                     { name: 'box', type: 'group', fields: zoneBoxFields() },

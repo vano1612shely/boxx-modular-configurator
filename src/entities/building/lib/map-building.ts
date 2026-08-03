@@ -57,11 +57,17 @@ type FloorDoc = NonNullable<NonNullable<BuildingModel['sceneConfig']>['floors']>
 // Payload regenerates array row ids on every save, so the key is the identity —
 // a storey the visitor has picked must survive the admin editing another one.
 function mapFloors(value: FloorDoc[] | null | undefined): BuildingFloor[] {
-  const floors = (value ?? []).map((floor, index) => ({
-    key: floor.key || `floor-${index + 1}`,
-    name: floor.name || `Floor ${index + 1}`,
-    box: toZoneBox(floor.box),
-  }))
+  const floors = (value ?? []).map((floor, index) => {
+    const box = toZoneBox(floor.box)
+    return {
+      key: floor.key || `floor-${index + 1}`,
+      name: floor.name || `Floor ${index + 1}`,
+      box,
+      // The bottom of the volume is where the storey begins, which is the right
+      // guess for a storey whose level was never set.
+      floorY: numberOr(floor.floorY, box.min[1]),
+    }
+  })
 
   return sortFloors(floors)
 }

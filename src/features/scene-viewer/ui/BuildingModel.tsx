@@ -120,8 +120,9 @@ export function BuildingModel({ building }: Props) {
     // A storey is stated as what stays, not as what goes: the cut has to reach
     // the shadow map, and only clipping planes do.
     controller.setKeepBox(floor?.box ?? null)
-    // Everything above the storey is already outside it, roof included.
-    controller.setHideBoxes(floor || showCeiling ? NOTHING_HIDDEN : building.roofBlocks)
+    // The roof goes with any storey, even one whose volume was drawn around it:
+    // looking at a storey means looking into it.
+    controller.setHideBoxes(floor || !showCeiling ? building.roofBlocks : NOTHING_HIDDEN)
   })
 
   return <primitive ref={rootRef} object={preparedScene} />

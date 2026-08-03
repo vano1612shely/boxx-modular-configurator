@@ -83,9 +83,9 @@ export function useSceneEditorModel() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [mode, setMode] = useState<EditorMode>('select')
   const [drawingPoints, setDrawingPoints] = useState<Array<{ x: number; z: number }>>([])
-  // Per storey, keyed by its key; '' is the level used while none is picked.
-  // y = 0 is the underside of the glb chassis, not a floor anybody walks on.
-  const [drawFloorByStorey, setDrawFloorByStorey] = useState<Record<string, number>>({})
+  // Only for a building with no storeys — a storey keeps its own level on the
+  // document. y = 0 is the underside of the glb chassis, not a walkable floor.
+  const [looseFloorY, setLooseFloorY] = useState(0)
   const [selectedRoomIndex, setSelectedRoomIndex] = useState<number | null>(null)
   const roomMode = selectedRoomIndex !== null
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null)
@@ -336,14 +336,11 @@ export function useSceneEditorModel() {
     while (used.has(`floor-${n}`)) n++
 
     const index = current.length
+    const box = nextStoreyBox(below, modelHeight, modelFootprint)
     patchDraft((d) =>
       writeFloors(d, [
         ...draftFloors(d),
-        {
-          key: `floor-${n}`,
-          name: `Floor ${index + 1}`,
-          box: nextStoreyBox(below, modelHeight, modelFootprint),
-        },
+        { key: `floor-${n}`, name: `Floor ${index + 1}`, box, floorY: box.min.y },
       ]),
     )
     setSelectedBlock({ scope: 'floor', index })
@@ -361,6 +358,7 @@ export function useSceneEditorModel() {
       min: [floor.box?.min?.x ?? 0, floor.box?.min?.y ?? 0, floor.box?.min?.z ?? 0],
       max: [floor.box?.max?.x ?? 0, floor.box?.max?.y ?? 0, floor.box?.max?.z ?? 0],
     },
+    floorY: typeof floor.floorY === 'number' ? floor.floorY : (floor.box?.min?.y ?? 0),
   }))
 
   const roomLevels = (draft?.rooms ?? []).map((room) => ({
@@ -394,12 +392,12 @@ export function useSceneEditorModel() {
       )
     : null
 
-  // A storey the admin is standing on owns its own drawing level, so rooms
-  // traced upstairs do not land on the ground. With no storeys there is one
-  // level and it behaves exactly as it always did.
-  const storeyLevelKey = previewedStorey?.key ?? ''
+  // A storey the admin is standing on owns its own drawing level, and owns it
+  // on the document: a level that lived only in this session came back wrong
+  // after a reload, and furniture stands on whatever the room was given. With
+  // no storeys there is one level and it behaves exactly as it always did.
   const storeyBaseY = previewedStorey?.box.min[1] ?? 0
-  const drawFloorY = drawFloorByStorey[storeyLevelKey] ?? storeyBaseY
+  const drawFloorY = previewedStorey ? previewedStorey.floorY : looseFloorY
 
   const renameFloor = (index: number, name: string) =>
     patchDraft((d) =>
@@ -533,13 +531,31 @@ export function useSceneEditorModel() {
 
   const setFloorLevel = (y: number) => {
     const level = Math.round(y * 1000) / 1000
+
     if (selectedRoomIndex !== null) {
       patchRoom(selectedRoomIndex, (room) => ({
         ...room,
         shell: { ...(room.shell ?? {}), floorY: level },
       }))
+      // With no storeys the level a room was set to is also the level the next
+      // one is drawn at; a storey's own level is authored, not inherited.
+      if (previewFloorIndex === null) setLooseFloorY(level)
+      return
     }
-    setDrawFloorByStorey((current) => ({ ...current, [storeyLevelKey]: level }))
+
+    if (previewFloorIndex !== null) {
+      patchDraft((d) =>
+        writeFloors(
+          d,
+          draftFloors(d).map((floor, i) =>
+            i === previewFloorIndex ? { ...floor, floorY: level } : floor,
+          ),
+        ),
+      )
+      return
+    }
+
+    setLooseFloorY(level)
   }
 
   return {

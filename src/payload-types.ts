@@ -258,6 +258,10 @@ export interface BuildingModel {
       | {
           key: string;
           name: string;
+          /**
+           * Walkable level of this storey — where rooms drawn on it start, and what furniture stands on.
+           */
+          floorY?: number | null;
           box: {
             min: {
               x: number;
@@ -860,6 +864,7 @@ export interface BuildingModelsSelect<T extends boolean = true> {
           | {
               key?: T;
               name?: T;
+              floorY?: T;
               box?:
                 | T
                 | {

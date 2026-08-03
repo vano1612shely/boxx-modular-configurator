@@ -38,6 +38,8 @@ export type BuildingFloor = {
   name: string
   /** The volume that stays visible when this storey is picked. */
   box: ZoneBox
+  /** Walkable level: where a room drawn on this storey starts. */
+  floorY: number
 }
 
 /** Floor outline vertex; `side` owns the edge that STARTS at this vertex. */

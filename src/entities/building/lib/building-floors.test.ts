@@ -16,6 +16,7 @@ function floor(key: string, minY: number, maxY: number): BuildingFloor {
     key,
     name: key,
     box: { min: [-10, minY, -6], max: [10, maxY, 6] },
+    floorY: minY,
   }
 }
 

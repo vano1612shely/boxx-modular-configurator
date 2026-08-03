@@ -60,10 +60,12 @@ export function FloorPlaneGizmo({ y, bounds, planMode, register, onStartDrag }: 
 
       {/* Looking straight down, `rayAtVertical` has no horizontal component and the drag cannot resolve. */}
       <Show when={!planMode}>
-        {/* No ScreenScaled here: HandlePoint already is one, and nesting applies the scale twice. */}
+        {/* No ScreenScaled here: HandlePoint already is one, and nesting applies the scale twice.
+            The radius covers the whole arrow — the cones reach 0.41, and a press that
+            missed the old 0.22 sphere fell through to whatever volume was behind it. */}
         <HandlePoint
           position={[cx, y, cz]}
-          hitRadius={0.22}
+          hitRadius={0.55}
           register={register}
           begin={() => onStartDrag(cx, cz)}
         >

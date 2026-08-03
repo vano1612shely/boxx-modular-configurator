@@ -8,6 +8,7 @@ import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import { quoteContactSchema, type QuoteConfiguration, type QuoteContact } from '@/entities/quote'
 
 import { submitQuote } from '../api/submit-quote'
+import { groupByRoom } from '../lib/group-by-room'
 
 export type IntegrationOptions = {
   enablePostMessage: boolean
@@ -58,6 +59,18 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
     [quotePackages],
   )
 
+  // A catalogue with no prices in it should not be summarised with a total of
+  // zero, which reads as free rather than as unpriced.
+  const hasPrices = useMemo(
+    () => quotePackages.some((p) => p.price !== null && p.price !== undefined),
+    [quotePackages],
+  )
+
+  const packagesByRoom = useMemo(
+    () => groupByRoom(quotePackages, building.rooms),
+    [quotePackages, building.rooms],
+  )
+
   const buildConfiguration = (): QuoteConfiguration => ({
     buildingModelId: building.id,
     buildingTitle: building.title,
@@ -103,6 +116,8 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
   return {
     buildingTitle: building.title,
     quotePackages,
+    packagesByRoom,
+    hasPrices,
     totalPrice,
     submitState,
     onSubmit: submit,

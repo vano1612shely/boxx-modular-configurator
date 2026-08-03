@@ -93,22 +93,38 @@ export function QuoteDialog({ building, packages, integration }: Props) {
                 <div className="flex flex-col gap-card">
                   <Card as="section" radius="card" elevation="none" pad="sm" hairline>
                     <p className="text-base leading-normal font-medium">{vm.buildingTitle}</p>
-                    <For each={vm.quotePackages} getKey={(p, i) => `${p.packageId}-${i}`}>
-                      {(pkg) => (
-                        <div className="mt-1 flex justify-between gap-4 text-sm text-muted-foreground">
-                          <span>{pkg.title}</span>
-                          <Show when={pkg.price}>
-                            {(price) => (
-                              <span className="shrink-0">${price.toLocaleString()}</span>
+                    <For each={vm.packagesByRoom} getKey={(room) => room.key}>
+                      {(room) => (
+                        <div className="mt-3">
+                          <Eyebrow as="h3">{room.name}</Eyebrow>
+                          <For
+                            each={room.packages}
+                            getKey={(p, i) => `${p.packageId}-${i}`}
+                          >
+                            {(pkg) => (
+                              <div className="mt-1 flex justify-between gap-4 text-sm">
+                                <span>{pkg.title}</span>
+                                <Show when={pkg.price}>
+                                  {(price) => (
+                                    <span className="shrink-0 text-muted-foreground">
+                                      ${price.toLocaleString()}
+                                    </span>
+                                  )}
+                                </Show>
+                              </div>
                             )}
-                          </Show>
+                          </For>
                         </div>
                       )}
                     </For>
-                    <div className="mt-3 flex justify-between gap-4 border-t pt-3 text-base font-medium">
-                      <span>Furniture total</span>
-                      <span className="shrink-0">${vm.totalPrice.toLocaleString()}</span>
-                    </div>
+
+                    {/* A total of $0 reads as free rather than as unpriced. */}
+                    <Show when={vm.hasPrices}>
+                      <div className="mt-3 flex justify-between gap-4 border-t pt-3 text-base font-medium">
+                        <span>Furniture total</span>
+                        <span className="shrink-0">${vm.totalPrice.toLocaleString()}</span>
+                      </div>
+                    </Show>
                   </Card>
 
                   <Field.Text

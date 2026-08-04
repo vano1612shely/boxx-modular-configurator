@@ -39,30 +39,36 @@ database directory are bind mounts from `/opt/boxx`.
 
 ### What the server has to be
 
-Serving the configurator is light. Sizing is decided by one thing only: model
-upload optimises the file in the request, and that is a memory problem.
+Serving the configurator is light. Sizing is decided by model upload, which
+optimises the file inside the request.
 
 | | |
 |---|---|
-| RAM | **16 GB** for sources up to ~200 MB. 8 GB handles ~80 MB. Below that it swaps, and swapping is what turns seconds into minutes |
-| vCPU | **4** is plenty. More does not help — see below |
+| RAM | **4 GB** is enough, 8 GB is comfortable. This is not the lever — see below |
+| vCPU | **2**, and prefer a dedicated core over four shared ones |
 | Disk | NVMe, 40 GB + room for every model you will ever upload |
-| Swap | 4 GB, as a cliff-edge guard rather than something to run in |
+| Swap | 2 GB, as a cliff-edge guard |
 
-Why memory and not cores: the optimiser decodes every texture in the model to
-raw RGBA at once. A measured 11.2 MB model carrying 86 Mpx of textures peaks at
-**471 MB — 42× the file** — and 344 MB of that is the decoded pixels. Capping
-the image encoder to two threads changed the total by nothing (2.66 s against
-3.13 s), because textures are processed one after another. A second core buys
-almost nothing; a second gigabyte buys everything.
+**Upload time is dominated by the wire, not the server.** Measured against this
+deployment: 11.8 MB took 29.6 s to reach it, an upstream of ~3.2 Mbit/s, while
+optimising that same file on the box took 12.7 s. A 180 MB source spends
+minutes being uploaded and under a minute being processed. Buying RAM does not
+touch that, and buying cores barely touches the rest.
 
-The rest of the pipeline is small: on that model, images take 68% of the time,
-`prune` 17%, `meshopt` 8%, and everything else 5%. Those stages are synchronous
-JavaScript, so they hold the event loop while they run — on a very large model
-the site stutters for a few seconds during an upload. That is expected.
+So the fix that actually works is to send less: run `pnpm optimize:model <file>`
+on a workstation and upload the `.glb` it writes. It is the same pipeline, and
+it takes a 180 MB source to about 12 MB — a fifteenfold smaller upload.
 
-If a model is too big for the server you have, run `pnpm optimize:model <file>`
-on a workstation and upload the `.glb` it writes; it is the same pipeline.
+Memory is not a constraint and does not need planning for. A measured 11.2 MB
+model carrying 86 Mpx of textures peaks under 1 GB, and this deployment has
+never touched its swap.
+
+Where the server time goes, on that model: images 73%, `prune` 16%, `meshopt`
+6%, everything else 5%. Textures are encoded one after another, so a second
+core changes almost nothing — measured at 12.7 s against 12.0 s with the
+encoder given two threads. Single-core speed is what moves it. Those stages are
+also synchronous JavaScript, so they hold the event loop while they run and the
+site stutters during a large upload.
 
 ### 1. Install what the server needs
 
@@ -215,6 +221,20 @@ certbot --nginx -d your-domain.example
 ```
 
 Certbot rewrites the nginx site in place and sets up renewal.
+
+### Telling a slow upload from a slow server
+
+A slow upload is almost always the wire. To see the split rather than guess it,
+give nginx a log format that records both halves — in the `http` block of
+`/etc/nginx/nginx.conf`:
+
+```nginx
+log_format upload '$remote_addr "$request" $status body=$request_length rt=${request_time}s upstream=${upstream_response_time}s';
+access_log /var/log/nginx/access.log upload;
+```
+
+`rt` is the whole request including the body arriving; `upstream` is what the
+app spent on it. The gap between them is transfer.
 
 ### Uploads
 

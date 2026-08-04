@@ -37,6 +37,33 @@ database publishes no port at all and the app is bound to `127.0.0.1`, so nginx 
 the only way in. Nothing that matters lives inside a container: uploads and the
 database directory are bind mounts from `/opt/boxx`.
 
+### What the server has to be
+
+Serving the configurator is light. Sizing is decided by one thing only: model
+upload optimises the file in the request, and that is a memory problem.
+
+| | |
+|---|---|
+| RAM | **16 GB** for sources up to ~200 MB. 8 GB handles ~80 MB. Below that it swaps, and swapping is what turns seconds into minutes |
+| vCPU | **4** is plenty. More does not help — see below |
+| Disk | NVMe, 40 GB + room for every model you will ever upload |
+| Swap | 4 GB, as a cliff-edge guard rather than something to run in |
+
+Why memory and not cores: the optimiser decodes every texture in the model to
+raw RGBA at once. A measured 11.2 MB model carrying 86 Mpx of textures peaks at
+**471 MB — 42× the file** — and 344 MB of that is the decoded pixels. Capping
+the image encoder to two threads changed the total by nothing (2.66 s against
+3.13 s), because textures are processed one after another. A second core buys
+almost nothing; a second gigabyte buys everything.
+
+The rest of the pipeline is small: on that model, images take 68% of the time,
+`prune` 17%, `meshopt` 8%, and everything else 5%. Those stages are synchronous
+JavaScript, so they hold the event loop while they run — on a very large model
+the site stutters for a few seconds during an upload. That is expected.
+
+If a model is too big for the server you have, run `pnpm optimize:model <file>`
+on a workstation and upload the `.glb` it writes; it is the same pipeline.
+
 ### 1. Install what the server needs
 
 ```bash
@@ -47,6 +74,14 @@ chmod a+r /etc/apt/keyrings/docker.asc
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
 apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 systemctl enable --now docker
+```
+
+A swap file, if the image does not already come with one. It is there so a big
+upload degrades instead of having the kernel shoot Postgres:
+
+```bash
+fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
 ```
 
 ### 2. Make the directories the data will live in

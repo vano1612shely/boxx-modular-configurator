@@ -1,25 +1,46 @@
 'use client'
 
+import { useDocumentInfo } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
 import { useRef, useState, type ChangeEvent } from 'react'
 
-import { uploadModelFolder, type UploadProgress } from '@/shared/lib'
+import { formatBytes, uploadModelFolder, type UploadProgress } from '@/shared/lib'
 
 import { UploadProgressBar } from './UploadProgressBar'
 
-export function PackFolderButton() {
-  const folderInput = useRef<HTMLInputElement>(null)
-  const fileInput = useRef<HTMLInputElement>(null)
+/**
+ * Replaces Payload's own upload area for models.
+ *
+ * Two reasons it has to own the request rather than hand a file to the form.
+ * The file is optimised here before it is sent, which is most of the wait and
+ * needs to be visible; and Payload submits through `fetch`, which the spec
+ * gives no upload progress events at all — so the built-in Save can only ever
+ * be a disabled button with nothing behind it.
+ */
+export function ModelUploadField() {
+  const { id } = useDocumentInfo()
   const router = useRouter()
+  const fileInput = useRef<HTMLInputElement>(null)
+  const folderInput = useRef<HTMLInputElement>(null)
   const [progress, setProgress] = useState<UploadProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState<string | null>(null)
   const busy = progress !== null
 
   const send = async (files: FileList) => {
     setProgress({ stage: 'optimizing', ratio: 0 })
     setError(null)
+    setDone(null)
+
     try {
       const model = await uploadModelFolder(files, { onProgress: setProgress })
+      setProgress(null)
+
+      if (id) {
+        setDone(`Replaced with ${model.title}.`)
+        router.refresh()
+        return
+      }
       router.push(`/admin/collections/models/${model.id}`)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Upload failed.')
@@ -42,7 +63,7 @@ export function PackFolderButton() {
           disabled={busy}
           onClick={() => fileInput.current?.click()}
         >
-          Upload a model
+          {id ? 'Replace the model' : 'Choose a model'}
         </button>
         <button
           type="button"
@@ -50,7 +71,7 @@ export function PackFolderButton() {
           disabled={busy}
           onClick={() => folderInput.current?.click()}
         >
-          Upload a model folder
+          Choose a folder
         </button>
       </div>
 
@@ -73,22 +94,27 @@ export function PackFolderButton() {
 
       {progress && <UploadProgressBar progress={progress} />}
 
-      {!progress && (
-        <p
-          style={{
-            margin: '6px 0 0',
-            fontSize: 12,
-            color: error ? 'var(--theme-error-500)' : 'var(--theme-elevation-500)',
-          }}
-        >
-          {error ??
-            'Models are optimised here in the browser before they are sent, so a 150 MB source ' +
-              'uploads as about 11 MB. Pick a single .glb/.gltf/.fbx, or the folder holding a ' +
-              '.gltf and its textures. FBX materials are approximate; export glTF where you can.'}
-        </p>
-      )}
+      <p
+        style={{
+          margin: '8px 0 0',
+          fontSize: 12,
+          color: error
+            ? 'var(--theme-error-500)'
+            : done
+              ? 'var(--theme-success-600, var(--theme-elevation-600))'
+              : 'var(--theme-elevation-500)',
+        }}
+      >
+        {error ??
+          done ??
+          'The model is optimised here in your browser before it is sent, so a ' +
+            `${formatBytes(150 * 1024 * 1024)} source uploads as about ` +
+            `${formatBytes(11 * 1024 * 1024)}. Pick a single .glb/.gltf/.fbx, or the folder ` +
+            'holding a .gltf and its textures. Saving is not needed — the file is stored as ' +
+            'soon as the bar finishes.'}
+      </p>
     </div>
   )
 }
 
-export default PackFolderButton
+export default ModelUploadField

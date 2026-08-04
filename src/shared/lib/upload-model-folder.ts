@@ -1,10 +1,11 @@
 import type { FolderFile } from '@/shared/three/gltf-pack'
 
 import { assetUrl } from './asset-url'
+import { postWithProgress } from './post-with-progress'
 
 export type UploadedModel = { id: number; url: string | null; title: string }
 
-export type UploadStage = 'converting' | 'optimizing' | 'uploading'
+export type UploadStage = 'converting' | 'optimizing' | 'uploading' | 'saving'
 
 export type UploadProgress = {
   stage: UploadStage
@@ -14,7 +15,17 @@ export type UploadProgress = {
   /** Bytes the upload was reduced to, once optimisation has finished. */
   sizeBefore?: number
   sizeAfter?: number
+  /** Bytes that have left the machine, while uploading. */
+  sent?: number
+  /** 0..1 across the whole job, for a bar that only ever moves forward. */
+  ratio?: number
 }
+
+/**
+ * Optimising is most of the wait on a big source and the upload is most of it on
+ * a small one, so the bar gives each a fixed share rather than letting it jump.
+ */
+const OPTIMISE_SHARE = 0.55
 
 const SENDABLE = /\.(gltf|glb|fbx|bin|jpe?g|png|webp|tga|dds|bmp|gif|avif|ktx2|basis)$/i
 const MODEL = /\.(gltf|glb|fbx)$/i
@@ -65,18 +76,30 @@ export async function uploadModelFolder(
   }
 
   const local = await optimizeLocally(entries, report)
-  if (local) {
+
+  const sending = (sent: number, total: number, sizes?: Partial<UploadProgress>) =>
     report?.({
       stage: 'uploading',
-      sizeBefore: local.meta.sizeBefore,
-      sizeAfter: local.meta.sizeAfter,
+      sent,
+      ratio: OPTIMISE_SHARE + (total > 0 ? sent / total : 0) * (1 - OPTIMISE_SHARE),
+      ...sizes,
     })
-    return createModel(local, options.title)
+
+  if (local) {
+    const sizes = { sizeBefore: local.meta.sizeBefore, sizeAfter: local.meta.sizeAfter }
+    sending(0, local.meta.sizeAfter, sizes)
+    return createModel(local, options.title, (p) => sending(p.sent, p.total, sizes), report)
   }
 
   // No local pipeline: send the folder whole and let the server pack it.
-  report?.({ stage: 'uploading' })
-  return packOnServer(entries, entries.map(pathOf), options.title)
+  sending(0, 1)
+  return packOnServer(
+    entries,
+    entries.map(pathOf),
+    options.title,
+    (p) => sending(p.sent, p.total),
+    report,
+  )
 }
 
 type LocalResult = Awaited<ReturnType<typeof runLocal>>
@@ -85,11 +108,22 @@ async function runLocal(folder: FolderFile[], report?: (progress: UploadProgress
   const { optimizeModelInBrowser } = await import('@/shared/three/optimize-model-client')
 
   return optimizeModelInBrowser(folder, (progress) => {
-    if (progress.stage === 'textures') {
-      report?.({ stage: 'optimizing', done: progress.done, total: progress.total })
+    if (progress.stage === 'textures' && progress.total) {
+      const share = (progress.done ?? 0) / progress.total
+      report?.({
+        stage: 'optimizing',
+        done: progress.done,
+        total: progress.total,
+        ratio: share * OPTIMISE_SHARE,
+      })
       return
     }
-    report?.({ stage: 'optimizing' })
+    // Reading and the geometry passes have nothing countable in them; the bar
+    // shows movement rather than pretending to a number it does not have.
+    report?.({
+      stage: 'optimizing',
+      ratio: progress.stage === 'encoding' ? OPTIMISE_SHARE * 0.95 : 0.02,
+    })
   })
 }
 
@@ -106,7 +140,7 @@ async function optimizeLocally(
   )
   if (!canOptimizeInBrowser()) return null
 
-  report?.({ stage: 'optimizing' })
+  report?.({ stage: 'optimizing', ratio: 0 })
 
   const folder: FolderFile[] = await Promise.all(
     files.map(async (file) => ({
@@ -123,7 +157,12 @@ async function optimizeLocally(
   }
 }
 
-async function createModel(model: LocalResult, title?: string): Promise<UploadedModel> {
+async function createModel(
+  model: LocalResult,
+  title: string | undefined,
+  onProgress: (progress: { sent: number; total: number }) => void,
+  report?: (progress: UploadProgress) => void,
+): Promise<UploadedModel> {
   const body = new FormData()
   body.append(
     'file',
@@ -140,37 +179,51 @@ async function createModel(model: LocalResult, title?: string): Promise<Uploaded
     }),
   )
 
-  return post('/api/models', body)
+  return post('/api/models', body, onProgress, report)
 }
 
 async function packOnServer(
   files: File[],
   paths: string[],
-  title?: string,
+  title: string | undefined,
+  onProgress: (progress: { sent: number; total: number }) => void,
+  report?: (progress: UploadProgress) => void,
 ): Promise<UploadedModel> {
   const body = new FormData()
   for (const file of files) body.append('files', file)
   body.append('_payload', JSON.stringify({ paths, title }))
 
-  return post('/api/models/pack', body)
+  return post('/api/models/pack', body, onProgress, report)
 }
 
-async function post(url: string, body: FormData): Promise<UploadedModel> {
-  const response = await fetch(url, { method: 'POST', body, credentials: 'include' })
+type CreatedDoc = {
+  doc?: {
+    id: number
+    url?: string | null
+    title?: string | null
+    filename?: string | null
+    updatedAt?: string | null
+  }
+  errors?: Array<{ message?: string }>
+}
 
-  const json = (await response.json().catch(() => null)) as {
-    doc?: {
-      id: number
-      url?: string | null
-      title?: string | null
-      filename?: string | null
-      updatedAt?: string | null
-    }
-    errors?: Array<{ message?: string }>
-  } | null
+async function post(
+  url: string,
+  body: FormData,
+  onProgress: (progress: { sent: number; total: number }) => void,
+  report?: (progress: UploadProgress) => void,
+): Promise<UploadedModel> {
+  const { status, body: json } = await postWithProgress<CreatedDoc>(url, body, {
+    onProgress: (progress) => {
+      onProgress(progress)
+      // The bytes are gone but the server has not answered yet; on a raw folder
+      // that is where it optimises, and the wait is the rest of the job.
+      if (progress.sent >= progress.total) report?.({ stage: 'saving', ratio: 1 })
+    },
+  })
 
-  if (!response.ok || !json?.doc) {
-    throw new Error(json?.errors?.[0]?.message ?? `Upload failed (${response.status}).`)
+  if (status < 200 || status >= 300 || !json?.doc) {
+    throw new Error(json?.errors?.[0]?.message ?? `Upload failed (${status}).`)
   }
 
   return {

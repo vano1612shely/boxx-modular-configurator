@@ -14,6 +14,13 @@ export const Models: CollectionConfig = {
       beforeListTable: [
         '/features/admin-model-viewer/ui/PackFolderButton#PackFolderButton',
       ],
+      edit: {
+        // Payload submits the form through `fetch`, which has no upload
+        // progress events, so its own upload area can only ever be a disabled
+        // Save button. This one optimises first and shows both halves of the
+        // wait.
+        Upload: '/features/admin-model-viewer/ui/ModelUploadField#ModelUploadField',
+      },
     },
     defaultColumns: ['title', 'filename', 'updatedAt'],
     description:

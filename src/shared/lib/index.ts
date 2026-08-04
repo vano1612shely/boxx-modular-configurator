@@ -7,6 +7,7 @@ export { ok, err, type Result } from './result'
 export {
   uploadModelFolder,
   type UploadedModel,
+  type UploadProgress,
   type UploadStage,
 } from './upload-model-folder'
 export { withModule } from './with-module'

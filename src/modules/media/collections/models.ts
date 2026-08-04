@@ -36,9 +36,16 @@ export const Models: CollectionConfig = {
     beforeChange: [
       ({ data, req }) => {
         const meta = req.context.modelMeta as ModelMeta | undefined
+        if (!meta) return data
 
-        if (meta) {
-          data.meta = meta
+        // A browser that optimised before uploading sends the size of what the
+        // admin actually picked. Keeping the larger of the two is what makes the
+        // saving on record the real one, rather than what was left over.
+        const claimed = (data.meta as ModelMeta | undefined)?.sizeBefore
+        data.meta = {
+          ...meta,
+          sizeBefore:
+            typeof claimed === 'number' && claimed > meta.sizeBefore ? claimed : meta.sizeBefore,
         }
 
         return data

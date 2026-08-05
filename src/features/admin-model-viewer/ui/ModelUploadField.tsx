@@ -4,7 +4,7 @@ import { useDocumentInfo } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
 import { useRef, useState, type ChangeEvent } from 'react'
 
-import { formatBytes, uploadModelFolder, type UploadProgress } from '@/shared/lib'
+import { uploadModelFolder, type UploadProgress } from '@/shared/lib'
 
 import { UploadProgressBar } from './UploadProgressBar'
 
@@ -92,27 +92,30 @@ export function ModelUploadField() {
         onChange={onPicked}
       />
 
-      {progress && <UploadProgressBar progress={progress} />}
+      {progress && (
+        <>
+          <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--theme-elevation-600)' }}>
+            Optimising and uploading your model…
+          </p>
+          <UploadProgressBar progress={progress} />
+        </>
+      )}
 
-      <p
-        style={{
-          margin: '8px 0 0',
-          fontSize: 12,
-          color: error
-            ? 'var(--theme-error-500)'
-            : done
-              ? 'var(--theme-success-600, var(--theme-elevation-600))'
-              : 'var(--theme-elevation-500)',
-        }}
-      >
-        {error ??
-          done ??
-          'The model is optimised here in your browser before it is sent, so a ' +
-            `${formatBytes(150 * 1024 * 1024)} source uploads as about ` +
-            `${formatBytes(11 * 1024 * 1024)}. Pick a single .glb/.gltf/.fbx, or the folder ` +
-            'holding a .gltf and its textures. Saving is not needed — the file is stored as ' +
-            'soon as the bar finishes.'}
-      </p>
+      {/* Only ever a failure or a confirmation; there is nothing to explain
+          while the panel is sitting idle. */}
+      {!progress && (error || done) && (
+        <p
+          style={{
+            margin: '8px 0 0',
+            fontSize: 12,
+            color: error
+              ? 'var(--theme-error-500)'
+              : 'var(--theme-success-600, var(--theme-elevation-600))',
+          }}
+        >
+          {error ?? done}
+        </p>
+      )}
     </div>
   )
 }

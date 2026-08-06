@@ -151,19 +151,26 @@ function PanelBody({ vm, addError, onAdd }: BodyProps) {
         )}
       </Show>
 
-      <div className="grid grid-cols-2 gap-card">
-        <For
-          each={vm.offers}
-          getKey={(offer) => offer.pkg.id}
-          fallback={
-            <Callout tone="notice" align="center" className="col-span-full p-4">
-              Nothing available for this kind of room yet.
-            </Callout>
-          }
-        >
-          {(offer) => <OfferTile offer={offer} onAdd={() => onAdd(offer)} />}
-        </For>
-      </div>
+      {/* Two blocks only when there is something in the first: a catalogue with
+          nothing named for this room would otherwise grow a heading that says
+          the same as no heading at all. */}
+      <Show when={vm.offerGroups.recommended.length > 0}>
+        <Eyebrow as="h3" className="mb-card">
+          Recommended for this room
+        </Eyebrow>
+        <OfferGrid offers={vm.offerGroups.recommended} onAdd={onAdd} />
+        <Show when={vm.offerGroups.other.length > 0}>
+          <Eyebrow as="h3" className="mt-block mb-card">
+            More furniture
+          </Eyebrow>
+        </Show>
+      </Show>
+
+      <OfferGrid
+        offers={vm.offerGroups.other}
+        onAdd={onAdd}
+        empty={vm.offerGroups.recommended.length === 0}
+      />
 
       <Show when={vm.placedInFocusedRoom.length > 0}>
         <Eyebrow as="h3" className="mt-block mb-card">
@@ -194,6 +201,35 @@ function PanelBody({ vm, addError, onAdd }: BodyProps) {
         </ul>
       </Show>
     </>
+  )
+}
+
+/** `empty` says this grid is the one that has to speak up when there is nothing. */
+function OfferGrid({
+  offers,
+  onAdd,
+  empty = false,
+}: {
+  offers: PackageOffer[]
+  onAdd: (offer: PackageOffer) => void
+  empty?: boolean
+}) {
+  if (offers.length === 0 && !empty) return null
+
+  return (
+    <div className="grid grid-cols-2 gap-card">
+      <For
+        each={offers}
+        getKey={(offer) => offer.pkg.id}
+        fallback={
+          <Callout tone="notice" align="center" className="col-span-full p-4">
+            Nothing available for this kind of room yet.
+          </Callout>
+        }
+      >
+        {(offer) => <OfferTile offer={offer} onAdd={() => onAdd(offer)} />}
+      </For>
+    </div>
   )
 }
 

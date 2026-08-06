@@ -93,6 +93,20 @@ export const FurniturePackages: CollectionConfig = {
       type: 'select',
       hasMany: true,
       options: [...ROOM_TYPE_OPTIONS],
+      admin: {
+        description: 'Where this package is offered at all. Empty means every room.',
+      },
+    },
+    {
+      name: 'recommendedFor',
+      type: 'select',
+      hasMany: true,
+      options: [...ROOM_TYPE_OPTIONS],
+      admin: {
+        description:
+          'Where it is offered first. In these rooms it appears under "Recommended", above ' +
+          'everything else — it does not change where the package can go.',
+      },
     },
     {
       name: 'compatibleLines',

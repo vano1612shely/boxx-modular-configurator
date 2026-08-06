@@ -31,5 +31,6 @@ export function mapFurniturePackage(doc: FurniturePackage): FurniturePackageEnti
       depth: doc.footprint?.depth ?? 1,
     },
     compatibleRoomTypes: doc.compatibleRoomTypes ?? [],
+    recommendedFor: doc.recommendedFor ?? [],
   }
 }

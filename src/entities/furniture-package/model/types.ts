@@ -15,5 +15,8 @@ export type FurniturePackageEntity = {
   price: number | null
   description: string | null
   footprint: PackageFootprint
+  /** Where it may be offered. Empty means anywhere. */
   compatibleRoomTypes: RoomType[]
+  /** Where it is offered first. A subset of the above in practice, not enforced. */
+  recommendedFor: RoomType[]
 }

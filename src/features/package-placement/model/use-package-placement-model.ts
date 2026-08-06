@@ -21,6 +21,12 @@ export type PackageOffer = {
   fits: boolean
 }
 
+export type OfferGroups = {
+  /** Named for this kind of room in the admin. */
+  recommended: PackageOffer[]
+  other: PackageOffer[]
+}
+
 export function usePackagePlacementModel({ building, packages }: Args) {
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
   const placed = useConfiguration((s) => s.placed)
@@ -51,6 +57,22 @@ export function usePackagePlacementModel({ building, packages }: Args) {
         fits: footprintFitsPolygon(pkg.footprint, focusedRoom.floorPolygon),
       }))
   }, [packages, focusedRoom])
+
+  // Derived alongside rather than replacing `offers`: that array feeds the
+  // thumbnail rig, the preloader and the item count as well as the list, and
+  // reshaping it would have meant touching all of them for a heading.
+  const offerGroups = useMemo<OfferGroups>(() => {
+    const roomType = focusedRoom?.roomType
+    const recommended: PackageOffer[] = []
+    const other: PackageOffer[] = []
+
+    for (const offer of offers) {
+      const suggested = roomType !== undefined && offer.pkg.recommendedFor.includes(roomType)
+      ;(suggested ? recommended : other).push(offer)
+    }
+
+    return { recommended, other }
+  }, [offers, focusedRoom])
 
   useEffect(() => {
     for (const offer of offers) {
@@ -94,6 +116,7 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     focusedRoom,
     isPanelOpen: focusedRoom !== null,
     offers,
+    offerGroups,
     isEmpty: offers.length === 0,
     placedInFocusedRoom,
     onAddPackage: addToFocusedRoom,

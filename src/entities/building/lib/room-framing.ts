@@ -1,6 +1,6 @@
 import type { CameraPreset, RoomZone, Vec3Tuple, WallSide } from '../model/types'
 import { WALL_SIDES } from '../model/types'
-import { polygonBounds } from './polygon'
+import { polygonAreaSqFt, polygonBounds } from './polygon'
 
 /** Elevation above the horizon, in radians (~28°). */
 const ELEVATION = 0.49
@@ -26,6 +26,19 @@ export function roomFeatureSide(room: RoomZone): WallSide {
   }
 
   return best
+}
+
+/**
+ * Floor area to show for a room, in whole square feet.
+ *
+ * An authored figure wins outright — the outline is traced over the model by
+ * hand and snapped to the nearest axis, so it is an approximation, and someone
+ * with the real drawing should be able to say so. Nothing is stored otherwise:
+ * a number written down when the outline was drawn would go quietly stale the
+ * next time anybody moved a corner.
+ */
+export function roomAreaSqFt(room: RoomZone): number {
+  return room.areaSqFt ?? Math.round(polygonAreaSqFt(room.floorPolygon))
 }
 
 /** `fovDeg` is the vertical field of view, the tighter one on a landscape viewport. */

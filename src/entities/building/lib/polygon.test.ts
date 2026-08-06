@@ -7,6 +7,7 @@ import {
   offsetPolygonMitered,
   outwardEdgeNormal,
   pointInPolygon,
+  polygonAreaSqFt,
   polygonCentroid,
   polygonWindingSign,
   poseInsidePolygon,
@@ -253,5 +254,45 @@ describe('offsetPolygonMitered', () => {
       expect(p.x).toBeCloseTo(square[i].x, 9)
       expect(p.z).toBeCloseTo(square[i].z, 9)
     })
+  })
+})
+
+describe('polygonAreaSqFt', () => {
+  const squareOf = (side: number) => [
+    { x: 0, z: 0 },
+    { x: side, z: 0 },
+    { x: side, z: side },
+    { x: 0, z: side },
+  ]
+
+  it('converts square metres to square feet', () => {
+    expect(polygonAreaSqFt(squareOf(1))).toBeCloseTo(10.7639, 3)
+    expect(polygonAreaSqFt(squareOf(3))).toBeCloseTo(9 * 10.7639, 2)
+  })
+
+  // Outlines come out of the editor either way round, and an area is an area.
+  it('does not care which way the outline was drawn', () => {
+    const clockwise = squareOf(4)
+    expect(polygonAreaSqFt([...clockwise].reverse())).toBeCloseTo(
+      polygonAreaSqFt(clockwise),
+      9,
+    )
+  })
+
+  it('handles an L-shaped room', () => {
+    // A 4x4 square with a 2x2 bite out of one corner: 12 m².
+    const shape = [
+      { x: 0, z: 0 },
+      { x: 4, z: 0 },
+      { x: 4, z: 2 },
+      { x: 2, z: 2 },
+      { x: 2, z: 4 },
+      { x: 0, z: 4 },
+    ]
+    expect(polygonAreaSqFt(shape)).toBeCloseTo(12 * 10.7639, 2)
+  })
+
+  it('is zero for a degenerate outline', () => {
+    expect(polygonAreaSqFt([{ x: 0, z: 0 }, { x: 1, z: 1 }, { x: 2, z: 2 }])).toBeCloseTo(0, 9)
   })
 })

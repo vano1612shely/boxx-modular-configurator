@@ -46,6 +46,19 @@ export function polygonSignedArea(poly: Point2[]): number {
   return area / 2
 }
 
+const SQ_FT_PER_SQ_M = 10.763910416709722
+
+/**
+ * Floor area of an outline, in square feet.
+ *
+ * Sign-free, so which way the outline was drawn does not matter. This is the
+ * *interior* face of the walls — what the room polygon traces — so it is usable
+ * floor area and will not agree with a gross figure measured to the outside.
+ */
+export function polygonAreaSqFt(poly: Point2[]): number {
+  return Math.abs(polygonSignedArea(poly)) * SQ_FT_PER_SQ_M
+}
+
 export function polygonCentroid(poly: Point2[]): Point2 {
   const area = polygonSignedArea(poly)
 

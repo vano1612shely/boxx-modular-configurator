@@ -249,6 +249,8 @@ export function mapRoomZone(room: RoomDoc): RoomZone {
     key: room.key,
     name: room.name,
     roomType: room.roomType,
+    // Zero is a figure someone typed; only an empty field means "work it out".
+    areaSqFt: typeof room.areaSqFt === 'number' ? room.areaSqFt : null,
     floorPolygon,
     shell: roomShell(room, floorPolygon),
     openings: roomOpenings(room.openings),

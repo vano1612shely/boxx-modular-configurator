@@ -316,6 +316,10 @@ export interface BuildingModel {
         name: string;
         roomType: 'office' | 'classroom' | 'conference' | 'kitchen' | 'restroom' | 'lounge' | 'hallway' | 'other';
         /**
+         * Approximate floor area shown to the visitor, in ft². Leave empty and it is worked out from the outline below — fill it in only when you have a better figure than the trace.
+         */
+        areaSqFt?: number | null;
+        /**
          * Floor outline points (XZ plane, meters), drawn in the editor. Each point owns the edge that starts at it, and that edge belongs to one of the four walls.
          */
         floorPolygon?:
@@ -912,6 +916,7 @@ export interface BuildingModelsSelect<T extends boolean = true> {
         key?: T;
         name?: T;
         roomType?: T;
+        areaSqFt?: T;
         floorPolygon?:
           | T
           | {

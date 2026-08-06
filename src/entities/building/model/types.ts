@@ -106,6 +106,8 @@ export type RoomZone = {
   key: string
   name: string
   roomType: RoomType
+  /** Authored floor area in ft². Null means it is worked out from the outline. */
+  areaSqFt: number | null
   /** Floor outline in the XZ plane; doubles as the interior face of the walls. */
   floorPolygon: RoomVertex[]
   shell: RoomShellConfig

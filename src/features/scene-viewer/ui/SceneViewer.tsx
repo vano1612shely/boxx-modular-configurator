@@ -139,7 +139,7 @@ export function SceneViewer({ building, children }: Props) {
         </Suspense>
         <RoomHotspots
           rooms={vm.visibleRooms}
-          visible={!vm.isRoomFocused}
+          focusedKey={vm.focusedRoom?.key ?? null}
           onFocusRoom={vm.onFocusRoom}
         />
         <CameraRig

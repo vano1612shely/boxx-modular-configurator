@@ -228,6 +228,16 @@ export const BuildingModels: CollectionConfig = {
                   ],
                 },
                 {
+                  name: 'areaSqFt',
+                  type: 'number',
+                  admin: {
+                    description:
+                      'Approximate floor area shown to the visitor, in ft². Leave empty and it ' +
+                      'is worked out from the outline below — fill it in only when you have a ' +
+                      'better figure than the trace.',
+                  },
+                },
+                {
                   name: 'floorPolygon',
                   type: 'array',
                   minRows: 3,

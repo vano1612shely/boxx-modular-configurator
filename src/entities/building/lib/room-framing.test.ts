@@ -7,6 +7,7 @@ import {
   frameRoom,
   orbitable,
   orbitRadius,
+  roomAreaSqFt,
   roomFocusTarget,
   type PartExtent,
 } from './room-framing'
@@ -24,6 +25,7 @@ function room(
     key: 'r',
     name: 'R',
     roomType: 'office',
+    areaSqFt: null,
     floorPolygon: polygon,
     shell: {
       floorY: overrides.floorY ?? 0,
@@ -328,5 +330,30 @@ describe('frameBuilding', () => {
     )
 
     expect(buildingOrbit / buildingRadius).toBeCloseTo(roomOrbit / roomRadius, 2)
+  })
+})
+
+describe('roomAreaSqFt', () => {
+  const fourByFive = room([
+    [0, 0],
+    [4, 0],
+    [4, 5],
+    [0, 5],
+  ])
+
+  it('works the area out from the outline', () => {
+    // 20 m² traced, to the nearest whole foot.
+    expect(roomAreaSqFt(fourByFive)).toBe(215)
+  })
+
+  // Outlines are traced over the model by hand and snapped to the nearest axis,
+  // so someone holding the real drawing has to be able to overrule them.
+  it('lets an authored figure win', () => {
+    expect(roomAreaSqFt({ ...fourByFive, areaSqFt: 208 })).toBe(208)
+  })
+
+  // Not `?? 0 ||`: a room genuinely authored as zero is still an answer.
+  it('takes zero as an answer', () => {
+    expect(roomAreaSqFt({ ...fourByFive, areaSqFt: 0 })).toBe(0)
   })
 })

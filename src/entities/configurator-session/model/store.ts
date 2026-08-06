@@ -79,10 +79,14 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
       viewMode: 'dollhouse',
       viewRequestId: s.viewRequestId + 1,
     })),
+  // Leaves looking straight down. Coming out of a room, the useful question is
+  // where that room sits in the plan, and the three-quarter view the visitor
+  // went in from answers it worst — the near walls stand in front of everything.
   exitRoomFocus: () =>
     set((s) => ({
       focusedRoomKey: null,
       moveToTarget: null,
+      viewMode: 'top',
       viewRequestId: s.viewRequestId + 1,
     })),
   setInteractionLock: (locked) => set({ interactionLock: locked }),

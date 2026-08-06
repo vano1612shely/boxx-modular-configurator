@@ -51,6 +51,41 @@ describe('move-to requests', () => {
   })
 })
 
+describe('room focus', () => {
+  it('goes in on the dollhouse and comes out looking down', () => {
+    session().setViewMode('side-left')
+    session().focusRoom('room-1')
+    expect(session().viewMode).toBe('dollhouse')
+
+    session().exitRoomFocus()
+    expect(session()).toMatchObject({ focusedRoomKey: null, viewMode: 'top' })
+  })
+})
+
+describe('rotateView', () => {
+  // Sharing `viewRequestId` would re-apply the whole preset, which zeroes the
+  // focal offset and dollies back — the visitor's zoom and pan, gone on every
+  // press of a button that only means "turn a bit".
+  it('does not ask for a preset flight', () => {
+    expect(requests(() => session().rotateView(1))).toBe(0)
+  })
+
+  it('counts its own requests and remembers the direction', () => {
+    const before = session().rotateRequestId
+    session().rotateView(-1)
+    expect(session().rotateRequestId).toBe(before + 1)
+    expect(session().rotateDirection).toBe(-1)
+  })
+
+  // The bar keeps naming the preset last picked; a turned camera is not that
+  // preset, but it is not a different one either.
+  it('leaves the view mode alone', () => {
+    session().setViewMode('side-back')
+    session().rotateView(1)
+    expect(session().viewMode).toBe('side-back')
+  })
+})
+
 describe('reset', () => {
   it('drops every choice the visitor made', () => {
     session().focusRoom('room-1')

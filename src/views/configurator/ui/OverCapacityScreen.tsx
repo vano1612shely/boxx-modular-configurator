@@ -5,9 +5,11 @@ import { Callout, CenteredPanel, Chip, PillLink } from '@/shared/ui/boxx'
 type Props = {
   lineName: string
   requestedUnits: number
+  /** Back to the quiz with this request still in it — "adjust", not "start over". */
+  adjustHref: string
 }
 
-export function OverCapacityScreen({ lineName, requestedUnits }: Props) {
+export function OverCapacityScreen({ lineName, requestedUnits, adjustHref }: Props) {
   return (
     <CenteredPanel as="main">
       <Chip tone="gold">Custom build</Chip>
@@ -23,7 +25,7 @@ export function OverCapacityScreen({ lineName, requestedUnits }: Props) {
           </span>
         }
         action={
-          <PillLink href="/configurator" variant="primary">
+          <PillLink href={adjustHref} variant="primary">
             Adjust request
           </PillLink>
         }

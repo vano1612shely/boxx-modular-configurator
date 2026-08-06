@@ -1,6 +1,6 @@
 import { SearchX } from 'lucide-react'
 
-import { IntakeForm } from '@/features/building-intake'
+import { changeSelectionHref, IntakeForm } from '@/features/building-intake'
 import { Callout, CenteredPanel } from '@/shared/ui/boxx'
 
 import { getBuildingScene } from '../api/get-building-scene'
@@ -34,13 +34,17 @@ export async function ConfiguratorView({ searchParams }: Props) {
   // Set by the host page, e.g. ?region=us. Absent means the whole catalogue.
   const regionCode = firstParam(searchParams.region)
   const region = await resolveRegionScope(regionCode)
+  // Set by the "change selection" link, which carries the answers it wants the
+  // form to open on — and those look exactly like an ordinary configurator link.
+  const changing = firstParam(searchParams.change) === '1'
+  const answers = { line: building, units, restrooms }
 
-  if (!building) {
+  if (!building || changing) {
     const lines = await getIntakeLines(region)
 
     return (
       <main className="flex min-h-dvh items-center justify-center bg-background p-4">
-        <IntakeForm lines={lines} region={regionCode} />
+        <IntakeForm lines={lines} region={regionCode} answers={answers} />
       </main>
     )
   }
@@ -73,6 +77,7 @@ export async function ConfiguratorView({ searchParams }: Props) {
       <OverCapacityScreen
         lineName={resolution.lineName}
         requestedUnits={resolution.requestedUnits}
+        adjustHref={changeSelectionHref(answers, regionCode)}
       />
     )
   }
@@ -88,6 +93,7 @@ export async function ConfiguratorView({ searchParams }: Props) {
       packages={packages}
       integration={integration}
       region={regionCode}
+      answers={answers}
     />
   )
 }

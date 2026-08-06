@@ -5,15 +5,18 @@ import { useEffect, useRef } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
+import { changeSelectionHref, type IntakeAnswers } from '@/features/building-intake'
 import { Chip, FloatingBar, Pill, PillLink, SceneOverlay } from '@/shared/ui/boxx'
 import { Show } from '@/shared/ui/control-flow'
 
 export function ConfiguratorHeader({
   building,
   region,
+  answers,
 }: {
   building: BuildingScene
   region?: string
+  answers: IntakeAnswers
 }) {
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
   const clearFocus = useConfiguratorSession((s) => s.exitRoomFocus)
@@ -52,7 +55,7 @@ export function ConfiguratorHeader({
         fallback={
           <FloatingBar shape="panel" className="min-w-0">
             <PillLink
-              href={region ? `/configurator?region=${encodeURIComponent(region)}` : '/configurator'}
+              href={changeSelectionHref(answers, region)}
               variant="secondary"
               leadingIcon={<ArrowLeft size={16} />}
               labelFrom="desktop"

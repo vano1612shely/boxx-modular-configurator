@@ -6,6 +6,8 @@ import { useState, type FormEvent } from 'react'
 import { Card, Eyebrow, Field, OptionGroup, Pill, Progress } from '@/shared/ui/boxx'
 import { Match, Show, Switch } from '@/shared/ui/control-flow'
 
+import type { IntakeAnswers } from '../lib/intake-href'
+
 export type IntakeLine = {
   slug: string
   name: string
@@ -17,6 +19,8 @@ type Props = {
   lines: IntakeLine[]
   /** Carried straight through, or the next screen forgets which catalogue it is showing. */
   region?: string
+  /** Answers to open on, when the visitor came back to change them. */
+  answers?: IntakeAnswers
 }
 
 const UNIT_LABEL = { offices: 'Offices', classrooms: 'Classrooms' } as const
@@ -24,12 +28,22 @@ const UNIT_LABEL = { offices: 'Offices', classrooms: 'Classrooms' } as const
 const heading =
   'text-[1.5625rem] leading-[1.3] font-medium text-foreground desktop:text-[2.1875rem]'
 
-export function IntakeForm({ lines, region }: Props) {
+export function IntakeForm({ lines, region, answers }: Props) {
   const router = useRouter()
   const [step, setStep] = useState(1)
-  const [lineSlug, setLineSlug] = useState(lines[0]?.slug ?? '')
-  const [units, setUnits] = useState(2)
-  const [restrooms, setRestrooms] = useState(0)
+  // Opens on step 1 rather than jumping to the sizing: the complaint was that
+  // the earlier choice was gone, and seeing it still picked is the answer to it.
+  //
+  // A slug the catalogue no longer offers — a retired line, a different region —
+  // would be submitted straight back and resolve to nothing, so it falls to the
+  // first the same way an absent one does.
+  const [lineSlug, setLineSlug] = useState(() =>
+    answers?.line && lines.some((line) => line.slug === answers.line)
+      ? answers.line
+      : (lines[0]?.slug ?? ''),
+  )
+  const [units, setUnits] = useState(answers?.units ?? 2)
+  const [restrooms, setRestrooms] = useState(answers?.restrooms ?? 0)
 
   const line = lines.find((l) => l.slug === lineSlug) ?? lines[0]
 

@@ -30,6 +30,8 @@ type ConfiguratorSessionState = {
   rotateDirection: 1 | -1
   /** World-space extent excluding the exported site plate; null until the glb resolves. */
   buildingBounds: BuildingBounds | null
+  /** Side the camera is square to, or null between two. Measured, not chosen. */
+  facing: ViewMode | null
   showCeiling: boolean
   /** Storey the visitor is looking at, or null for the whole building. */
   selectedFloorKey: string | null
@@ -40,6 +42,7 @@ type ConfiguratorSessionState = {
   setInteractionLock: (locked: boolean) => void
   setViewMode: (mode: ViewMode) => void
   setBuildingBounds: (bounds: BuildingBounds) => void
+  setFacing: (facing: ViewMode | null) => void
   toggleCeiling: () => void
   selectFloor: (key: string | null) => void
   requestMoveTo: (position: [number, number, number], target: [number, number, number]) => void
@@ -72,6 +75,7 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   rotateRequestId: 0,
   rotateDirection: 1,
   buildingBounds: null,
+  facing: null,
   focusRoom: (key) =>
     set((s) => ({
       focusedRoomKey: key,
@@ -97,6 +101,8 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
       viewRequestId: s.viewRequestId + 1,
     })),
   setBuildingBounds: (bounds) => set({ buildingBounds: bounds }),
+  // Read off the pose by BearingProbe, which only calls this when it changes.
+  setFacing: (facing) => set({ facing }),
   toggleCeiling: () => set((s) => ({ showCeiling: !s.showCeiling })),
   // Reframes: a storey is a different subject, and the pose that framed the
   // whole building leaves it small and off centre.

@@ -53,6 +53,7 @@ export function ViewModeBar({ floors }: Props) {
   const setViewMode = useConfiguratorSession((s) => s.setViewMode)
   const requestMoveTo = useConfiguratorSession((s) => s.requestMoveTo)
   const rotateView = useConfiguratorSession((s) => s.rotateView)
+  const facing = useConfiguratorSession((s) => s.facing)
   const isRoomFocused = useConfiguratorSession((s) => s.focusedRoomKey !== null)
   const showCeiling = useConfiguratorSession((s) => s.showCeiling)
   const toggleCeiling = useConfiguratorSession((s) => s.toggleCeiling)
@@ -62,8 +63,10 @@ export function ViewModeBar({ floors }: Props) {
   const placed = useConfiguration((s) => s.placed)
   const [open, setOpen] = useState<OpenMenu>(null)
 
-  const isSideView = viewMode.startsWith('side-')
-  const activeSide = SIDE_VIEWS.find((view) => view.mode === viewMode) ?? null
+  // Off the pose, not off the button last pressed: dragging the view used to
+  // leave the bar insisting on a side the camera had long since left.
+  const activeSide = SIDE_VIEWS.find((view) => view.mode === facing) ?? null
+  const isSideView = activeSide !== null
   const overviewLabel = isRoomFocused ? 'Dollhouse' : 'Overview'
   const selected = placed.find((p) => p.instanceId === selectedInstanceId) ?? null
 

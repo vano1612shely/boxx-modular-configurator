@@ -12,10 +12,17 @@ export function useSceneViewerModel(building: BuildingScene) {
   const exitRoomFocus = useConfiguratorSession((s) => s.exitRoomFocus)
   const interactionLock = useConfiguratorSession((s) => s.interactionLock)
   const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)
+  const previewRoomKey = useConfiguratorSession((s) => s.previewRoomKey)
+  const previewRoom = useConfiguratorSession((s) => s.previewRoom)
 
   const focusedRoom = useMemo<RoomZone | null>(
     () => building.rooms.find((room) => room.key === focusedRoomKey) ?? null,
     [building.rooms, focusedRoomKey],
+  )
+
+  const previewedRoom = useMemo<RoomZone | null>(
+    () => building.rooms.find((room) => room.key === previewRoomKey) ?? null,
+    [building.rooms, previewRoomKey],
   )
 
   const selectedFloor = useMemo(
@@ -36,9 +43,11 @@ export function useSceneViewerModel(building: BuildingScene) {
     visibleRooms,
     focusedRoom,
     isRoomFocused: focusedRoom !== null,
+    previewedRoom,
     selectedFloor,
     interactionLock,
     onFocusRoom: focusRoom,
+    onPreviewRoom: previewRoom,
     onExitRoomFocus: exitRoomFocus,
   }
 }

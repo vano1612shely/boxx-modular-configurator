@@ -25,6 +25,7 @@ import { useSceneViewerModel } from '../model/use-scene-viewer-model'
 import { BearingProbe } from './BearingProbe'
 import { BuildingModel } from './BuildingModel'
 import { CameraRig } from './CameraRig'
+import { RoomFloors } from './RoomFloors'
 import { RoomHotspots } from './RoomHotspots'
 import { SceneLoader } from './SceneLoader'
 import { ShadowUpdates } from './ShadowUpdates'
@@ -109,7 +110,13 @@ export function SceneViewer({ building, children }: Props) {
           gl.shadowMap.autoUpdate = false
         }}
         className="touch-none"
-        onPointerMissed={() => useConfiguration.getState().selectPackage(null)}
+        onPointerMissed={() => {
+          useConfiguration.getState().selectPackage(null)
+          // Clicking off a room steps back out of its preview, the same way it
+          // drops a selected item. Guarded in the store, so a click on empty
+          // ground with nothing previewed does not reframe the camera.
+          useConfiguratorSession.getState().clearPreview()
+        }}
       >
         <color attach="background" args={[SCENE_BACKGROUND]} />
         <ShadowUpdates trigger={shadowTrigger} />
@@ -150,6 +157,15 @@ export function SceneViewer({ building, children }: Props) {
         <Suspense fallback={null}>
           <Show when={transition.staged}>{(room) => <RoomShell room={room} />}</Show>
         </Suspense>
+        {/* Only outside a room: in one, the floor under the visitor belongs to
+            the generated shell and clicking it means nothing. */}
+        <Show when={!vm.isRoomFocused}>
+          <RoomFloors
+            rooms={vm.visibleRooms}
+            previewedKey={vm.previewedRoom?.key ?? null}
+            onPreviewRoom={vm.onPreviewRoom}
+          />
+        </Show>
         <RoomHotspots
           rooms={vm.visibleRooms}
           focusedKey={vm.focusedRoom?.key ?? null}
@@ -158,6 +174,7 @@ export function SceneViewer({ building, children }: Props) {
         <CameraRig
           building={building}
           focusedRoom={vm.focusedRoom}
+          previewedRoom={vm.previewedRoom}
           floor={vm.selectedFloor}
           enabled={!vm.interactionLock}
         />

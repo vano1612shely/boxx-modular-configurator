@@ -7,14 +7,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Box3, MathUtils, Spherical, Vector3 } from 'three'
 
 import type { BuildingFloor, BuildingScene, RoomZone } from '@/entities/building'
-import {
-  floorExtent,
-  frameBuilding,
-  frameExtent,
-  frameRoom,
-  orbitable,
-  polygonBounds,
-} from '@/entities/building'
+import { floorExtent, frameBuilding, frameExtent, orbitable } from '@/entities/building'
 import { useConfiguratorSession, type BuildingBounds } from '@/entities/configurator-session'
 
 import { applyPreset } from '../lib/apply-preset'
@@ -25,12 +18,13 @@ import { offsetLimit, panSpeedFactor } from '../lib/pan-resistance'
 import { quarterTurn } from '../lib/quarter-turn'
 import { pinPose } from '../lib/pin-pose'
 import { azimuthRotateSpeed, polarRotateSpeed } from '../lib/rotate-speeds'
-import { viewModePreset, type ViewScope } from '../lib/view-presets'
+import { roomScope, viewModePreset, type ViewScope } from '../lib/view-presets'
 import { dollySpeedFor } from '../lib/wheel-dolly'
 
 type Props = {
   building: BuildingScene
   focusedRoom: RoomZone | null
+  previewedRoom: RoomZone | null
   floor: BuildingFloor | null
   enabled?: boolean
 }
@@ -40,21 +34,16 @@ function scopeFor(
   focusedRoom: RoomZone | null,
   buildingBounds: BuildingBounds | null,
   floor: BuildingFloor | null,
+  previewedRoom: RoomZone | null,
 ): ViewScope | null {
   const fov = building.camera.fov
 
-  if (focusedRoom) {
-    const { minX, minZ, maxX, maxZ } = polygonBounds(focusedRoom.floorPolygon)
-    const { floorY, wallHeight } = focusedRoom.shell
-    // Anchor at the room's floorY, not y=0: the model sits on a base that
-    // belongs to no room.
-    return {
-      min: [minX, floorY, minZ],
-      max: [maxX, floorY + wallHeight, maxZ],
-      dollhouse: frameRoom(focusedRoom, fov),
-      fov,
-    }
-  }
+  if (focusedRoom) return roomScope(focusedRoom, fov)
+
+  // The same extent as being in the room, but arrived at in the top view, so
+  // the visitor is looking straight down at one room instead of at the middle
+  // of the whole building. It also bounds the zoom and the pan to that room.
+  if (previewedRoom) return roomScope(previewedRoom, fov)
 
   if (!buildingBounds) return null
 
@@ -90,7 +79,13 @@ const PAN_SPEED = 2
 const SMOOTH_TIME = 0.3
 const DRAGGING_SMOOTH_TIME = 0.12
 
-export function CameraRig({ building, focusedRoom, floor, enabled = true }: Props) {
+export function CameraRig({
+  building,
+  focusedRoom,
+  previewedRoom,
+  floor,
+  enabled = true,
+}: Props) {
   const controlsRef = useRef<CameraControls>(null)
   const hasFlownRef = useRef(false)
   const viewMode = useConfiguratorSession((s) => s.viewMode)
@@ -102,8 +97,8 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
   const { camera } = building
 
   const scope = useMemo(
-    () => scopeFor(building, focusedRoom, buildingBounds, floor),
-    [building, focusedRoom, buildingBounds, floor],
+    () => scopeFor(building, focusedRoom, buildingBounds, floor, previewedRoom),
+    [building, focusedRoom, buildingBounds, floor, previewedRoom],
   )
 
   const limits = useMemo(

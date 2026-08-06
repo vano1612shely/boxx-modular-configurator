@@ -1,4 +1,11 @@
-import { fitDistance, orbitRadius, type CameraPreset } from '@/entities/building'
+import {
+  fitDistance,
+  frameRoom,
+  orbitRadius,
+  polygonBounds,
+  type CameraPreset,
+  type RoomZone,
+} from '@/entities/building'
 import type { ViewMode } from '@/entities/configurator-session'
 
 export type ViewScope = {
@@ -6,6 +13,28 @@ export type ViewScope = {
   max: [number, number, number]
   dollhouse: CameraPreset
   fov: number
+}
+
+/**
+ * What the camera is looking at when the subject is one room.
+ *
+ * Used for a room the visitor is standing in and for one they are only looking
+ * down at from outside — the subject is the same either way, and it is the view
+ * mode that decides where they look at it from.
+ *
+ * Anchored at the room's own floor level, not y=0: the model sits on a base
+ * that belongs to no room.
+ */
+export function roomScope(room: RoomZone, fov: number): ViewScope {
+  const { minX, minZ, maxX, maxZ } = polygonBounds(room.floorPolygon)
+  const { floorY, wallHeight } = room.shell
+
+  return {
+    min: [minX, floorY, minZ],
+    max: [maxX, floorY + wallHeight, maxZ],
+    dollhouse: frameRoom(room, fov),
+    fov,
+  }
 }
 
 export const VIEW_MODES = [

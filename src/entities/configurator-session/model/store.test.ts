@@ -86,6 +86,41 @@ describe('rotateView', () => {
   })
 })
 
+describe('room preview', () => {
+  it('looks straight down at the room and asks for the flight', () => {
+    expect(requests(() => session().previewRoom('room-2'))).toBe(1)
+    expect(session()).toMatchObject({ previewRoomKey: 'room-2', viewMode: 'top' })
+  })
+
+  // Every click on empty ground goes through here, and reframing the camera on
+  // each of them would be a jolt with no cause.
+  it('costs nothing to clear when nothing is previewed', () => {
+    expect(requests(() => session().clearPreview())).toBe(0)
+  })
+
+  it('reframes when there was something to clear', () => {
+    session().previewRoom('room-2')
+    expect(requests(() => session().clearPreview())).toBe(1)
+    expect(session().previewRoomKey).toBeNull()
+  })
+
+  // A preview is a step towards somewhere, so anything that decides where to
+  // look ends it — including picking a view, which is a statement about the
+  // building and not about one room.
+  it('ends with any other decision about the view', () => {
+    for (const act of [
+      () => session().focusRoom('room-1'),
+      () => session().exitRoomFocus(),
+      () => session().setViewMode('side-left'),
+      () => session().selectFloor('floor-2'),
+    ]) {
+      session().previewRoom('room-2')
+      act()
+      expect(session().previewRoomKey).toBeNull()
+    }
+  })
+})
+
 describe('reset', () => {
   it('drops every choice the visitor made', () => {
     session().focusRoom('room-1')

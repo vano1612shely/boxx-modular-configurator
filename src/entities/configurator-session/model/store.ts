@@ -35,6 +35,8 @@ type ConfiguratorSessionState = {
   showCeiling: boolean
   /** Storey the visitor is looking at, or null for the whole building. */
   selectedFloorKey: string | null
+  /** Room framed from above without going in, or null. A step, not a place. */
+  previewRoomKey: string | null
   /** One pose to fly to, consumed by the camera on the next request and then cleared. */
   moveToTarget: MoveToRequest | null
   focusRoom: (key: string) => void
@@ -45,6 +47,8 @@ type ConfiguratorSessionState = {
   setFacing: (facing: ViewMode | null) => void
   toggleCeiling: () => void
   selectFloor: (key: string | null) => void
+  previewRoom: (key: string) => void
+  clearPreview: () => void
   requestMoveTo: (position: [number, number, number], target: [number, number, number]) => void
   clearMoveTo: () => void
   rotateView: (direction: 1 | -1) => void
@@ -66,6 +70,7 @@ const VISITOR_STATE = {
   viewMode: 'dollhouse' as ViewMode,
   showCeiling: false,
   selectedFloorKey: null as string | null,
+  previewRoomKey: null as string | null,
   moveToTarget: null as MoveToRequest | null,
 }
 
@@ -79,6 +84,7 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   focusRoom: (key) =>
     set((s) => ({
       focusedRoomKey: key,
+      previewRoomKey: null,
       moveToTarget: null,
       viewMode: 'dollhouse',
       viewRequestId: s.viewRequestId + 1,
@@ -89,14 +95,18 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   exitRoomFocus: () =>
     set((s) => ({
       focusedRoomKey: null,
+      previewRoomKey: null,
       moveToTarget: null,
       viewMode: 'top',
       viewRequestId: s.viewRequestId + 1,
     })),
   setInteractionLock: (locked) => set({ interactionLock: locked }),
+  // Picking a view is a statement about the building, so it drops a room
+  // preview: framing one room from the front is not what "Front" was asked for.
   setViewMode: (mode) =>
     set((s) => ({
       viewMode: mode,
+      previewRoomKey: null,
       moveToTarget: null,
       viewRequestId: s.viewRequestId + 1,
     })),
@@ -109,9 +119,28 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   selectFloor: (key) =>
     set((s) => ({
       selectedFloorKey: key,
+      previewRoomKey: null,
       moveToTarget: null,
       viewRequestId: s.viewRequestId + 1,
     })),
+  // Straight down at one room, close enough to read it, without going in. The
+  // zoom in the overview always closes on the middle of the building, which is
+  // no help at all when the room of interest is at one end.
+  previewRoom: (key) =>
+    set((s) => ({
+      previewRoomKey: key,
+      viewMode: 'top',
+      moveToTarget: null,
+      viewRequestId: s.viewRequestId + 1,
+    })),
+  // Guarded: a stray clear while nothing is previewed would reframe the camera
+  // for no reason, and every click on empty ground goes through here.
+  clearPreview: () =>
+    set((s) =>
+      s.previewRoomKey === null
+        ? {}
+        : { previewRoomKey: null, moveToTarget: null, viewRequestId: s.viewRequestId + 1 },
+    ),
   // Bumps the request id like every other camera action, so the rig re-runs for
   // it. That is what lets the rig consume the pose and clear it in one pass,
   // instead of holding it and re-flying to it on every later scope change.

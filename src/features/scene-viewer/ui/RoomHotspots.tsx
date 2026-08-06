@@ -55,8 +55,11 @@ export function RoomHotspots({ rooms, focusedKey, onFocusRoom }: Props) {
                 // way out. Here it is on the room it names.
                 <Chip tone="glass" className="shadow-md whitespace-nowrap">
                   <span className="font-medium">{room.name}</span>
+                  {/* "of floor" earns its five characters: the building's own
+                      square-foot figure is a different measurement, and the
+                      rooms will never add up to it. */}
                   <span className="text-muted-foreground">
-                    {' · '}approx. {roomAreaSqFt(room).toLocaleString('en-US')} ft²
+                    {' · '}approx. {roomAreaSqFt(room).toLocaleString('en-US')} ft² of floor
                   </span>
                 </Chip>
               ) : (

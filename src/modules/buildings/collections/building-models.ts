@@ -63,7 +63,15 @@ export const BuildingModels: CollectionConfig = {
                   admin: { description: 'Number of offices/classrooms this size provides.' },
                 },
                 { name: 'restroomCount', type: 'number', defaultValue: 0 },
-                { name: 'sqft', type: 'number' },
+                {
+                  name: 'sqft',
+                  type: 'number',
+                  admin: {
+                    description:
+                      'Overall size of the building. Rooms carry their own floor area and will ' +
+                      'not add up to this — walls, corridors and plant are not in any room.',
+                  },
+                },
               ],
             },
             {

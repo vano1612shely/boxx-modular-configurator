@@ -20,7 +20,9 @@ import { useConfiguratorSession, type BuildingBounds } from '@/entities/configur
 import { applyPreset } from '../lib/apply-preset'
 import { cameraLimits } from '../lib/camera-limits'
 import { clampOffsetToLimit } from '../lib/clamp-offset'
+import { groundOffsetLimit } from '../lib/ground-clearance'
 import { offsetLimit, panSpeedFactor } from '../lib/pan-resistance'
+import { quarterTurn } from '../lib/quarter-turn'
 import { pinPose } from '../lib/pin-pose'
 import { azimuthRotateSpeed, polarRotateSpeed } from '../lib/rotate-speeds'
 import { viewModePreset, type ViewScope } from '../lib/view-presets'
@@ -79,6 +81,7 @@ function scopeFor(
 
 /** Reused so the per-event reads allocate nothing and mutate no hook value. */
 const OFFSET_SCRATCH = new Vector3()
+const TARGET_SCRATCH = new Vector3()
 const SPHERICAL_SCRATCH = new Spherical()
 
 /** camera-controls' own default; restated so the resistance has a fixed base. */
@@ -92,6 +95,7 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
   const hasFlownRef = useRef(false)
   const viewMode = useConfiguratorSession((s) => s.viewMode)
   const viewRequestId = useConfiguratorSession((s) => s.viewRequestId)
+  const rotateRequestId = useConfiguratorSession((s) => s.rotateRequestId)
   const buildingBounds = useConfiguratorSession((s) => s.buildingBounds)
   const domElement = useThree((s) => s.gl.domElement)
   const size = useThree((s) => s.size)
@@ -123,6 +127,17 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
     controls.polarRotateSpeed = polarRotateSpeed(camera.minPolarDeg, camera.maxPolarDeg)
   }, [size, camera])
 
+  // The floor under whatever is being looked at: the site for the building, the
+  // storey's own base for a storey, the room's walkable level for a room.
+  const groundY = scope ? scope.min[1] : null
+  const groundRef = useRef<number | null>(null)
+
+  // Declared above the listeners so it has landed before any of them can fire,
+  // and kept in a ref so a new scope does not re-register the whole set.
+  useEffect(() => {
+    groundRef.current = groundY
+  }, [groundY])
+
   const fov = camera.fov
 
   useEffect(() => {
@@ -152,6 +167,21 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
     const isMac = /Mac/.test(navigator.platform)
 
     const endRadius = () => controls.getSpherical(SPHERICAL_SCRATCH, true).radius
+
+    /**
+     * How far the view may still be slid downward before the eye reaches the
+     * ground. Read live, because the pose it depends on is not the radius: the
+     * same offset that is harmless overhead puts the eye underground at the
+     * horizon.
+     */
+    const downLimit = (radius: number) => {
+      const ground = groundRef.current
+      if (ground === null) return Infinity
+
+      const { phi } = controls.getSpherical(SPHERICAL_SCRATCH, true)
+      const { y } = controls.getTarget(TARGET_SCRATCH, true)
+      return groundOffsetLimit({ radius, phi, targetY: y }, ground)
+    }
 
     /** Radius the focal offset currently matches, staged before a wheel dolly. */
     let scaledAt: number | null = null
@@ -224,25 +254,37 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
         if (gestureFrom === null && from > 0) rescaleOffset(radius / from)
       }
 
-      // Between gestures only: the bound moves with the radius, so a zoom can
-      // leave the offset outside it, and the resistance below is zero there —
-      // which panning cannot undo, panning being what it switches off.
-      if (gestureFrom === null) clampOffsetToLimit(controls, fov)
-
-      const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
-      const reach = Math.hypot(offset.x, offset.y)
       // The bound is radius-proportional, so a pinch that shrinks the radius
       // would drag it down past a reach the same gesture had already earned and
       // stop the pan dead with the fingers still moving. Held at the radius the
       // gesture started from, it cannot cross itself mid-gesture.
-      const limit = offsetLimit(gestureFrom ?? radius, fov)
-      controls.truckSpeed = PAN_SPEED * panSpeedFactor(reach, limit)
+      const measuredAt = gestureFrom ?? radius
+      const down = downLimit(measuredAt)
+
+      // Between gestures only: the bounds move with the pose, so a zoom or a
+      // swing towards the horizon can leave the offset outside them, and the
+      // resistance below is zero out there — which panning cannot undo, panning
+      // being what it switches off.
+      if (gestureFrom === null) clampOffsetToLimit(controls, fov, down)
+
+      const offset = controls.getFocalOffset(OFFSET_SCRATCH, true)
+      const reach = Math.hypot(offset.x, offset.y)
+      // Two bounds, one speed. Sliding sideways cannot lower the eye, so the
+      // ground is measured against the downward component alone — but truckSpeed
+      // is a single scalar, so nearing the ground does slow a sideways drag too.
+      // Splitting it per axis would mean rewriting what `panSpeedFactor` means.
+      controls.truckSpeed =
+        PAN_SPEED *
+        Math.min(
+          panSpeedFactor(reach, offsetLimit(measuredAt, fov)),
+          panSpeedFactor(Math.max(offset.y, 0), down),
+        )
     }
 
     const onControlStart = () => {
       // Before the gesture's own radius is latched, so a drag never starts from
       // outside the bound and spends its whole length at zero speed.
-      clampOffsetToLimit(controls, fov)
+      clampOffsetToLimit(controls, fov, downLimit(endRadius()))
       gestureFrom = endRadius()
       // A wheel-tuned dollySpeed must not carry into the pinch after it.
       controls.dollySpeed = 1
@@ -314,6 +356,20 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
 
     applyPreset(controls, preset, transition)
   }, [camera, scope, viewMode, viewRequestId])
+
+  // Its own effect, not the preset one above: a turn rewrites the bearing and
+  // nothing else, so it keeps the zoom, the tilt and the pan the visitor has
+  // built up — all of which `applyPreset` would throw away. `rotateAzimuthTo`
+  // is the library's own setter, and the target is not touched.
+  useEffect(() => {
+    const controls = controlsRef.current
+    // Zero is the opening value, not a request; acting on it would spin the
+    // camera off its authored pose the moment the scene appeared.
+    if (!controls || rotateRequestId === 0) return
+
+    const { rotateDirection } = useConfiguratorSession.getState()
+    void controls.rotateAzimuthTo(quarterTurn(controls.azimuthAngle, rotateDirection), true)
+  }, [rotateRequestId])
 
   const minPolar =
     viewMode === 'top' ? MathUtils.degToRad(3) : MathUtils.degToRad(camera.minPolarDeg)

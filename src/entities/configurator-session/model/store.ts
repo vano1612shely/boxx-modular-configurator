@@ -24,6 +24,10 @@ type ConfiguratorSessionState = {
   viewMode: ViewMode
   /** Monotonic counter — bumping it re-triggers the camera flight for the current mode. */
   viewRequestId: number
+  /** Counted separately: a turn nudges the bearing and must not re-fly the pose. */
+  rotateRequestId: number
+  /** Which way the last turn went, +1 clockwise from above. */
+  rotateDirection: 1 | -1
   /** World-space extent excluding the exported site plate; null until the glb resolves. */
   buildingBounds: BuildingBounds | null
   showCeiling: boolean
@@ -40,6 +44,7 @@ type ConfiguratorSessionState = {
   selectFloor: (key: string | null) => void
   requestMoveTo: (position: [number, number, number], target: [number, number, number]) => void
   clearMoveTo: () => void
+  rotateView: (direction: 1 | -1) => void
   reset: () => void
 }
 
@@ -64,6 +69,8 @@ const VISITOR_STATE = {
 export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => ({
   ...VISITOR_STATE,
   viewRequestId: 0,
+  rotateRequestId: 0,
+  rotateDirection: 1,
   buildingBounds: null,
   focusRoom: (key) =>
     set((s) => ({
@@ -103,6 +110,13 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   // No bump: this is the rig putting a consumed request down, not asking for a
   // flight. Bumping here would send the camera straight back to the view preset.
   clearMoveTo: () => set({ moveToTarget: null }),
+  // Its own counter, deliberately: a turn only rewrites the bearing, and routing
+  // it through `viewRequestId` would re-apply the whole preset — which zeroes the
+  // focal offset and dollies back, throwing away the visitor's zoom and pan on
+  // every press. It also leaves `viewMode` alone, so the bar keeps saying which
+  // preset was last picked rather than claiming a turned camera is that preset.
+  rotateView: (direction) =>
+    set((s) => ({ rotateDirection: direction, rotateRequestId: s.rotateRequestId + 1 })),
   // A different building is a different subject: its rooms, storeys and framing
   // share nothing with the last one's.
   reset: () => set((s) => ({ ...VISITOR_STATE, viewRequestId: s.viewRequestId + 1 })),

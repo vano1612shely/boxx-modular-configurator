@@ -307,7 +307,10 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
       minDistance: camera?.minDistance ?? 2,
       maxDistance: camera?.maxDistance ?? 30,
       minPolarDeg: camera?.minPolarDeg ?? 15,
-      maxPolarDeg: camera?.maxPolarDeg ?? 85,
+      // Held under the horizontal: past it the orbit alone puts the eye below
+      // the target, and the pan's ground guard has no say in where orbiting
+      // goes. The field itself is unbounded, so authored data has to be caught.
+      maxPolarDeg: Math.min(camera?.maxPolarDeg ?? 85, 89),
     },
     floors: mapFloors(doc.sceneConfig?.floors),
     roofBlocks: (doc.sceneConfig?.roofBlocks ?? []).map(toZoneBox),

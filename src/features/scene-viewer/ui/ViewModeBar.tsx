@@ -9,6 +9,7 @@ import {
   Layers,
   LayoutGrid,
   Eye,
+  RotateCw,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -51,6 +52,7 @@ export function ViewModeBar({ floors }: Props) {
   const viewMode = useConfiguratorSession((s) => s.viewMode)
   const setViewMode = useConfiguratorSession((s) => s.setViewMode)
   const requestMoveTo = useConfiguratorSession((s) => s.requestMoveTo)
+  const rotateView = useConfiguratorSession((s) => s.rotateView)
   const isRoomFocused = useConfiguratorSession((s) => s.focusedRoomKey !== null)
   const showCeiling = useConfiguratorSession((s) => s.showCeiling)
   const toggleCeiling = useConfiguratorSession((s) => s.toggleCeiling)
@@ -182,6 +184,16 @@ export function ViewModeBar({ floors }: Props) {
           }
           onClick={() => setOpen((current) => (current === 'side' ? null : 'side'))}
         />
+        {/* A quarter of a turn, taking four presses to go round. It only
+            rewrites the bearing, so it works from the top view as well — where
+            dragging at a three-degree tilt is awkward — and it leaves the zoom
+            and the pan where the visitor put them. */}
+        <Pill
+          {...spellOut('Turn 90°', false)}
+          variant="ghost"
+          leadingIcon={<RotateCw size={16} />}
+          onClick={() => rotateView(1)}
+        />
         <Show when={hasFloors}>
           <FloatingBar.Divider />
           <Pill
@@ -205,14 +217,20 @@ export function ViewModeBar({ floors }: Props) {
             onClick={() => setOpen((current) => (current === 'floor' ? null : 'floor'))}
           />
         </Show>
-        <FloatingBar.Divider />
-        <Pill
-          {...spellOut('Move to selected', false)}
-          variant="ghost"
-          disabled={!selected}
-          leadingIcon={<Footprints size={16} />}
-          onClick={moveToSelected}
-        />
+        {/* Only inside a room. From the building view it walked the camera to
+            eye level inside the glb, where the walls it flew through are still
+            drawn and stand between the visitor and what they picked. A room
+            already hides its own walls, so there the move works. */}
+        <Show when={isRoomFocused}>
+          <FloatingBar.Divider />
+          <Pill
+            {...spellOut('Move to selected', false)}
+            variant="ghost"
+            disabled={!selected}
+            leadingIcon={<Footprints size={16} />}
+            onClick={moveToSelected}
+          />
+        </Show>
         {/* A storey is already cut below its own ceiling, so the toggle has
             nothing left to say while one is picked. */}
         <Show when={!isRoomFocused && currentFloor === null}>

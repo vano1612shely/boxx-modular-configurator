@@ -4,6 +4,12 @@ import * as THREE from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { clampOffsetToLimit } from './clamp-offset'
+import {
+  eyeHeight,
+  groundOffsetLimit,
+  GROUND_MARGIN,
+  type EyePose,
+} from './ground-clearance'
 import { offsetLimit, panSpeedFactor } from './pan-resistance'
 
 beforeAll(() => {
@@ -87,5 +93,64 @@ describe('clampOffsetToLimit', () => {
     const controls = rig()
     void controls.dollyTo(2, false)
     expect(clampOffsetToLimit(controls, FOV)).toBe(false)
+  })
+})
+
+describe('clampOffsetToLimit, against the ground', () => {
+  /** A building-sized orbit at the steepest angle the authored camera allows. */
+  function atTheHorizon(): CameraControlsImpl {
+    const controls = rig()
+    void controls.setTarget(0, 1.5, 0, false)
+    void controls.rotateTo(0, (85 * Math.PI) / 180, false)
+    void controls.dollyTo(20, false)
+    return controls
+  }
+
+  function poseOf(controls: CameraControlsImpl): EyePose {
+    const spherical = controls.getSpherical(new Spherical(), true)
+    return {
+      radius: spherical.radius,
+      phi: spherical.phi,
+      targetY: controls.getTarget(new Vector3(), true).y,
+    }
+  }
+
+  function offsetY(controls: CameraControlsImpl): number {
+    return controls.getFocalOffset(new Vector3(), true).y
+  }
+
+  // The reported bug: the radial bound alone is happy to slide the view far
+  // enough down that the eye ends up under the site.
+  it('rescues a pan the radial bound was happy with', () => {
+    const controls = atTheHorizon()
+    const inside = offsetLimit(20, FOV) * 0.9
+    void controls.setFocalOffset(0, inside, 0, false)
+
+    expect(clampOffsetToLimit(controls, FOV)).toBe(false)
+    expect(eyeHeight(poseOf(controls), inside)).toBeLessThan(0)
+
+    const ground = groundOffsetLimit(poseOf(controls), 0)
+    expect(clampOffsetToLimit(controls, FOV, ground)).toBe(true)
+    expect(eyeHeight(poseOf(controls), offsetY(controls))).toBeGreaterThan(GROUND_MARGIN)
+  })
+
+  // Sliding the view the other way lifts the eye; there is nothing to rescue.
+  it('leaves an upward pan alone', () => {
+    const controls = atTheHorizon()
+    const up = -offsetLimit(20, FOV) * 0.9
+    void controls.setFocalOffset(0, up, 0, false)
+
+    expect(clampOffsetToLimit(controls, FOV, groundOffsetLimit(poseOf(controls), 0))).toBe(false)
+    expect(offsetY(controls)).toBeCloseTo(up, 9)
+  })
+
+  // Overhead the offset slides across the ground rather than towards it, so the
+  // bound is infinite and the old behaviour is exactly what is wanted.
+  it('is the old clamp when the ground is out of reach', () => {
+    const controls = rig()
+    void controls.dollyTo(20, false)
+    void controls.setFocalOffset(0, offsetLimit(20, FOV) * 0.9, 0, false)
+
+    expect(clampOffsetToLimit(controls, FOV, Infinity)).toBe(false)
   })
 })

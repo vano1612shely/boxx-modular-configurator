@@ -93,7 +93,6 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
   const viewMode = useConfiguratorSession((s) => s.viewMode)
   const viewRequestId = useConfiguratorSession((s) => s.viewRequestId)
   const buildingBounds = useConfiguratorSession((s) => s.buildingBounds)
-  const moveToTarget = useConfiguratorSession((s) => s.moveToTarget)
   const domElement = useThree((s) => s.gl.domElement)
   const size = useThree((s) => s.size)
   const { camera } = building
@@ -288,8 +287,17 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
     const controls = controlsRef.current
     if (!controls) return
 
+    // Read, not subscribed: `requestMoveTo` bumps `viewRequestId`, so this
+    // effect already re-runs for it. Subscribing would make the clear below a
+    // second run, and holding the pose instead of consuming it would fly the
+    // camera back to it on every later scope change — a storey pick, a resize,
+    // the bounds resolving — long after the visitor asked to go somewhere once.
+    const session = useConfiguratorSession.getState()
+    const moveTo = session.moveToTarget
+    if (moveTo) session.clearMoveTo()
+
     const preset =
-      moveToTarget ??
+      moveTo ??
       (scope
         ? viewModePreset(viewMode, scope)
         : { position: camera.position, target: camera.target })
@@ -305,7 +313,7 @@ export function CameraRig({ building, focusedRoom, floor, enabled = true }: Prop
     hasFlownRef.current = true
 
     applyPreset(controls, preset, transition)
-  }, [camera, scope, viewMode, viewRequestId, moveToTarget])
+  }, [camera, scope, viewMode, viewRequestId])
 
   const minPolar =
     viewMode === 'top' ? MathUtils.degToRad(3) : MathUtils.degToRad(camera.minPolarDeg)

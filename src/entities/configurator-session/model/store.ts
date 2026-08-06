@@ -13,6 +13,11 @@ export type BuildingBounds = {
   max: [number, number, number]
 }
 
+export type MoveToRequest = {
+  position: [number, number, number]
+  target: [number, number, number]
+}
+
 type ConfiguratorSessionState = {
   focusedRoomKey: string | null
   interactionLock: boolean
@@ -24,7 +29,8 @@ type ConfiguratorSessionState = {
   showCeiling: boolean
   /** Storey the visitor is looking at, or null for the whole building. */
   selectedFloorKey: string | null
-  moveToTarget: { position: [number, number, number]; target: [number, number, number] } | null
+  /** One pose to fly to, consumed by the camera on the next request and then cleared. */
+  moveToTarget: MoveToRequest | null
   focusRoom: (key: string) => void
   exitRoomFocus: () => void
   setInteractionLock: (locked: boolean) => void
@@ -34,17 +40,31 @@ type ConfiguratorSessionState = {
   selectFloor: (key: string | null) => void
   requestMoveTo: (position: [number, number, number], target: [number, number, number]) => void
   clearMoveTo: () => void
+  reset: () => void
+}
+
+/**
+ * What the visitor chose, and nothing measured off the model.
+ *
+ * `buildingBounds` is deliberately not in here: it is published by BuildingModel
+ * once the glb is in the scene, and only when it differs from what the store
+ * already holds. Clearing it from the outside would race that publish — reset
+ * runs in a parent effect, which fires after the child's — and a bounds cleared
+ * after the new model measured itself would never be measured again.
+ */
+const VISITOR_STATE = {
+  focusedRoomKey: null as string | null,
+  interactionLock: false,
+  viewMode: 'dollhouse' as ViewMode,
+  showCeiling: false,
+  selectedFloorKey: null as string | null,
+  moveToTarget: null as MoveToRequest | null,
 }
 
 export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => ({
-  focusedRoomKey: null,
-  interactionLock: false,
-  viewMode: 'dollhouse',
+  ...VISITOR_STATE,
   viewRequestId: 0,
   buildingBounds: null,
-  showCeiling: false,
-  selectedFloorKey: null,
-  moveToTarget: null,
   focusRoom: (key) =>
     set((s) => ({
       focusedRoomKey: key,
@@ -75,6 +95,15 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
       moveToTarget: null,
       viewRequestId: s.viewRequestId + 1,
     })),
-  requestMoveTo: (position, target) => set({ moveToTarget: { position, target } }),
+  // Bumps the request id like every other camera action, so the rig re-runs for
+  // it. That is what lets the rig consume the pose and clear it in one pass,
+  // instead of holding it and re-flying to it on every later scope change.
+  requestMoveTo: (position, target) =>
+    set((s) => ({ moveToTarget: { position, target }, viewRequestId: s.viewRequestId + 1 })),
+  // No bump: this is the rig putting a consumed request down, not asking for a
+  // flight. Bumping here would send the camera straight back to the view preset.
   clearMoveTo: () => set({ moveToTarget: null }),
+  // A different building is a different subject: its rooms, storeys and framing
+  // share nothing with the last one's.
+  reset: () => set((s) => ({ ...VISITOR_STATE, viewRequestId: s.viewRequestId + 1 })),
 }))

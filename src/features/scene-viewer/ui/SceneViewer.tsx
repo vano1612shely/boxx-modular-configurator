@@ -52,8 +52,20 @@ export function SceneViewer({ building, children }: Props) {
   )
 
   // Everything that changes what the sun has to draw into the shadow map.
+  //
+  // Poses, not just how many there are: turning a piece moves nothing in or out
+  // of the scene, so a count would not notice, and the shadow would go on
+  // pointing the old way until something unrelated re-armed the map. Memoised,
+  // or every render of this component would rebuild the string.
   const placed = useConfiguration((s) => s.placed)
-  const shadowTrigger = `${vm.focusedRoom?.key ?? ''}|${vm.selectedFloor?.key ?? ''}|${showCeiling}|${placed.length}|${bounds ? 1 : 0}`
+  const poses = useMemo(
+    () =>
+      placed
+        .map((p) => `${p.instanceId}:${p.x.toFixed(2)},${p.z.toFixed(2)},${Math.round(p.rotationYDeg)}`)
+        .join(';'),
+    [placed],
+  )
+  const shadowTrigger = `${vm.focusedRoom?.key ?? ''}|${vm.selectedFloor?.key ?? ''}|${showCeiling}|${bounds ? 1 : 0}|${poses}`
 
   // In an effect, not the render body: each preload walks suspend-react's whole
   // global cache comparing key arrays, and these assets never change.

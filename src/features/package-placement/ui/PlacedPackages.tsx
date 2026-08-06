@@ -2,7 +2,7 @@
 
 import { Html, useGLTF } from '@react-three/drei'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { RotateCw, Trash2 } from 'lucide-react'
+import { ChevronUp, RotateCw, Trash2 } from 'lucide-react'
 import { damp, dampAngle } from 'maath/easing'
 import {
   Suspense,
@@ -39,6 +39,7 @@ import {
 import { useConfiguration, type PlacedPackage } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
+import { cn } from '@/shared/lib'
 import { HIGHLIGHT } from '@/shared/three/scene-tokens'
 import { FloatingBar, Pill } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
@@ -217,7 +218,13 @@ const OUTLINE_VALID = new Color(HIGHLIGHT.selected)
 const OUTLINE_INVALID = new Color(HIGHLIGHT.blocked)
 
 const TOOLBAR_MARGIN_X = 130
-const TOOLBAR_MARGIN_Y = 80
+/**
+ * Asymmetric, because the toolbar hangs off the bottom of its anchor point: it
+ * grows upward, and the slider grows above it again, so all of that has to fit
+ * over the anchor while almost nothing needs to fit under it.
+ */
+const TOOLBAR_MARGIN_TOP = 124
+const TOOLBAR_MARGIN_BOTTOM = 16
 
 const ANCHOR = new Vector3()
 const CAMERA_POS = new Vector3()
@@ -247,14 +254,15 @@ function keepOnScreen(
   const ndcY = inFront ? projected.y : -projected.y
 
   const marginX = Math.min(TOOLBAR_MARGIN_X, size.width / 2)
-  const marginY = Math.min(TOOLBAR_MARGIN_Y, size.height / 2)
+  const marginTop = Math.min(TOOLBAR_MARGIN_TOP, size.height / 2)
+  const marginBottom = Math.min(TOOLBAR_MARGIN_BOTTOM, size.height / 2)
 
   return [
     MathUtils.clamp(ndcX * (size.width / 2) + size.width / 2, marginX, size.width - marginX),
     MathUtils.clamp(
       -(ndcY * (size.height / 2)) + size.height / 2,
-      marginY,
-      size.height - marginY,
+      marginTop,
+      size.height - marginBottom,
     ),
   ]
 }
@@ -414,7 +422,8 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
   const footprint = footprintOf(pkg.id, pkg.footprint)
 
-  const applyRotation = (nextDeg: number) => {
+  /** Where a turn would land, or null when there is something in the way. */
+  const resolveRotation = (nextDeg: number) => {
     const detented =
       Math.abs(nextDeg - Math.round(nextDeg / 90) * 90) <= 5
         ? (Math.round(nextDeg / 90) * 90 + 360) % 360
@@ -427,13 +436,25 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
       footprint,
       room.floorPolygon,
     )
-    const candidate = { ...clamped, rotationYDeg: detented, footprint }
 
-    if (collidesWithAny(candidate, obstacles)) return
-
-    rotatePackage(placement.instanceId, detented)
-    movePackage(placement.instanceId, clamped.x, clamped.z)
+    return collidesWithAny({ ...clamped, rotationYDeg: detented, footprint }, obstacles)
+      ? null
+      : { ...clamped, rotationYDeg: detented }
   }
+
+  const applyRotation = (nextDeg: number) => {
+    const pose = resolveRotation(nextDeg)
+    if (!pose) return
+
+    rotatePackage(placement.instanceId, pose.rotationYDeg)
+    movePackage(placement.instanceId, pose.x, pose.z)
+  }
+
+  // Asked before the button is drawn rather than after it is pressed: a quarter
+  // turn is far more likely to be blocked than the slider's one degree was, and
+  // a control that silently does nothing is worse than one that says it cannot.
+  const nextQuarter = signedDegrees(placement.rotationYDeg) + 90
+  const canTurn = isSelected && !isDragging && resolveRotation(nextQuarter) !== null
 
   return (
     <group ref={groupRef} position={[placement.x, floorY, placement.z]}>
@@ -471,13 +492,16 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
       <Show when={isSelected && !isDragging}>
         <Html
-          position={[0, height + 0.3, 0]}
-          center
+          position={[0, height + 0.25, 0]}
           zIndexRange={[20, 0]}
           calculatePosition={keepOnScreen}
         >
+          {/* Anchored by its bottom edge, not its middle. Centred, half the bar
+              hung down over the top of the furniture it was there to change,
+              which meant clicking away to see what a change had done. drei puts
+              `center` on a wrapper it owns, so the shift has to be done here. */}
           <div
-            className="flex flex-col items-center gap-2"
+            className="flex -translate-x-1/2 -translate-y-full flex-col items-center gap-2"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => {
               event.stopPropagation()
@@ -513,17 +537,38 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
             </Show>
 
             <FloatingBar tone="ink">
+              {/* The button turns; the chevron beside it opens the slider. It
+                  used to be one control that only ever opened the slider, so
+                  the obvious thing to click did nothing on its own. */}
               <Pill
+                size="sm"
                 variant="ghost-inverted"
                 labelFrom="desktop"
-                selected={rotateOpen}
+                disabled={!canTurn}
+                title={canTurn ? 'Turn a quarter' : 'No room to turn it here'}
                 leadingIcon={<RotateCw size={16} />}
-                onClick={() => setRotateOpen((v) => !v)}
+                onClick={() => applyRotation(nextQuarter)}
               >
                 Rotate
               </Pill>
+              <Pill
+                size="sm"
+                variant="ghost-inverted"
+                selected={rotateOpen}
+                aria-expanded={rotateOpen}
+                aria-label="Set the angle by hand"
+                title="Set the angle by hand"
+                leadingIcon={
+                  <ChevronUp
+                    size={16}
+                    className={cn('transition-transform', rotateOpen && 'rotate-180')}
+                  />
+                }
+                onClick={() => setRotateOpen((v) => !v)}
+              />
               <FloatingBar.Divider />
               <Pill
+                size="sm"
                 variant="ghost-inverted"
                 labelFrom="desktop"
                 leadingIcon={<Trash2 size={16} />}

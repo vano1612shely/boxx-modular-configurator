@@ -18,7 +18,7 @@ import {
 
 const SHEET_INSET = 'px-[max(1.25rem,env(safe-area-inset-left))]'
 const SHEET_OPEN = 'max-h-[68dvh]'
-const SHEET_CLOSED = 'max-h-[calc(4rem+env(safe-area-inset-bottom))]'
+const SHEET_CLOSED = 'max-h-[calc(4.75rem+env(safe-area-inset-bottom))]'
 
 type Props = {
   building: BuildingScene
@@ -29,6 +29,21 @@ export function PackagePanel({ building, packages }: Props) {
   const vm = usePackagePlacementModel({ building, packages })
   const [addError, setAddError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [coachedRoom, setCoachedRoom] = useState<string | null>(null)
+
+  // Opened once, on the first room of the session, and only while that room is
+  // still bare. The collapsed strip sits at the bottom of a full-screen scene
+  // and is easy to miss entirely; seeing it open once is the cheapest way to
+  // say it is there, and it costs nothing on every room after.
+  //
+  // Adjusted during render rather than in an effect — React's own pattern for
+  // reacting to a changed input — so the sheet is never painted shut and then
+  // flipped open a frame later.
+  const focusedKey = vm.focusedRoom?.key ?? null
+  if (focusedKey !== null && coachedRoom === null) {
+    setCoachedRoom(focusedKey)
+    if (vm.placedInFocusedRoom.length === 0) setExpanded(true)
+  }
 
   const handleAdd = (offer: PackageOffer) => {
     setAddError(null)
@@ -74,15 +89,23 @@ export function PackagePanel({ building, packages }: Props) {
             expanded ? SHEET_OPEN : SHEET_CLOSED,
           )}
         >
+          {/* Reads as a sheet you can pull rather than a status strip. */}
+          <div
+            aria-hidden
+            className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-muted-foreground/35"
+          />
+
           <button
             type="button"
             onClick={() => setExpanded((open) => !open)}
             aria-expanded={expanded}
-            className={cn('flex h-16 w-full shrink-0 items-center gap-3 text-left', SHEET_INSET)}
+            className={cn('flex h-14 w-full shrink-0 items-center gap-3 text-left', SHEET_INSET)}
           >
-            <Sofa size={18} className="shrink-0 text-muted-foreground" />
+            <Sofa size={18} className="shrink-0" />
             <span className="flex-1 truncate text-base font-medium">
-              Furniture
+              {/* An empty room gets told what to do with the sheet, not what it
+                  contains — which is nothing, and says nothing. */}
+              {vm.placedInFocusedRoom.length === 0 ? 'Add furniture' : 'Furniture'}
               <span className="font-normal text-muted-foreground"> · {vm.focusedRoom?.name}</span>
             </span>
             <Show when={vm.placedInFocusedRoom.length > 0}>

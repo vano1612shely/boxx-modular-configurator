@@ -43,6 +43,7 @@ export {
   roomsOnFloor,
   sortFloors,
 } from './lib/building-floors'
+export { buildingSummary, type SummaryFact } from './lib/building-summary'
 export {
   extentWithoutSite,
   fitDistance,

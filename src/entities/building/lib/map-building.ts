@@ -301,6 +301,9 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
     restroomCount: doc.restroomCount ?? 0,
     sqft: doc.sqft ?? null,
     dimensions: doc.dimensions ?? null,
+    occupancy: doc.occupancy ?? null,
+    estimatedPrice: doc.estimatedPrice ?? null,
+    leadTime: doc.leadTime ?? null,
     modelUrl,
     camera: {
       position: toTuple(camera?.position, [10, 8, 12]),

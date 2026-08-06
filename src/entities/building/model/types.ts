@@ -142,6 +142,10 @@ export type BuildingScene = {
   restroomCount: number
   sqft: number | null
   dimensions: string | null
+  /** Facts for the summary panel. Each is left out of it when null. */
+  occupancy: number | null
+  estimatedPrice: number | null
+  leadTime: string | null
   modelUrl: string
   camera: CameraConfig
   /** Ascending by height; empty for a single-storey building. */

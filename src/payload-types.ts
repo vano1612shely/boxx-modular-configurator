@@ -206,6 +206,18 @@ export interface BuildingModel {
    * Display size, e.g. 24' x 56'.
    */
   dimensions?: string | null;
+  /**
+   * Estimated people. Left empty it is not shown.
+   */
+  occupancy?: number | null;
+  /**
+   * Indicative price in USD, shown to the visitor. Left empty it is not shown.
+   */
+  estimatedPrice?: number | null;
+  /**
+   * Free text — "8–10 weeks" is not a number.
+   */
+  leadTime?: string | null;
   model: number | Model;
   thumbnail?: (number | null) | Image;
   regions?: (number | Region)[] | null;
@@ -613,7 +625,15 @@ export interface FurniturePackage {
     width?: number | null;
     depth?: number | null;
   };
+  /**
+   * Where this package is offered at all. Empty means every room.
+   */
   compatibleRoomTypes?:
+    ('office' | 'classroom' | 'conference' | 'kitchen' | 'restroom' | 'lounge' | 'hallway' | 'other')[] | null;
+  /**
+   * Where it is offered first. In these rooms it appears under "Recommended", above everything else — it does not change where the package can go.
+   */
+  recommendedFor?:
     ('office' | 'classroom' | 'conference' | 'kitchen' | 'restroom' | 'lounge' | 'hallway' | 'other')[] | null;
   compatibleLines?: (number | BuildingLine)[] | null;
   regions?: (number | Region)[] | null;
@@ -819,6 +839,9 @@ export interface BuildingModelsSelect<T extends boolean = true> {
   restroomCount?: T;
   sqft?: T;
   dimensions?: T;
+  occupancy?: T;
+  estimatedPrice?: T;
+  leadTime?: T;
   model?: T;
   thumbnail?: T;
   regions?: T;
@@ -1024,6 +1047,7 @@ export interface FurniturePackagesSelect<T extends boolean = true> {
         depth?: T;
       };
   compatibleRoomTypes?: T;
+  recommendedFor?: T;
   compatibleLines?: T;
   regions?: T;
   updatedAt?: T;

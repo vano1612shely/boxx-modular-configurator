@@ -72,6 +72,29 @@ export const BuildingModels: CollectionConfig = {
               admin: { description: "Display size, e.g. 24' x 56'." },
             },
             {
+              type: 'row',
+              fields: [
+                {
+                  name: 'occupancy',
+                  type: 'number',
+                  admin: { description: 'Estimated people. Left empty it is not shown.' },
+                },
+                {
+                  name: 'estimatedPrice',
+                  type: 'number',
+                  admin: {
+                    description:
+                      'Indicative price in USD, shown to the visitor. Left empty it is not shown.',
+                  },
+                },
+                {
+                  name: 'leadTime',
+                  type: 'text',
+                  admin: { description: 'Free text — "8–10 weeks" is not a number.' },
+                },
+              ],
+            },
+            {
               name: 'model',
               type: 'relationship',
               relationTo: 'models',

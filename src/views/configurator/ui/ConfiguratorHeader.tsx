@@ -1,13 +1,15 @@
 'use client'
 
-import { ArrowLeft, DoorOpen } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { ArrowLeft, ChevronDown, DoorOpen } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
+import { buildingSummary } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { changeSelectionHref, type IntakeAnswers } from '@/features/building-intake'
+import { cn } from '@/shared/lib'
 import { Chip, FloatingBar, Pill, PillLink, SceneOverlay } from '@/shared/ui/boxx'
-import { Show } from '@/shared/ui/control-flow'
+import { For, Show } from '@/shared/ui/control-flow'
 
 export function ConfiguratorHeader({
   building,
@@ -27,6 +29,8 @@ export function ConfiguratorHeader({
   // before the link existed cannot have meant it; `timeStamp` records when the
   // press happened, not when it was dispatched, so the two are tellable apart.
   const shownAt = useRef(0)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const facts = useMemo(() => buildingSummary(building), [building])
 
   useEffect(() => {
     shownAt.current = focusedRoomKey === null ? performance.now() : 0
@@ -53,24 +57,59 @@ export function ConfiguratorHeader({
       <Show
         when={room}
         fallback={
-          <FloatingBar shape="panel" className="min-w-0">
-            <PillLink
-              href={changeSelectionHref(answers, region)}
-              variant="secondary"
-              leadingIcon={<ArrowLeft size={16} />}
-              labelFrom="desktop"
-              onClick={(event) => {
-                if (event.timeStamp < shownAt.current) event.preventDefault()
-              }}
-            >
-              Change selection
-            </PillLink>
-            <FloatingBar.Divider />
-            <div className="min-w-0">
-              <h1 className="truncate text-sm leading-normal font-medium">{building.title}</h1>
-              <p className="truncate text-xs text-muted-foreground">{meta}</p>
-            </div>
-          </FloatingBar>
+          <div className="flex min-w-0 flex-col items-start gap-2">
+            <FloatingBar shape="panel" className="min-w-0 max-w-full">
+              <PillLink
+                href={changeSelectionHref(answers, region)}
+                variant="secondary"
+                leadingIcon={<ArrowLeft size={16} />}
+                labelFrom="desktop"
+                onClick={(event) => {
+                  if (event.timeStamp < shownAt.current) event.preventDefault()
+                }}
+              >
+                Change selection
+              </PillLink>
+              <FloatingBar.Divider />
+              <div className="min-w-0">
+                <h1 className="truncate text-sm leading-normal font-medium">{building.title}</h1>
+                <p className="truncate text-xs text-muted-foreground">{meta}</p>
+              </div>
+              <FloatingBar.Divider />
+              <Pill
+                variant="ghost"
+                selected={detailsOpen}
+                aria-expanded={detailsOpen}
+                aria-label="Building details"
+                title="Building details"
+                leadingIcon={
+                  <ChevronDown
+                    size={16}
+                    className={cn('transition-transform', detailsOpen && 'rotate-180')}
+                  />
+                }
+                onClick={() => setDetailsOpen((open) => !open)}
+              />
+            </FloatingBar>
+
+            {/* Whatever the building has been given, and nothing else: an empty
+                row would read as a fact the building lacks rather than one
+                nobody has filled in yet. */}
+            <Show when={detailsOpen}>
+              <FloatingBar shape="panel" className="w-max max-w-full flex-col items-stretch">
+                <dl className="flex flex-col gap-1.5 px-2 py-1">
+                  <For each={facts} getKey={(fact) => fact.label}>
+                    {(fact) => (
+                      <div className="flex items-baseline justify-between gap-8">
+                        <dt className="text-xs text-muted-foreground">{fact.label}</dt>
+                        <dd className="text-sm font-medium">{fact.value}</dd>
+                      </div>
+                    )}
+                  </For>
+                </dl>
+              </FloatingBar>
+            </Show>
+          </div>
         }
       >
         {(focused) => (

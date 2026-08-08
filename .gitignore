@@ -53,7 +53,5 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 
-# Local-only: notes, demo data and tooling config
-/docs
-/src/seed
-/.claude
+# Machine-specific: permissions and paths, not shared between checkouts.
+/.claude/settings.local.json

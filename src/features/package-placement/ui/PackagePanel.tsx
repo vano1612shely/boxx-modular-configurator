@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronDown, Info, Plus, Sofa, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
@@ -12,6 +12,7 @@ import { For, Show } from '@/shared/ui/control-flow'
 import { ModelThumbnailFactory, useModelThumbnail } from '../lib/model-thumbnails'
 import {
   usePackagePlacementModel,
+  type FloorSection,
   type PackageOffer,
   type PackagePlacementVm,
 } from '../model/use-package-placement-model'
@@ -45,9 +46,9 @@ export function PackagePanel({ building, packages }: Props) {
     if (vm.placedInFocusedRoom.length === 0) setExpanded(true)
   }
 
-  const handleAdd = (offer: PackageOffer) => {
+  const handleAdd = (offer: PackageOffer, zoneKey: string | null) => {
     setAddError(null)
-    const added = vm.onAddPackage(offer.pkg)
+    const added = vm.onAddPackage(offer.pkg, zoneKey)
 
     if (!added) {
       setAddError(`No room left for “${offer.pkg.title}” here.`)
@@ -106,7 +107,10 @@ export function PackagePanel({ building, packages }: Props) {
               {/* An empty room gets told what to do with the sheet, not what it
                   contains — which is nothing, and says nothing. */}
               {vm.placedInFocusedRoom.length === 0 ? 'Add furniture' : 'Furniture'}
-              <span className="font-normal text-muted-foreground"> · {vm.focusedRoom?.name}</span>
+              <span className="font-normal text-muted-foreground">
+                {' · '}
+                {vm.activeZone?.name ?? vm.focusedRoom?.name}
+              </span>
             </span>
             <Show when={vm.placedInFocusedRoom.length > 0}>
               <Chip tone="ink" size="sm">
@@ -141,7 +145,9 @@ export function PackagePanel({ building, packages }: Props) {
         <header className="flex items-baseline justify-between gap-2 border-b border-border px-5 py-4">
           <div className="min-w-0">
             <h2 className="truncate text-lg leading-normal font-medium">Furniture</h2>
-            <Eyebrow className="truncate">{vm.focusedRoom?.name}</Eyebrow>
+            <Eyebrow className="truncate">
+              {vm.activeZone?.name ?? vm.focusedRoom?.name}
+            </Eyebrow>
           </div>
           <Eyebrow className="shrink-0">
             {vm.offers.length} {vm.offers.length === 1 ? 'item' : 'items'}
@@ -160,7 +166,7 @@ export function PackagePanel({ building, packages }: Props) {
 type BodyProps = {
   vm: PackagePlacementVm
   addError: string | null
-  onAdd: (offer: PackageOffer) => void
+  onAdd: (offer: PackageOffer, zoneKey: string | null) => void
 }
 
 function PanelBody({ vm, addError, onAdd }: BodyProps) {
@@ -174,15 +180,85 @@ function PanelBody({ vm, addError, onAdd }: BodyProps) {
         )}
       </Show>
 
+      <For each={vm.sections} getKey={(section) => section.key}>
+        {(section) => (
+          <Show
+            when={vm.isSplit}
+            fallback={<SectionBody vm={vm} section={section} onAdd={onAdd} />}
+          >
+            <ZoneAccordion section={section}>
+              <SectionBody vm={vm} section={section} onAdd={onAdd} />
+            </ZoneAccordion>
+          </Show>
+        )}
+      </For>
+    </>
+  )
+}
+
+/**
+ * One zone's furniture, behind its own name.
+ *
+ * Open by default: a visitor looking at the whole of a divided room is being
+ * shown two catalogues, and two shut drawers say less than no drawers at all.
+ */
+function ZoneAccordion({ section, children }: { section: FloorSection; children: ReactNode }) {
+  const [open, setOpen] = useState(true)
+
+  return (
+    <section className="mb-block border-b border-border pb-block last:mb-0 last:border-0 last:pb-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="mb-card flex w-full items-center gap-2 text-left"
+      >
+        {/* Same tint as the floor of the half it stands for — the only thing
+            tying this list to a place in the room. */}
+        <Show when={section.color}>
+          {(color) => (
+            <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: color }} />
+          )}
+        </Show>
+        <span className="flex-1 truncate text-sm font-medium">{section.name}</span>
+        <Show when={section.placed.length > 0}>
+          <Chip tone="ink" size="sm">
+            {section.placed.length}
+          </Chip>
+        </Show>
+        <ChevronDown
+          size={16}
+          className={cn('shrink-0 text-muted-foreground transition-transform', !open && '-rotate-90')}
+        />
+      </button>
+      <div className={cn(!open && 'hidden')}>{children}</div>
+    </section>
+  )
+}
+
+function SectionBody({
+  vm,
+  section,
+  onAdd,
+}: {
+  vm: PackagePlacementVm
+  section: FloorSection
+  onAdd: (offer: PackageOffer, zoneKey: string | null) => void
+}) {
+  const zoneKey = section.zone?.key ?? null
+  const where = section.zone ? section.name : 'this room'
+
+  return (
+    <>
       {/* Two blocks only when there is something in the first: a catalogue with
           nothing named for this room would otherwise grow a heading that says
           the same as no heading at all. */}
-      <Show when={vm.offerGroups.recommended.length > 0}>
+      <Show when={section.groups.recommended.length > 0}>
         <Eyebrow as="h3" className="mb-card">
-          Recommended for this room
+          Recommended for {where}
         </Eyebrow>
-        <OfferGrid offers={vm.offerGroups.recommended} onAdd={onAdd} />
-        <Show when={vm.offerGroups.other.length > 0}>
+        <OfferGrid offers={section.groups.recommended} onAdd={(offer) => onAdd(offer, zoneKey)} />
+        <Show when={section.groups.other.length > 0}>
           <Eyebrow as="h3" className="mt-block mb-card">
             More furniture
           </Eyebrow>
@@ -190,17 +266,17 @@ function PanelBody({ vm, addError, onAdd }: BodyProps) {
       </Show>
 
       <OfferGrid
-        offers={vm.offerGroups.other}
-        onAdd={onAdd}
-        empty={vm.offerGroups.recommended.length === 0}
+        offers={section.groups.other}
+        onAdd={(offer) => onAdd(offer, zoneKey)}
+        empty={section.groups.recommended.length === 0}
       />
 
-      <Show when={vm.placedInFocusedRoom.length > 0}>
+      <Show when={section.placed.length > 0}>
         <Eyebrow as="h3" className="mt-block mb-card">
-          In this room
+          In {where}
         </Eyebrow>
         <ul className="flex flex-col gap-card">
-          <For each={vm.placedInFocusedRoom} getKey={(p) => p.instanceId}>
+          <For each={section.placed} getKey={(p) => p.instanceId}>
             {(placedItem) => (
               <Card
                 as="li"

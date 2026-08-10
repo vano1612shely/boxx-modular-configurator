@@ -11,6 +11,7 @@ import {
   floorForY,
   autoAssignSides,
   nextZoneTint,
+  zoneNamesJoined,
   reanchorOpenings,
   rectifyPolygon,
   roomOpenings,
@@ -301,21 +302,31 @@ export function useSceneEditorModel() {
       ? existing.flatMap((zone) => (zone.key === divided.key ? [kept, added] : [zone]))
       : [kept, added]
 
-    patchRoom(selectedRoomIndex, (r) => ({ ...r, zones }))
+    patchRoom(selectedRoomIndex, (r) => ({ ...r, zones, name: zoneNamesJoined(zones) }))
     setCutPoints([])
     setCutError(null)
     setSelectedZoneKey(added.key)
     setMode('select')
   }
 
+  /**
+   * Renames the room along with its zones, until somebody names it themselves.
+   *
+   * "Conference + Kitchen" is what a divided room should be called, and it has
+   * to keep up as the halves are named. Comparing against the joined names it
+   * had a moment ago is how it knows nobody has overridden it: once the room
+   * carries a name of its own, the two stop agreeing and it is left alone from
+   * then on.
+   */
   const updateZone = (key: string, update: Partial<Zone>) => {
     if (selectedRoomIndex === null) return
-    patchRoom(selectedRoomIndex, (room) => ({
-      ...room,
-      zones: roomZones(room.zones).map((zone) =>
-        zone.key === key ? { ...zone, ...update } : zone,
-      ),
-    }))
+    patchRoom(selectedRoomIndex, (room) => {
+      const before = roomZones(room.zones)
+      const zones = before.map((zone) => (zone.key === key ? { ...zone, ...update } : zone))
+      const following = room.name === zoneNamesJoined(before)
+
+      return { ...room, zones, name: following ? zoneNamesJoined(zones) : room.name }
+    })
   }
 
   /**

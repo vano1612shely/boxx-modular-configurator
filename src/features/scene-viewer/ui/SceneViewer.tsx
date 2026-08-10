@@ -29,6 +29,8 @@ import { RoomHotspots } from './RoomHotspots'
 import { SceneLoader } from './SceneLoader'
 import { ShadowUpdates } from './ShadowUpdates'
 import { ViewModeBar } from './ViewModeBar'
+import { ZoneBar } from './ZoneBar'
+import { ZoneFloors } from './ZoneFloors'
 
 type Props = {
   building: BuildingScene
@@ -154,7 +156,23 @@ export function SceneViewer({ building, children }: Props) {
           {children}
         </Suspense>
         <Suspense fallback={null}>
-          <Show when={transition.staged}>{(room) => <RoomShell room={room} />}</Show>
+          <Show when={transition.staged}>
+            {(room) => (
+              <>
+                <RoomShell room={room} />
+                {/* Only for the room actually being stood in: the staged room
+                    is the one whose shell is up, so the tints cannot outlive it
+                    on the way out. */}
+                <Show when={vm.focusedRoom?.key === room.key}>
+                  <ZoneFloors
+                    room={room}
+                    activeZoneKey={vm.activeZoneKey}
+                    onPickZone={vm.onPickZone}
+                  />
+                </Show>
+              </>
+            )}
+          </Show>
         </Suspense>
         {/* Only outside a room: in one, the floor under the visitor belongs to
             the generated shell and clicking it means nothing. */}
@@ -179,6 +197,7 @@ export function SceneViewer({ building, children }: Props) {
         />
       </Canvas>
 
+      <ZoneBar room={vm.focusedRoom} />
       <ViewModeBar floors={building.floors} />
 
       {/* `settling` is true for only two frames, so the veil cannot fade in. */}

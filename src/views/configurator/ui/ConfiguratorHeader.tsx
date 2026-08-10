@@ -3,8 +3,8 @@
 import { ArrowLeft, ChevronDown, DoorOpen } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import type { BuildingScene, Room, SummaryFact } from '@/entities/building'
-import { buildingSummary, roomArea } from '@/entities/building'
+import type { BuildingScene, Room, SummaryFact, Zone } from '@/entities/building'
+import { buildingSummary, roomArea, zoneArea } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { changeSelectionHref, type IntakeAnswers } from '@/features/building-intake'
 import { ROOM_TYPE_OPTIONS } from '@/modules/shared/room-types'
@@ -118,10 +118,29 @@ function FactsPanel({
   )
 }
 
-/** Name is in the bar beside it, so the panel states what the bar cannot. */
-function roomFacts(room: Room, unit: AreaUnit): SummaryFact[] {
+/**
+ * Name is in the bar beside it, so the panel states what the bar cannot.
+ *
+ * A zone answers for itself once one is picked. Whole-room facts for a divided
+ * room leave the type out: calling a conference-and-kitchen room "Kitchen"
+ * because that is what its `roomType` happens to say would be a plain untruth,
+ * and the zone list below already says what the halves are.
+ */
+function roomFacts(room: Room, zone: Zone | null, unit: AreaUnit): SummaryFact[] {
+  if (zone) {
+    return [
+      { label: 'Type', value: ROOM_TYPE_LABELS.get(zone.roomType) ?? zone.roomType },
+      { label: 'Approx. floor area', value: formatArea(zoneArea(zone, unit), unit), inUnits: true },
+    ]
+  }
+
   return [
-    { label: 'Type', value: ROOM_TYPE_LABELS.get(room.roomType) ?? room.roomType },
+    ...(room.zones.length > 0
+      ? room.zones.map((each) => ({
+          label: each.name,
+          value: ROOM_TYPE_LABELS.get(each.roomType) ?? each.roomType,
+        }))
+      : [{ label: 'Type', value: ROOM_TYPE_LABELS.get(room.roomType) ?? room.roomType }]),
     // Always present: a room has an outline, so there is always an area to
     // measure even when nobody has written one down.
     { label: 'Approx. floor area', value: formatArea(roomArea(room, unit), unit), inUnits: true },
@@ -140,6 +159,7 @@ export function ConfiguratorHeader({
   defaultAreaUnit: AreaUnit
 }) {
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
+  const activeZoneKey = useConfiguratorSession((s) => s.activeZoneKey)
   const clearFocus = useConfiguratorSession((s) => s.exitRoomFocus)
   const override = useConfiguratorSession((s) => s.areaUnitOverride)
   const setAreaUnit = useConfiguratorSession((s) => s.setAreaUnit)
@@ -160,6 +180,7 @@ export function ConfiguratorHeader({
   }, [focusedRoomKey])
 
   const room = building.rooms.find((r) => r.key === focusedRoomKey) ?? null
+  const zone = room?.zones.find((z) => z.key === activeZoneKey) ?? null
 
   const area = areaIn(unit, { sqft: building.sqft, sqm: building.sqm }, null)
   const meta = [
@@ -256,7 +277,7 @@ export function ConfiguratorHeader({
               </FloatingBar>
 
               <FactsPanel
-                facts={roomFacts(focused, unit)}
+                facts={roomFacts(focused, zone, unit)}
                 open={detailsOpen}
                 unit={unit}
                 onUnit={setAreaUnit}

@@ -11,6 +11,10 @@ export const quotePackageSchema = z.object({
   packageId: z.number(),
   title: z.string(),
   roomKey: z.string(),
+  // Which half of a divided room it stands in. Optional so quotes taken before
+  // rooms could be divided still parse, and null for a room that never was.
+  zoneKey: z.string().nullable().optional(),
+  zoneName: z.string().nullable().optional(),
   price: z.number().nullable(),
   x: z.number(),
   z: z.number(),

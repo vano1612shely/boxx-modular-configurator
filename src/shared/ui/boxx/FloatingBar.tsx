@@ -93,6 +93,11 @@ const overlay = tv({
         'top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))]',
       'bottom-center':
         'bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2',
+      /* Between the header on the left and the quote button on the right. On a
+         phone those two leave no room across the top, so it drops to its own
+         row underneath rather than being squeezed between them. */
+      'top-center':
+        'top-[calc(max(1rem,env(safe-area-inset-top))+3.5rem)] left-1/2 -translate-x-1/2 desktop:top-[max(1rem,env(safe-area-inset-top))]',
       /* A sheet pads its own bottom inset, so its surface keeps reaching the
          screen edge instead of leaving a strip of canvas under the home bar. */
       'bottom-sheet': 'inset-x-0 bottom-0',
@@ -102,7 +107,7 @@ const overlay = tv({
 
 export type SceneOverlayProps = ComponentPropsWithoutRef<'div'> & {
   as?: ElementType
-  corner: 'top-left' | 'top-right' | 'bottom-center' | 'bottom-sheet'
+  corner: 'top-left' | 'top-right' | 'top-center' | 'bottom-center' | 'bottom-sheet'
   z?: OverlayLayer
 }
 

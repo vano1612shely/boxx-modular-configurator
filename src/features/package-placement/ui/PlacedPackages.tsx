@@ -31,8 +31,9 @@ import {
 
 import type { BuildingScene, Room } from '@/entities/building'
 import {
-  clampPoseToPolygon,
-  progressiveEdgeSnap,
+  clampPoseToRegion,
+  progressiveEdgeSnapRegion,
+  reachableFloor,
   roomFloorTopY,
   roomsOnFloor,
 } from '@/entities/building'
@@ -434,12 +435,12 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
         ? (Math.round(nextDeg / 90) * 90 + 360) % 360
         : nextDeg
 
-    const clamped = clampPoseToPolygon(
+    const clamped = clampPoseToRegion(
       placement.x,
       placement.z,
       detented,
       footprint,
-      room.floorPolygon,
+      reachableFloor(room, pkg.compatibleRoomTypes, placement.x, placement.z),
     )
 
     return collidesWithAny({ ...clamped, rotationYDeg: detented, footprint }, obstacles)
@@ -654,12 +655,16 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
       }
     }
 
-    const snapped = progressiveEdgeSnap(
+    // Worked out from where the thing already stands, every move: the zones it
+    // may cross into depend on which one it is in, and a drag that reaches a
+    // friendly zone through an unfriendly one has to be stopped at the line
+    // rather than allowed to land on the far side of it.
+    const snapped = progressiveEdgeSnapRegion(
       pointX + grabOffsetRef.current.x,
       pointZ + grabOffsetRef.current.z,
       freeRotationRef.current.rotationYDeg,
       footprint,
-      room.floorPolygon,
+      reachableFloor(room, pkg.compatibleRoomTypes, placement.x, placement.z),
     )
 
     const obstacles = obstaclesFor(

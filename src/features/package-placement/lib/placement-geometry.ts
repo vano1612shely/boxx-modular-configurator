@@ -1,8 +1,10 @@
 import {
-  clampPoseToPolygon,
-  footprintFitsPolygon,
-  poseInsidePolygon,
+  clampPoseToRegion,
+  footprintFitsRegion,
+  poseInsideRegion,
+  regionOf,
   type Point2,
+  type Region,
 } from '@/entities/building'
 import type { PlacedPackage } from '@/entities/configuration'
 import type { PackageFootprint } from '@/entities/furniture-package'
@@ -39,14 +41,14 @@ export function collidesWithAny(
 }
 
 /** Preferred spot, else a spiral of offsets around it; null when nothing fits. */
-export function findFreeSpot(
+export function findFreeSpotInRegion(
   preferred: { x: number; z: number },
   footprint: PackageFootprint,
   rotationYDeg: number,
-  polygon: Point2[],
+  region: Region,
   others: PlacedWithFootprint[],
 ): { x: number; z: number } | null {
-  if (!footprintFitsPolygon(footprint, polygon)) return null
+  if (!footprintFitsRegion(footprint, region)) return null
 
   const step = 0.75
   const candidates: Array<{ x: number; z: number }> = [preferred]
@@ -68,13 +70,24 @@ export function findFreeSpot(
   }
 
   for (const candidate of candidates) {
-    const clamped = clampPoseToPolygon(candidate.x, candidate.z, rotationYDeg, footprint, polygon)
+    const clamped = clampPoseToRegion(candidate.x, candidate.z, rotationYDeg, footprint, region)
 
-    if (!poseInsidePolygon(clamped.x, clamped.z, rotationYDeg, footprint, polygon)) continue
+    if (!poseInsideRegion(clamped.x, clamped.z, rotationYDeg, footprint, region)) continue
 
     const spot = { ...clamped, rotationYDeg, footprint }
     if (!collidesWithAny(spot, others)) return clamped
   }
 
   return null
+}
+
+/** The single-polygon case, which is every room nobody has divided. */
+export function findFreeSpot(
+  preferred: { x: number; z: number },
+  footprint: PackageFootprint,
+  rotationYDeg: number,
+  polygon: Point2[],
+  others: PlacedWithFootprint[],
+): { x: number; z: number } | null {
+  return findFreeSpotInRegion(preferred, footprint, rotationYDeg, regionOf(polygon), others)
 }

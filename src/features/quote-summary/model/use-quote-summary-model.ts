@@ -3,12 +3,13 @@
 import { useMemo, useState } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
+import { zoneAt } from '@/entities/building'
 import { useConfiguration } from '@/entities/configuration'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import { quoteContactSchema, type QuoteConfiguration, type QuoteContact } from '@/entities/quote'
 
 import { submitQuote } from '../api/submit-quote'
-import { groupByRoom } from '../lib/group-by-room'
+import { groupByPlace, placeKeyOf, placesOf } from '../lib/group-by-place'
 
 export type IntegrationOptions = {
   enablePostMessage: boolean
@@ -33,25 +34,39 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
 
   const packagesById = useMemo(() => new Map(packages.map((p) => [p.id, p])), [packages])
 
+  const roomsByKey = useMemo(
+    () => new Map(building.rooms.map((room) => [room.key, room])),
+    [building.rooms],
+  )
+
+  // The zone is worked out from where the thing stands rather than stored with
+  // it, so a piece dragged across an open boundary is quoted under the half it
+  // ended up in — which is the half the customer will get it in.
   const quotePackages = useMemo(
     () =>
       placed.flatMap((placement) => {
         const pkg = packagesById.get(placement.packageId)
-        return pkg
-          ? [
-              {
-                packageId: pkg.id,
-                title: pkg.title,
-                roomKey: placement.roomKey,
-                price: pkg.price,
-                x: placement.x,
-                z: placement.z,
-                rotationYDeg: placement.rotationYDeg,
-              },
-            ]
-          : []
+        if (!pkg) return []
+
+        const room = roomsByKey.get(placement.roomKey) ?? null
+        const zone = room ? zoneAt(room, placement.x, placement.z) : null
+
+        return [
+          {
+            packageId: pkg.id,
+            title: pkg.title,
+            roomKey: placement.roomKey,
+            zoneKey: zone?.key ?? null,
+            zoneName: zone?.name ?? null,
+            placeKey: placeKeyOf(placement.roomKey, zone?.key ?? null),
+            price: pkg.price,
+            x: placement.x,
+            z: placement.z,
+            rotationYDeg: placement.rotationYDeg,
+          },
+        ]
       }),
-    [placed, packagesById],
+    [placed, packagesById, roomsByKey],
   )
 
   const totalPrice = useMemo(
@@ -67,7 +82,7 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
   )
 
   const packagesByRoom = useMemo(
-    () => groupByRoom(quotePackages, building.rooms),
+    () => groupByPlace(quotePackages, placesOf(building.rooms)),
     [quotePackages, building.rooms],
   )
 

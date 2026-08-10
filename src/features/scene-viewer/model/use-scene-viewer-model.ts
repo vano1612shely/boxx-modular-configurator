@@ -14,6 +14,8 @@ export function useSceneViewerModel(building: BuildingScene) {
   const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)
   const previewRoomKey = useConfiguratorSession((s) => s.previewRoomKey)
   const previewRoom = useConfiguratorSession((s) => s.previewRoom)
+  const activeZoneKey = useConfiguratorSession((s) => s.activeZoneKey)
+  const setActiveZone = useConfiguratorSession((s) => s.setActiveZone)
 
   const focusedRoom = useMemo<Room | null>(
     () => building.rooms.find((room) => room.key === focusedRoomKey) ?? null,
@@ -46,9 +48,13 @@ export function useSceneViewerModel(building: BuildingScene) {
     previewedRoom,
     selectedFloor,
     interactionLock,
+    activeZoneKey,
     onFocusRoom: focusRoom,
     onPreviewRoom: previewRoom,
     onExitRoomFocus: exitRoomFocus,
+    // Picking the half you are already in steps back out to the whole room, so
+    // the floor is never a one-way door.
+    onPickZone: (key: string) => setActiveZone(activeZoneKey === key ? null : key),
   }
 }
 

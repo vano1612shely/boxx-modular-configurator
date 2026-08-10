@@ -54,6 +54,14 @@ type ConfiguratorSessionState = {
   selectedFloorKey: string | null
   /** Room framed from above without going in, or null. A step, not a place. */
   previewRoomKey: string | null
+  /**
+   * The zone of the focused room being furnished, or null for the whole of it.
+   *
+   * Not a camera state — a divided room is one space and picking a half does
+   * not move the eye. It only says which furniture is on offer and where the
+   * next piece lands.
+   */
+  activeZoneKey: string | null
   /** One pose to fly to, consumed by the camera on the next request and then cleared. */
   moveToTarget: MoveToRequest | null
   focusRoom: (key: string) => void
@@ -67,6 +75,7 @@ type ConfiguratorSessionState = {
   selectFloor: (key: string | null) => void
   previewRoom: (key: string) => void
   clearPreview: () => void
+  setActiveZone: (key: string | null) => void
   requestMoveTo: (position: [number, number, number], target: [number, number, number]) => void
   clearMoveTo: () => void
   rotateView: (direction: 1 | -1) => void
@@ -90,6 +99,7 @@ const VISITOR_STATE = {
   showCeiling: false,
   selectedFloorKey: null as string | null,
   previewRoomKey: null as string | null,
+  activeZoneKey: null as string | null,
   moveToTarget: null as MoveToRequest | null,
 }
 
@@ -102,10 +112,13 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   // Outside VISITOR_STATE on purpose: picking a different building size should
   // not put a visitor who asked for metres back into feet.
   areaUnitOverride: null,
+  // Entering lands on the whole room, never on one of its halves: what is in
+  // the room is the first thing to see, and picking a half is a step after.
   focusRoom: (key) =>
     set((s) => ({
       focusedRoomKey: key,
       previewRoomKey: null,
+      activeZoneKey: null,
       moveToTarget: null,
       viewMode: 'dollhouse',
       pickedView: 'dollhouse',
@@ -118,11 +131,13 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
     set((s) => ({
       focusedRoomKey: null,
       previewRoomKey: null,
+      activeZoneKey: null,
       moveToTarget: null,
       viewMode: 'top',
       pickedView: 'top',
       viewRequestId: s.viewRequestId + 1,
     })),
+  setActiveZone: (key) => set({ activeZoneKey: key }),
   setInteractionLock: (locked) => set({ interactionLock: locked }),
   // Picking a view is a statement about the building, so it drops a room
   // preview: framing one room from the front is not what "Front" was asked for.

@@ -7,7 +7,7 @@ import {
   frameRoom,
   orbitable,
   orbitRadius,
-  roomAreaSqFt,
+  roomArea,
   roomFocusTarget,
   type PartExtent,
 } from './room-framing'
@@ -26,6 +26,7 @@ function room(
     name: 'R',
     roomType: 'office',
     areaSqFt: null,
+    areaSqM: null,
     floorPolygon: polygon,
     shell: {
       floorY: overrides.floorY ?? 0,
@@ -333,7 +334,7 @@ describe('frameBuilding', () => {
   })
 })
 
-describe('roomAreaSqFt', () => {
+describe('roomArea', () => {
   const fourByFive = room([
     [0, 0],
     [4, 0],
@@ -341,19 +342,39 @@ describe('roomAreaSqFt', () => {
     [0, 5],
   ])
 
-  it('works the area out from the outline', () => {
-    // 20 m² traced, to the nearest whole foot.
-    expect(roomAreaSqFt(fourByFive)).toBe(215)
+  // The outline is in metres, so m² is the figure it measures directly.
+  it('measures the outline in whichever unit is asked for', () => {
+    expect(roomArea(fourByFive, 'sqm')).toBeCloseTo(20, 9)
+    expect(roomArea(fourByFive, 'sqft')).toBeCloseTo(215.278, 3)
   })
 
   // Outlines are traced over the model by hand and snapped to the nearest axis,
   // so someone holding the real drawing has to be able to overrule them.
   it('lets an authored figure win', () => {
-    expect(roomAreaSqFt({ ...fourByFive, areaSqFt: 208 })).toBe(208)
+    expect(roomArea({ ...fourByFive, areaSqFt: 208 }, 'sqft')).toBe(208)
+    expect(roomArea({ ...fourByFive, areaSqM: 19 }, 'sqm')).toBe(19)
+  })
+
+  // The unauthored unit follows the authored one, not the trace — otherwise the
+  // panel would show 208 ft² beside a traced 20 m², which disagree.
+  it('converts the other unit from what was authored', () => {
+    expect(roomArea({ ...fourByFive, areaSqFt: 208 }, 'sqm')).toBeCloseTo(19.32, 2)
+    expect(roomArea({ ...fourByFive, areaSqM: 19 }, 'sqft')).toBeCloseTo(204.51, 2)
+  })
+
+  it('shows both exactly as typed when both were authored', () => {
+    const both = { ...fourByFive, areaSqFt: 215, areaSqM: 20 }
+    expect(roomArea(both, 'sqft')).toBe(215)
+    expect(roomArea(both, 'sqm')).toBe(20)
   })
 
   // Not `?? 0 ||`: a room genuinely authored as zero is still an answer.
   it('takes zero as an answer', () => {
-    expect(roomAreaSqFt({ ...fourByFive, areaSqFt: 0 })).toBe(0)
+    expect(roomArea({ ...fourByFive, areaSqFt: 0 }, 'sqft')).toBe(0)
+  })
+
+  // Rounding belongs at the point of display, or a figure is rounded twice.
+  it('does not round', () => {
+    expect(roomArea(fourByFive, 'sqft') % 1).not.toBe(0)
   })
 })

@@ -294,6 +294,11 @@ export function CameraRig({
       if (gestureFrom === null || pinned) return
       pinned = true
       pinPose(controls)
+      // The first genuine movement of a gesture, which is exactly when the view
+      // stops being the one a button asked for. A bare click never gets here —
+      // it dispatches controlstart but no pointermove — and neither does the
+      // wheel, which dispatches neither, so a zoom keeps the label.
+      useConfiguratorSession.getState().noteManualView()
     }
 
     const onControlEnd = () => {

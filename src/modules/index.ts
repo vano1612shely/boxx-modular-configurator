@@ -7,6 +7,7 @@ import { furnitureModule } from './furniture'
 import { mediaModule } from './media'
 import { quotesModule } from './quotes'
 import { regionsModule } from './regions'
+import { settingsModule } from './settings'
 import { usersModule } from './users'
 
 // Order matters: Payload groups the admin nav by first appearance.
@@ -16,6 +17,7 @@ const modules: PayloadModule[] = [
   furnitureModule,
   quotesModule,
   mediaModule,
+  settingsModule,
   usersModule,
 ]
 

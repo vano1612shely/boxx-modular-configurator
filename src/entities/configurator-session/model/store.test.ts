@@ -62,6 +62,45 @@ describe('room focus', () => {
   })
 })
 
+describe('the view the bar names', () => {
+  // The client's rule: a side is lit only when that exact button was pressed.
+  it('follows the button that was pressed', () => {
+    session().setViewMode('side-right')
+    expect(session().pickedView).toBe('side-right')
+  })
+
+  // The whole complaint: after dragging the model the bar went on insisting on
+  // a side the camera had long since left.
+  it('goes back to the overview the moment the model is moved by hand', () => {
+    session().setViewMode('side-right')
+    session().noteManualView()
+    expect(session().pickedView).toBe('dollhouse')
+  })
+
+  // The one thing that must NOT happen: relabelling is not a reason to fly.
+  // viewMode is in the rig's dependencies and also sets the polar floor, so
+  // writing either mid-drag would jerk the model out from under the finger.
+  it('costs the camera nothing', () => {
+    session().setViewMode('side-right')
+    expect(requests(() => session().noteManualView())).toBe(0)
+    expect(session().viewMode).toBe('side-right')
+  })
+
+  it('is cleared by a quarter turn, which is not that side’s button', () => {
+    session().setViewMode('side-right')
+    session().rotateView(1)
+    expect(session().pickedView).toBe('dollhouse')
+    expect(session().viewMode).toBe('side-right')
+  })
+
+  it('is restored by pressing the same pill again', () => {
+    session().setViewMode('side-right')
+    session().noteManualView()
+    expect(requests(() => session().setViewMode('side-right'))).toBe(1)
+    expect(session().pickedView).toBe('side-right')
+  })
+})
+
 describe('rotateView', () => {
   // Sharing `viewRequestId` would re-apply the whole preset, which zeroes the
   // focal offset and dollies back — the visitor's zoom and pan, gone on every
@@ -135,6 +174,7 @@ describe('reset', () => {
     expect(session()).toMatchObject({
       focusedRoomKey: null,
       viewMode: 'dollhouse',
+      pickedView: 'dollhouse',
       showCeiling: false,
       selectedFloorKey: null,
       interactionLock: false,
@@ -144,6 +184,19 @@ describe('reset', () => {
 
   it('reframes, so the camera does not stay pointed at the last building', () => {
     expect(requests(() => session().reset())).toBe(1)
+  })
+
+  // Picking a different size is not a reason to put someone who asked for
+  // metres back into feet, so the unit is deliberately outside VISITOR_STATE.
+  it('keeps the unit the visitor chose', () => {
+    session().setAreaUnit('sqm')
+    session().reset()
+    expect(session().areaUnitOverride).toBe('sqm')
+  })
+
+  // Nor is reading a figure in other units a reason to move the camera.
+  it('does not fly the camera to change units', () => {
+    expect(requests(() => session().setAreaUnit('sqm'))).toBe(0)
   })
 
   // BuildingModel publishes bounds only when they differ from what the store

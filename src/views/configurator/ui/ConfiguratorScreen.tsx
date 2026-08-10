@@ -8,6 +8,7 @@ import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import type { IntakeAnswers } from '@/features/building-intake'
+import type { AreaUnit } from '@/shared/lib'
 import { PackagePanel, PlacedPackages } from '@/features/package-placement'
 import { QuoteDialog, type IntegrationOptions } from '@/features/quote-summary'
 import { SceneViewer } from '@/features/scene-viewer'
@@ -23,6 +24,8 @@ type Props = {
   region?: string
   /** What the visitor asked the quiz for, so they can come back and change it. */
   answers: IntakeAnswers
+  /** The admin's unit for floor areas; the visitor may override it for the session. */
+  defaultAreaUnit: AreaUnit
 }
 
 type SceneProps = Pick<Props, 'building' | 'packages'>
@@ -81,6 +84,7 @@ export function ConfiguratorScreen({
   integration,
   region,
   answers,
+  defaultAreaUnit,
 }: Props) {
   useResetOnBuildingChange(building.id)
 
@@ -88,7 +92,12 @@ export function ConfiguratorScreen({
     <main className="relative h-dvh w-full overflow-hidden">
       <SafeSceneViewer building={building} packages={packages} />
 
-      <ConfiguratorHeader building={building} region={region} answers={answers} />
+      <ConfiguratorHeader
+        building={building}
+        region={region}
+        answers={answers}
+        defaultAreaUnit={defaultAreaUnit}
+      />
 
       <PackagePanel building={building} packages={packages} />
       <QuoteDialog building={building} packages={packages} integration={integration} />

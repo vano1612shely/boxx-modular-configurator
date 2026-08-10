@@ -7,6 +7,7 @@ import * as migration_20260803_232420_add_scene_floor_y from './20260803_232420_
 import * as migration_20260806_105259_add_room_area from './20260806_105259_add_room_area';
 import * as migration_20260806_200448_add_recommended_for from './20260806_200448_add_recommended_for';
 import * as migration_20260806_200729_add_building_facts from './20260806_200729_add_building_facts';
+import * as migration_20260810_115345_add_area_units from './20260810_115345_add_area_units';
 
 export const migrations = [
   {
@@ -52,6 +53,11 @@ export const migrations = [
   {
     up: migration_20260806_200729_add_building_facts.up,
     down: migration_20260806_200729_add_building_facts.down,
-    name: '20260806_200729_add_building_facts'
+    name: '20260806_200729_add_building_facts',
+  },
+  {
+    up: migration_20260810_115345_add_area_units.up,
+    down: migration_20260810_115345_add_area_units.down,
+    name: '20260810_115345_add_area_units'
   },
 ];

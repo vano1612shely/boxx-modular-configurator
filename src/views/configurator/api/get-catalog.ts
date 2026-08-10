@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
+import type { AreaUnit } from '@/shared/lib'
 import type { IntakeLine } from '@/features/building-intake'
 import type { IntegrationOptions } from '@/features/quote-summary'
 
@@ -42,4 +43,18 @@ export async function getIntegrationOptions(): Promise<IntegrationOptions> {
     enablePostMessage: settings.enablePostMessage ?? true,
     targetOrigin: settings.targetOrigin ?? '*',
   }
+}
+
+/**
+ * The unit floor areas open in.
+ *
+ * A site-wide default rather than a per-building one: it is a fact about who is
+ * reading, not about the building, and an admin should not have to set it on
+ * every size. The visitor may override it for their own session.
+ */
+export async function getDefaultAreaUnit(): Promise<AreaUnit> {
+  const payload = await getPayload({ config })
+  const settings = await payload.findGlobal({ slug: 'display-settings' })
+
+  return settings.areaUnit === 'sqm' ? 'sqm' : 'sqft'
 }

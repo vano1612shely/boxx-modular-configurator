@@ -4,8 +4,7 @@ import { Html } from '@react-three/drei'
 import { Plus } from 'lucide-react'
 
 import type { RoomZone } from '@/entities/building'
-import { polygonCentroid, roomAreaSqFt, roomFloorTopY } from '@/entities/building'
-import { useConfiguration } from '@/entities/configuration'
+import { polygonCentroid, roomFloorTopY } from '@/entities/building'
 import { cn } from '@/shared/lib'
 import { Chip } from '@/shared/ui/boxx'
 import { For } from '@/shared/ui/control-flow'
@@ -17,74 +16,45 @@ type Props = {
   onFocusRoom: (key: string) => void
 }
 
-/**
- * Head height over the room from outside; up near the ceiling once inside it.
- *
- * A plate at the entry height would sit in the middle of the room the visitor
- * came to look at. High in the frame it names the room without standing in it.
- */
-function anchorOf(room: RoomZone, focused: boolean): [number, number, number] {
+/** Head height over the room, so the marker reads as belonging to it. */
+function anchorOf(room: RoomZone): [number, number, number] {
   const centroid = polygonCentroid(room.floorPolygon)
-  const height = focused ? room.shell.wallHeight * 0.8 : 1.1
-  return [centroid.x, roomFloorTopY(room) + height, centroid.z]
+  return [centroid.x, roomFloorTopY(room) + 1.1, centroid.z]
 }
 
 // Hidden in CSS rather than unmounted: every drei <Html> runs a full
 // scene.updateMatrixWorld() and spins up its own React root when it mounts, so
 // unmounting these on room entry made leaving one cost a traversal per room.
 export function RoomHotspots({ rooms, focusedKey, onFocusRoom }: Props) {
-  // Both plates are anchored near the middle of the room, so from some angles
-  // the furniture toolbar lands straight on top of the room's name. The name is
-  // the one that can wait: nobody adjusting a chair needs telling which room
-  // they are in.
-  const editing = useConfiguration((state) => state.selectedInstanceId !== null)
-
   return (
     <For each={rooms} getKey={(room) => room.key}>
-      {(room) => {
-        const focused = focusedKey === room.key
-        // Every other room's marker: it belongs to a room that is not being
-        // looked at and cannot be entered from in here.
-        const hidden = (focusedKey !== null && !focused) || (focused && editing)
-
-        return (
-          <Html position={anchorOf(room, focused)} center zIndexRange={[10, 0]}>
-            <div className={cn(hidden && 'hidden')}>
-              {focused ? (
-                // The name used to live only in the top-left corner, next to the
-                // way out. Here it is on the room it names.
-                <Chip tone="glass" className="shadow-md whitespace-nowrap">
-                  <span className="font-medium">{room.name}</span>
-                  {/* "of floor" earns its five characters: the building's own
-                      square-foot figure is a different measurement, and the
-                      rooms will never add up to it. */}
-                  <span className="text-muted-foreground">
-                    {' · '}approx. {roomAreaSqFt(room).toLocaleString('en-US')} ft² of floor
-                  </span>
-                </Chip>
-              ) : (
-                <button
-                  type="button"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onFocusRoom(room.key)
-                  }}
-                  className="group flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <Chip
-                    tone="glass"
-                    icon={<Plus />}
-                    className="shadow-md transition-transform group-hover:scale-105"
-                  >
-                    {room.name}
-                  </Chip>
-                </button>
-              )}
-            </div>
-          </Html>
-        )
-      }}
+      {(room) => (
+        <Html position={anchorOf(room)} center zIndexRange={[10, 0]}>
+          {/* Inside a room every marker goes: this one has nowhere left to
+              take you, and the rest belong to rooms you cannot reach from here.
+              What the room is and how big it is now lives in the header panel,
+              where nothing in the scene can land on top of it. */}
+          <div className={cn(focusedKey !== null && 'hidden')}>
+            <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                onFocusRoom(room.key)
+              }}
+              className="group flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Chip
+                tone="glass"
+                icon={<Plus />}
+                className="shadow-md transition-transform group-hover:scale-105"
+              >
+                {room.name}
+              </Chip>
+            </button>
+          </div>
+        </Html>
+      )}
     </For>
   )
 }

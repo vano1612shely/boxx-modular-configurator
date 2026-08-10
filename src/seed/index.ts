@@ -139,6 +139,7 @@ async function seed() {
       restroomCount: 0,
       sqft: 775,
       dimensions: "20' x 40'",
+      dimensionsMetric: '6.1 m × 12.2 m',
       occupancy: 12,
       estimatedPrice: 96500,
       leadTime: '8–10 weeks',

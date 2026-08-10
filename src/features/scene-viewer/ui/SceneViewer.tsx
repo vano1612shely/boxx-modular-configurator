@@ -22,7 +22,6 @@ import { bindSceneCursor, setSceneCursor } from '@/shared/ui/scene-cursor'
 
 import { useRoomTransition } from '../model/use-room-transition'
 import { useSceneViewerModel } from '../model/use-scene-viewer-model'
-import { BearingProbe } from './BearingProbe'
 import { BuildingModel } from './BuildingModel'
 import { CameraRig } from './CameraRig'
 import { RoomFloors } from './RoomFloors'
@@ -178,8 +177,6 @@ export function SceneViewer({ building, children }: Props) {
           floor={vm.selectedFloor}
           enabled={!vm.interactionLock}
         />
-        {/* After the rig, so the default controls it reads already exist. */}
-        <BearingProbe />
       </Canvas>
 
       <ViewModeBar floors={building.floors} />

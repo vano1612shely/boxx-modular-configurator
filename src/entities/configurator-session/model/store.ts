@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 
+import type { AreaUnit } from '@/shared/lib'
+
 export type ViewMode =
   | 'dollhouse'
   | 'top'
@@ -30,8 +32,23 @@ type ConfiguratorSessionState = {
   rotateDirection: 1 | -1
   /** World-space extent excluding the exported site plate; null until the glb resolves. */
   buildingBounds: BuildingBounds | null
-  /** Side the camera is square to, or null between two. Measured, not chosen. */
-  facing: ViewMode | null
+  /**
+   * The view button last pressed, which is all the bar ever claims.
+   *
+   * Separate from `viewMode` because that one is an instruction to the camera:
+   * it is in the preset effect's dependencies and it also sets the polar floor,
+   * so writing it to relabel the bar would fly the camera and, mid-drag, jerk
+   * the model out from under the finger doing the dragging.
+   */
+  pickedView: ViewMode
+  /**
+   * The visitor's own unit, or null to follow the admin's default.
+   *
+   * An override rather than a value: the default is resolved on the server and a
+   * module-scope store cannot see it, and holding null means the choice keeps
+   * following the admin if they change theirs.
+   */
+  areaUnitOverride: AreaUnit | null
   showCeiling: boolean
   /** Storey the visitor is looking at, or null for the whole building. */
   selectedFloorKey: string | null
@@ -44,7 +61,8 @@ type ConfiguratorSessionState = {
   setInteractionLock: (locked: boolean) => void
   setViewMode: (mode: ViewMode) => void
   setBuildingBounds: (bounds: BuildingBounds) => void
-  setFacing: (facing: ViewMode | null) => void
+  setAreaUnit: (unit: AreaUnit | null) => void
+  noteManualView: () => void
   toggleCeiling: () => void
   selectFloor: (key: string | null) => void
   previewRoom: (key: string) => void
@@ -68,6 +86,7 @@ const VISITOR_STATE = {
   focusedRoomKey: null as string | null,
   interactionLock: false,
   viewMode: 'dollhouse' as ViewMode,
+  pickedView: 'dollhouse' as ViewMode,
   showCeiling: false,
   selectedFloorKey: null as string | null,
   previewRoomKey: null as string | null,
@@ -80,13 +99,16 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   rotateRequestId: 0,
   rotateDirection: 1,
   buildingBounds: null,
-  facing: null,
+  // Outside VISITOR_STATE on purpose: picking a different building size should
+  // not put a visitor who asked for metres back into feet.
+  areaUnitOverride: null,
   focusRoom: (key) =>
     set((s) => ({
       focusedRoomKey: key,
       previewRoomKey: null,
       moveToTarget: null,
       viewMode: 'dollhouse',
+      pickedView: 'dollhouse',
       viewRequestId: s.viewRequestId + 1,
     })),
   // Leaves looking straight down. Coming out of a room, the useful question is
@@ -98,6 +120,7 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
       previewRoomKey: null,
       moveToTarget: null,
       viewMode: 'top',
+      pickedView: 'top',
       viewRequestId: s.viewRequestId + 1,
     })),
   setInteractionLock: (locked) => set({ interactionLock: locked }),
@@ -106,13 +129,20 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   setViewMode: (mode) =>
     set((s) => ({
       viewMode: mode,
+      pickedView: mode,
       previewRoomKey: null,
       moveToTarget: null,
       viewRequestId: s.viewRequestId + 1,
     })),
   setBuildingBounds: (bounds) => set({ buildingBounds: bounds }),
-  // Read off the pose by BearingProbe, which only calls this when it changes.
-  setFacing: (facing) => set({ facing }),
+  // No request bump: reading a figure in other units is not a reason to move
+  // the camera, and a bump would throw away the visitor's zoom and pan.
+  setAreaUnit: (areaUnitOverride) => set({ areaUnitOverride }),
+  // The visitor has taken the camera somewhere the bar cannot name, so the bar
+  // stops naming one. No request bump and no `viewMode` write: this is called
+  // from the first move of a drag, and either would fly the camera out from
+  // under the finger doing the dragging.
+  noteManualView: () => set({ pickedView: 'dollhouse' }),
   toggleCeiling: () => set((s) => ({ showCeiling: !s.showCeiling })),
   // Reframes: a storey is a different subject, and the pose that framed the
   // whole building leaves it small and off centre.
@@ -130,6 +160,7 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
     set((s) => ({
       previewRoomKey: key,
       viewMode: 'top',
+      pickedView: 'top',
       moveToTarget: null,
       viewRequestId: s.viewRequestId + 1,
     })),
@@ -152,10 +183,17 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   // Its own counter, deliberately: a turn only rewrites the bearing, and routing
   // it through `viewRequestId` would re-apply the whole preset — which zeroes the
   // focal offset and dollies back, throwing away the visitor's zoom and pan on
-  // every press. It also leaves `viewMode` alone, so the bar keeps saying which
-  // preset was last picked rather than claiming a turned camera is that preset.
+  // every press. It leaves `viewMode` alone for the same reason.
+  //
+  // The bar does stop naming a side, though: a quarter turn is a button press,
+  // but not that side's button, and after it the camera is demonstrably ninety
+  // degrees off whatever the bar was claiming.
   rotateView: (direction) =>
-    set((s) => ({ rotateDirection: direction, rotateRequestId: s.rotateRequestId + 1 })),
+    set((s) => ({
+      rotateDirection: direction,
+      rotateRequestId: s.rotateRequestId + 1,
+      pickedView: 'dollhouse',
+    })),
   // A different building is a different subject: its rooms, storeys and framing
   // share nothing with the last one's.
   reset: () => set((s) => ({ ...VISITOR_STATE, viewRequestId: s.viewRequestId + 1 })),

@@ -4,7 +4,7 @@ import { changeSelectionHref, IntakeForm } from '@/features/building-intake'
 import { Callout, CenteredPanel } from '@/shared/ui/boxx'
 
 import { getBuildingScene } from '../api/get-building-scene'
-import { getIntakeLines, getIntegrationOptions } from '../api/get-catalog'
+import { getDefaultAreaUnit, getIntakeLines, getIntegrationOptions } from '../api/get-catalog'
 import { getPackagesForLine } from '../api/get-packages'
 import { resolveRegionScope } from '../api/regions'
 import { ConfiguratorScreen } from './ConfiguratorScreen'
@@ -82,9 +82,10 @@ export async function ConfiguratorView({ searchParams }: Props) {
     )
   }
 
-  const [packages, integration] = await Promise.all([
+  const [packages, integration, defaultAreaUnit] = await Promise.all([
     getPackagesForLine(resolution.scene.line.id, region),
     getIntegrationOptions(),
+    getDefaultAreaUnit(),
   ])
 
   return (
@@ -94,6 +95,7 @@ export async function ConfiguratorView({ searchParams }: Props) {
       integration={integration}
       region={regionCode}
       answers={answers}
+      defaultAreaUnit={defaultAreaUnit}
     />
   )
 }

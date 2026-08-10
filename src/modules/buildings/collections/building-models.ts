@@ -72,12 +72,35 @@ export const BuildingModels: CollectionConfig = {
                       'not add up to this — walls, corridors and plant are not in any room.',
                   },
                 },
+                {
+                  name: 'sqm',
+                  type: 'number',
+                  admin: {
+                    description:
+                      'The same size in m². Fill in only if it should not be the conversion of ' +
+                      'the figure beside it.',
+                  },
+                },
               ],
             },
             {
-              name: 'dimensions',
-              type: 'text',
-              admin: { description: "Display size, e.g. 24' x 56'." },
+              type: 'row',
+              fields: [
+                {
+                  name: 'dimensions',
+                  type: 'text',
+                  admin: { description: "Display size, e.g. 24' x 56'." },
+                },
+                {
+                  name: 'dimensionsMetric',
+                  type: 'text',
+                  admin: {
+                    description:
+                      'The same, in metres — e.g. 7.3 m × 17.1 m. Free text cannot be converted, ' +
+                      'so a visitor reading metres sees this or nothing.',
+                  },
+                },
+              ],
             },
             {
               type: 'row',
@@ -259,14 +282,27 @@ export const BuildingModels: CollectionConfig = {
                   ],
                 },
                 {
-                  name: 'areaSqFt',
-                  type: 'number',
-                  admin: {
-                    description:
-                      'Approximate floor area shown to the visitor, in ft². Leave empty and it ' +
-                      'is worked out from the outline below — fill it in only when you have a ' +
-                      'better figure than the trace.',
-                  },
+                  type: 'row',
+                  fields: [
+                    {
+                      name: 'areaSqFt',
+                      type: 'number',
+                      admin: {
+                        description:
+                          'Floor area in ft². Empty means it is worked out from the outline ' +
+                          'below — fill it in only when you have a better figure than the trace.',
+                      },
+                    },
+                    {
+                      name: 'areaSqM',
+                      type: 'number',
+                      admin: {
+                        description:
+                          'The same area in m². Empty means the outline, or a conversion of the ' +
+                          'figure beside it if that one was filled in.',
+                      },
+                    },
+                  ],
                 },
                 {
                   name: 'floorPolygon',

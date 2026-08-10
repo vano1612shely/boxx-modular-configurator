@@ -52,7 +52,7 @@ export {
   frameRoom,
   orbitable,
   orbitRadius,
-  roomAreaSqFt,
+  roomArea,
   roomFeatureSide,
   roomFocusTarget,
   type Extent,

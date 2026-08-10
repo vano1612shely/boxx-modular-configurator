@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Shape, ShapeGeometry } from 'three'
 
 import type { RoomZone } from '@/entities/building'
@@ -17,6 +17,9 @@ type Props = {
 
 /** Just clear of the model's own floor, or the two z-fight. */
 const LIFT = 0.02
+
+/** Pointer travel, in pixels, past which a press was a drag and not a click. */
+const DRAG_SLOP = 4
 
 /**
  * `ShapeGeometry` builds in XY, and laying it flat rotates −90° about X, which
@@ -44,6 +47,10 @@ function RoomFloor({
 }) {
   const [hovered, setHovered] = useState(false)
   const geometry = useMemo(() => floorGeometry(room), [room])
+  // R3F only applies its own "did the pointer move" test to the miss path, so
+  // an orbit that starts and ends over a floor arrives here as a click and
+  // would preview the room the visitor was only turning the building around.
+  const pressedAt = useRef<{ x: number; y: number } | null>(null)
 
   return (
     <mesh
@@ -59,7 +66,14 @@ function RoomFloor({
         setHovered(false)
         setSceneCursor('default')
       }}
+      onPointerDown={(event) => {
+        pressedAt.current = { x: event.clientX, y: event.clientY }
+      }}
       onClick={(event) => {
+        const from = pressedAt.current
+        pressedAt.current = null
+        if (!from || Math.hypot(event.clientX - from.x, event.clientY - from.y) > DRAG_SLOP) return
+
         event.stopPropagation()
         onPreview()
       }}

@@ -1,7 +1,7 @@
 'use client'
 
 import type { RoomDoc } from '@/entities/building'
-import { polygonAreaSqFt, roomVertices } from '@/entities/building'
+import { polygonAreaSqFt, polygonSignedArea, roomVertices } from '@/entities/building'
 import { SHELL_DEFAULTS } from '@/modules/shared/room-shell'
 
 import type { SceneEditorVm } from '../../../model/use-scene-editor-model'
@@ -26,12 +26,17 @@ function Field({
 }
 
 /**
- * Floor area, empty meaning "work it out from the outline".
+ * Floor area in both units, empty meaning "work it out from the outline".
  *
- * Not a NumberInput: this field has to be able to hold nothing, and nothing is
- * the state that keeps the figure honest when a corner is dragged later. The
- * traced number shows as the placeholder so it is never a mystery what empty
- * means, and the button stamps it in for anyone who wants it fixed.
+ * Not NumberInputs: these have to be able to hold nothing, and nothing is the
+ * state that keeps the figure honest when a corner is dragged later. The traced
+ * number shows as the placeholder so it is never a mystery what empty means.
+ *
+ * Filling one and leaving the other empty is a supported answer — the client
+ * converts the empty one from the filled one, on the grounds that whoever typed
+ * a figure was holding a better drawing than the trace. The button fills both
+ * at once from the outline rather than one from the other, so a stamped pair is
+ * never a conversion of a rounded number.
  */
 function AreaField({
   vm,
@@ -42,38 +47,57 @@ function AreaField({
   roomIndex: number
   room: RoomDoc
 }) {
-  const traced = Math.round(polygonAreaSqFt(roomVertices(room)))
-  const stored = typeof room.areaSqFt === 'number' ? room.areaSqFt : null
+  const polygon = roomVertices(room)
+  const traced = {
+    areaSqFt: Math.round(polygonAreaSqFt(polygon)),
+    areaSqM: Math.round(Math.abs(polygonSignedArea(polygon)) * 10) / 10,
+  }
+  const stored = {
+    areaSqFt: typeof room.areaSqFt === 'number' ? room.areaSqFt : null,
+    areaSqM: typeof room.areaSqM === 'number' ? room.areaSqM : null,
+  }
+  const authored = stored.areaSqFt !== null || stored.areaSqM !== null
+
+  const field = (key: 'areaSqFt' | 'areaSqM', unit: string) => (
+    <label style={s.field}>
+      <span style={s.label}>{unit}</span>
+      <input
+        type="number"
+        style={{ ...s.input, minWidth: 0 }}
+        placeholder={String(traced[key])}
+        value={stored[key] ?? ''}
+        onChange={(event) => {
+          const raw = event.target.value
+          const next = Number.parseFloat(raw)
+          vm.onUpdateRoom(roomIndex, {
+            [key]: raw === '' || Number.isNaN(next) ? null : next,
+          })
+        }}
+      />
+    </label>
+  )
 
   return (
-    <label style={{ ...s.field, gridColumn: '1 / -1' }}>
-      <span style={s.label}>Floor area (ft²) — empty follows the outline</span>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <input
-          type="number"
-          style={{ ...s.input, flex: 1, minWidth: 0 }}
-          placeholder={String(traced)}
-          value={stored ?? ''}
-          onChange={(event) => {
-            const raw = event.target.value
-            const next = Number.parseFloat(raw)
-            vm.onUpdateRoom(roomIndex, {
-              areaSqFt: raw === '' || Number.isNaN(next) ? null : next,
-            })
-          }}
-        />
+    <div style={{ ...s.field, gridColumn: '1 / -1' }}>
+      <span style={s.label}>Floor area — empty follows the outline</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 4 }}>
+        {field('areaSqFt', 'ft²')}
+        {field('areaSqM', 'm²')}
         <button
           type="button"
-          style={{ ...button('ghost'), flexShrink: 0 }}
-          title={stored === null ? `Write ${traced} ft² in` : 'Follow the outline again'}
+          style={{ ...button('ghost'), flexShrink: 0, alignSelf: 'end' }}
+          title={authored ? 'Follow the outline again' : 'Write the traced figures in'}
           onClick={() =>
-            vm.onUpdateRoom(roomIndex, { areaSqFt: stored === null ? traced : null })
+            vm.onUpdateRoom(
+              roomIndex,
+              authored ? { areaSqFt: null, areaSqM: null } : traced,
+            )
           }
         >
-          {stored === null ? `= ${traced}` : 'Auto'}
+          {authored ? 'Auto' : '= traced'}
         </button>
       </div>
-    </label>
+    </div>
   )
 }
 

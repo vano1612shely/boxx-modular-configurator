@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BuildingScene } from '../model/types'
+import type { AreaUnit } from '@/shared/lib'
 import { buildingSummary } from './building-summary'
 
 function scene(overrides: Partial<BuildingScene> = {}): BuildingScene {
@@ -17,7 +18,9 @@ function scene(overrides: Partial<BuildingScene> = {}): BuildingScene {
     unitCount: 6,
     restroomCount: 2,
     sqft: 1344,
+    sqm: null,
     dimensions: "24' x 56'",
+    dimensionsMetric: null,
     occupancy: null,
     estimatedPrice: null,
     leadTime: null,
@@ -32,19 +35,15 @@ function scene(overrides: Partial<BuildingScene> = {}): BuildingScene {
   }
 }
 
-const labels = (building: BuildingScene) => buildingSummary(building).map((f) => f.label)
-const find = (building: BuildingScene, label: string) =>
-  buildingSummary(building).find((f) => f.label === label)?.value
+const labels = (building: BuildingScene, unit: AreaUnit = 'sqft') =>
+  buildingSummary(building, unit).map((f) => f.label)
+const find = (building: BuildingScene, label: string, unit: AreaUnit = 'sqft') =>
+  buildingSummary(building, unit).find((f) => f.label === label)?.value
 
 describe('buildingSummary', () => {
   // The client's own rule for the panel.
   it('leaves out everything that was not filled in', () => {
-    expect(labels(scene())).toEqual([
-      'Offices',
-      'Restrooms',
-      'Approx. square feet',
-      'Dimensions',
-    ])
+    expect(labels(scene())).toEqual(['Offices', 'Restrooms', 'Approx. floor area', 'Dimensions'])
   })
 
   it('states the three new facts once they are there', () => {
@@ -63,7 +62,22 @@ describe('buildingSummary', () => {
   })
 
   it('groups thousands', () => {
-    expect(find(scene({ sqft: 12480 }), 'Approx. square feet')).toBe('12,480')
+    expect(find(scene({ sqft: 12480 }), 'Approx. floor area')).toBe('12,480 ft²')
+  })
+
+  it('converts the area for a metric reader', () => {
+    expect(find(scene({ sqft: 1344 }), 'Approx. floor area', 'sqm')).toBe('124.9 m²')
+    expect(find(scene({ sqft: 1344, sqm: 125 }), 'Approx. floor area', 'sqm')).toBe('125.0 m²')
+  })
+
+  // Free text with feet baked in: there is nothing to convert, so a metric
+  // reader gets the metric text if someone wrote one and no row if not.
+  it('swaps the dimensions text rather than converting it', () => {
+    expect(labels(scene(), 'sqm')).not.toContain('Dimensions')
+    expect(find(scene({ dimensionsMetric: '7.3 m × 17.1 m' }), 'Dimensions', 'sqm')).toBe(
+      '7.3 m × 17.1 m',
+    )
+    expect(find(scene({ dimensionsMetric: '7.3 m × 17.1 m' }), 'Dimensions')).toBe("24' x 56'")
   })
 
   // A price of zero is not "free", it is someone having typed a zero, and a
@@ -76,6 +90,6 @@ describe('buildingSummary', () => {
 
   it('never returns an empty list, so there is always something to say', () => {
     const bare = scene({ sqft: null, dimensions: null, restroomCount: 0 })
-    expect(buildingSummary(bare)).toHaveLength(1)
+    expect(buildingSummary(bare, 'sqft')).toHaveLength(1)
   })
 })

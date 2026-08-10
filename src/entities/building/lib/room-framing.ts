@@ -1,6 +1,7 @@
 import type { CameraPreset, RoomZone, Vec3Tuple, WallSide } from '../model/types'
 import { WALL_SIDES } from '../model/types'
-import { polygonAreaSqFt, polygonBounds } from './polygon'
+import { areaIn, type AreaUnit } from '@/shared/lib'
+import { polygonBounds, polygonSignedArea } from './polygon'
 
 /** Elevation above the horizon, in radians (~28°). */
 const ELEVATION = 0.49
@@ -29,16 +30,22 @@ export function roomFeatureSide(room: RoomZone): WallSide {
 }
 
 /**
- * Floor area to show for a room, in whole square feet.
+ * Floor area to show for a room, in the unit asked for.
  *
- * An authored figure wins outright — the outline is traced over the model by
- * hand and snapped to the nearest axis, so it is an approximation, and someone
- * with the real drawing should be able to say so. Nothing is stored otherwise:
- * a number written down when the outline was drawn would go quietly stale the
- * next time anybody moved a corner.
+ * Unrounded — the caller rounds once, at the point of display, so a figure is
+ * never rounded twice on its way to the screen. An authored figure wins over the
+ * trace, and the outline is measured in its own right rather than converted;
+ * `areaIn` carries the whole rule.
+ *
+ * Nothing is stored back: a number written down when the outline was drawn would
+ * go quietly stale the next time anybody moved a corner.
  */
-export function roomAreaSqFt(room: RoomZone): number {
-  return room.areaSqFt ?? Math.round(polygonAreaSqFt(room.floorPolygon))
+export function roomArea(room: RoomZone, unit: AreaUnit): number {
+  return areaIn(
+    unit,
+    { sqft: room.areaSqFt, sqm: room.areaSqM },
+    Math.abs(polygonSignedArea(room.floorPolygon)),
+  )!
 }
 
 /** `fovDeg` is the vertical field of view, the tighter one on a landscape viewport. */

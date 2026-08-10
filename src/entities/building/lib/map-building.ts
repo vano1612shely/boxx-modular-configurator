@@ -251,6 +251,7 @@ export function mapRoomZone(room: RoomDoc): RoomZone {
     roomType: room.roomType,
     // Zero is a figure someone typed; only an empty field means "work it out".
     areaSqFt: typeof room.areaSqFt === 'number' ? room.areaSqFt : null,
+    areaSqM: typeof room.areaSqM === 'number' ? room.areaSqM : null,
     floorPolygon,
     shell: roomShell(room, floorPolygon),
     openings: roomOpenings(room.openings),
@@ -300,7 +301,9 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
     unitCount: doc.unitCount,
     restroomCount: doc.restroomCount ?? 0,
     sqft: doc.sqft ?? null,
+    sqm: typeof doc.sqm === 'number' ? doc.sqm : null,
     dimensions: doc.dimensions ?? null,
+    dimensionsMetric: doc.dimensionsMetric ?? null,
     occupancy: doc.occupancy ?? null,
     estimatedPrice: doc.estimatedPrice ?? null,
     leadTime: doc.leadTime ?? null,

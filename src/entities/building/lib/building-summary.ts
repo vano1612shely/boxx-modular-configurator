@@ -1,4 +1,5 @@
 import type { BuildingScene } from '../model/types'
+import { areaIn, formatArea, type AreaUnit } from '@/shared/lib'
 
 export type SummaryFact = { label: string; value: string }
 
@@ -18,8 +19,12 @@ const MONEY = new Intl.NumberFormat('en-US', {
  *
  * Zero is a fact — no restrooms is worth saying on a building that has none —
  * which is why these are null checks and not truthiness.
+ *
+ * `unit` reaches the area and the overall dimensions. The dimensions are free
+ * text with feet baked into them, so there is nothing to convert: a visitor
+ * reading metres gets the metric text if someone wrote one, and no row if not.
  */
-export function buildingSummary(building: BuildingScene): SummaryFact[] {
+export function buildingSummary(building: BuildingScene, unit: AreaUnit): SummaryFact[] {
   const facts: SummaryFact[] = [
     { label: capitalise(building.line.unitLabel), value: NUMBER.format(building.unitCount) },
   ]
@@ -30,12 +35,17 @@ export function buildingSummary(building: BuildingScene): SummaryFact[] {
   if (building.occupancy !== null) {
     facts.push({ label: 'Estimated occupancy', value: NUMBER.format(building.occupancy) })
   }
-  if (building.sqft !== null) {
-    facts.push({ label: 'Approx. square feet', value: NUMBER.format(building.sqft) })
+
+  const area = areaIn(unit, { sqft: building.sqft, sqm: building.sqm }, null)
+  if (area !== null) {
+    facts.push({ label: 'Approx. floor area', value: formatArea(area, unit) })
   }
-  if (building.dimensions) {
-    facts.push({ label: 'Dimensions', value: building.dimensions })
+
+  const dimensions = unit === 'sqft' ? building.dimensions : building.dimensionsMetric
+  if (dimensions) {
+    facts.push({ label: 'Dimensions', value: dimensions })
   }
+
   if (building.estimatedPrice !== null) {
     facts.push({ label: 'Estimated price', value: MONEY.format(building.estimatedPrice) })
   }

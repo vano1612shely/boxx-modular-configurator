@@ -223,7 +223,12 @@ const TOOLBAR_MARGIN_X = 130
  * grows upward, and the slider grows above it again, so all of that has to fit
  * over the anchor while almost nothing needs to fit under it.
  */
-const TOOLBAR_MARGIN_TOP = 124
+/**
+ * Clears the header column, not just the header bar. When the selected item is
+ * off-frame the toolbar parks at this margin — top-left — which is exactly where
+ * the room's facts panel sits, and the header paints over the canvas.
+ */
+const TOOLBAR_MARGIN_TOP = 220
 const TOOLBAR_MARGIN_BOTTOM = 16
 
 const ANCHOR = new Vector3()

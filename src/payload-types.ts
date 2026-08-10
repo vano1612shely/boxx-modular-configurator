@@ -103,9 +103,11 @@ export interface Config {
   fallbackLocale: null;
   globals: {
     'integration-settings': IntegrationSetting;
+    'display-settings': DisplaySetting;
   };
   globalsSelect: {
     'integration-settings': IntegrationSettingsSelect<false> | IntegrationSettingsSelect<true>;
+    'display-settings': DisplaySettingsSelect<false> | DisplaySettingsSelect<true>;
   };
   locale: null;
   widgets: {
@@ -206,9 +208,17 @@ export interface BuildingModel {
    */
   sqft?: number | null;
   /**
+   * The same size in m². Fill in only if it should not be the conversion of the figure beside it.
+   */
+  sqm?: number | null;
+  /**
    * Display size, e.g. 24' x 56'.
    */
   dimensions?: string | null;
+  /**
+   * The same, in metres — e.g. 7.3 m × 17.1 m. Free text cannot be converted, so a visitor reading metres sees this or nothing.
+   */
+  dimensionsMetric?: string | null;
   /**
    * Estimated people. Left empty it is not shown.
    */
@@ -331,9 +341,13 @@ export interface BuildingModel {
         name: string;
         roomType: 'office' | 'classroom' | 'conference' | 'kitchen' | 'restroom' | 'lounge' | 'hallway' | 'other';
         /**
-         * Approximate floor area shown to the visitor, in ft². Leave empty and it is worked out from the outline below — fill it in only when you have a better figure than the trace.
+         * Floor area in ft². Empty means it is worked out from the outline below — fill it in only when you have a better figure than the trace.
          */
         areaSqFt?: number | null;
+        /**
+         * The same area in m². Empty means the outline, or a conversion of the figure beside it if that one was filled in.
+         */
+        areaSqM?: number | null;
         /**
          * Floor outline points (XZ plane, meters), drawn in the editor. Each point owns the edge that starts at it, and that edge belongs to one of the four walls.
          */
@@ -841,7 +855,9 @@ export interface BuildingModelsSelect<T extends boolean = true> {
   unitCount?: T;
   restroomCount?: T;
   sqft?: T;
+  sqm?: T;
   dimensions?: T;
+  dimensionsMetric?: T;
   occupancy?: T;
   estimatedPrice?: T;
   leadTime?: T;
@@ -943,6 +959,7 @@ export interface BuildingModelsSelect<T extends boolean = true> {
         name?: T;
         roomType?: T;
         areaSqFt?: T;
+        areaSqM?: T;
         floorPolygon?:
           | T
           | {
@@ -1271,6 +1288,21 @@ export interface IntegrationSetting {
   createdAt?: string | null;
 }
 /**
+ * How figures are shown to visitors.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "display-settings".
+ */
+export interface DisplaySetting {
+  id: number;
+  /**
+   * Unit floor areas open in. A visitor can switch it for their own session, and their choice does not change this.
+   */
+  areaUnit: 'sqft' | 'sqm';
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "integration-settings_select".
  */
@@ -1285,6 +1317,16 @@ export interface IntegrationSettingsSelect<T extends boolean = true> {
       };
   enablePostMessage?: T;
   targetOrigin?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "display-settings_select".
+ */
+export interface DisplaySettingsSelect<T extends boolean = true> {
+  areaUnit?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

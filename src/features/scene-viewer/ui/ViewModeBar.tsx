@@ -49,11 +49,10 @@ type Props = {
 type OpenMenu = 'side' | 'floor' | null
 
 export function ViewModeBar({ floors }: Props) {
-  const viewMode = useConfiguratorSession((s) => s.viewMode)
   const setViewMode = useConfiguratorSession((s) => s.setViewMode)
   const requestMoveTo = useConfiguratorSession((s) => s.requestMoveTo)
   const rotateView = useConfiguratorSession((s) => s.rotateView)
-  const facing = useConfiguratorSession((s) => s.facing)
+  const pickedView = useConfiguratorSession((s) => s.pickedView)
   const isRoomFocused = useConfiguratorSession((s) => s.focusedRoomKey !== null)
   const showCeiling = useConfiguratorSession((s) => s.showCeiling)
   const toggleCeiling = useConfiguratorSession((s) => s.toggleCeiling)
@@ -63,9 +62,9 @@ export function ViewModeBar({ floors }: Props) {
   const placed = useConfiguration((s) => s.placed)
   const [open, setOpen] = useState<OpenMenu>(null)
 
-  // Off the pose, not off the button last pressed: dragging the view used to
-  // leave the bar insisting on a side the camera had long since left.
-  const activeSide = SIDE_VIEWS.find((view) => view.mode === facing) ?? null
+  // Only ever the button that was pressed, and any manual move of the model
+  // clears it — so the bar can never insist on a side the camera has left.
+  const activeSide = SIDE_VIEWS.find((view) => view.mode === pickedView) ?? null
   const isSideView = activeSide !== null
   const overviewLabel = isRoomFocused ? 'Dollhouse' : 'Overview'
   const selected = placed.find((p) => p.instanceId === selectedInstanceId) ?? null
@@ -116,7 +115,7 @@ export function ViewModeBar({ floors }: Props) {
             {(view) => (
               <Pill
                 variant="ghost"
-                selected={viewMode === view.mode}
+                selected={pickedView === view.mode}
                 onClick={() => pick(view.mode)}
               >
                 {view.label}
@@ -157,16 +156,16 @@ export function ViewModeBar({ floors }: Props) {
           it is meant to be steering. */}
       <FloatingBar>
         <Pill
-          {...spellOut(overviewLabel, viewMode === 'dollhouse')}
+          {...spellOut(overviewLabel, pickedView === 'dollhouse')}
           variant="ghost"
-          selected={viewMode === 'dollhouse'}
+          selected={pickedView === 'dollhouse'}
           leadingIcon={isRoomFocused ? <Box size={16} /> : <Home size={16} />}
           onClick={() => pick('dollhouse')}
         />
         <Pill
-          {...spellOut('Top view', viewMode === 'top')}
+          {...spellOut('Top view', pickedView === 'top')}
           variant="ghost"
-          selected={viewMode === 'top'}
+          selected={pickedView === 'top'}
           leadingIcon={<LayoutGrid size={16} />}
           onClick={() => pick('top')}
         />

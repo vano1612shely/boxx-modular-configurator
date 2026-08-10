@@ -106,8 +106,9 @@ export type RoomZone = {
   key: string
   name: string
   roomType: RoomType
-  /** Authored floor area in ft². Null means it is worked out from the outline. */
+  /** Authored floor area. Either half null means "work that unit out". */
   areaSqFt: number | null
+  areaSqM: number | null
   /** Floor outline in the XZ plane; doubles as the interior face of the walls. */
   floorPolygon: RoomVertex[]
   shell: RoomShellConfig
@@ -141,7 +142,10 @@ export type BuildingScene = {
   unitCount: number
   restroomCount: number
   sqft: number | null
+  sqm: number | null
   dimensions: string | null
+  /** Free text, so it cannot be converted — a metric reader sees this or nothing. */
+  dimensionsMetric: string | null
   /** Facts for the summary panel. Each is left out of it when null. */
   occupancy: number | null
   estimatedPrice: number | null

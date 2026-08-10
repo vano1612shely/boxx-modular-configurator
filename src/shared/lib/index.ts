@@ -1,3 +1,11 @@
+export {
+  areaIn,
+  areaUnitLabel,
+  AREA_UNITS,
+  formatArea,
+  type AreaUnit,
+  type AuthoredArea,
+} from './area'
 export { assetUrl, type UploadDoc } from './asset-url'
 export { cn } from './cn'
 export { isCoarsePointer } from './device'

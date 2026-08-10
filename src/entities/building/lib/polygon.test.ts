@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  clampPoseToPolygon,
-  footprintFitsPolygon,
   nearestEdgeAlignedRotation,
   offsetPolygonMitered,
   outwardEdgeNormal,
@@ -10,10 +8,14 @@ import {
   polygonAreaSqFt,
   polygonCentroid,
   polygonWindingSign,
-  poseInsidePolygon,
-  progressiveEdgeSnap,
   rectifyPolygon,
 } from './polygon'
+import {
+  clampPoseToPolygon,
+  footprintFitsPolygon,
+  poseInsidePolygon,
+  progressiveEdgeSnap,
+} from './region'
 
 const square = [
   { x: -3, z: -3 },

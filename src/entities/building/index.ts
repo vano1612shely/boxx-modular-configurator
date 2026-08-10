@@ -88,19 +88,30 @@ export {
   type SizingResult,
 } from './lib/rules-engine'
 export {
-  clampPoseToPolygon,
   closestPointOnPolygon,
   footprintCorners,
-  footprintFitsPolygon,
   nearestEdgeAlignedRotation,
   pointInPolygon,
   polygonAreaSqFt,
   polygonBounds,
   polygonCentroid,
   polygonSignedArea,
-  poseInsidePolygon,
-  progressiveEdgeSnap,
   rectifyPolygon,
-  type EdgeSnapResult,
   type Footprint,
 } from './lib/polygon'
+export {
+  clampPoseToPolygon,
+  clampPoseToRegion,
+  footprintFitsPolygon,
+  footprintFitsRegion,
+  pointInRegion,
+  poseInsidePolygon,
+  poseInsideRegion,
+  progressiveEdgeSnap,
+  progressiveEdgeSnapRegion,
+  regionFrom,
+  regionOf,
+  type EdgeSnapResult,
+  type Region,
+} from './lib/region'
+export { canCut, cutPolygon, type CutFailure, type CutResult } from './lib/zone-cut'

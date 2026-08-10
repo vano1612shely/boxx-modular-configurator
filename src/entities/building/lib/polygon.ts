@@ -171,7 +171,7 @@ export function pointInPolygon(p: Point2, poly: Point2[]): boolean {
   return inside
 }
 
-function closestPointOnSegment(p: Point2, a: Point2, b: Point2): Point2 {
+export function closestPointOnSegment(p: Point2, a: Point2, b: Point2): Point2 {
   const abx = b.x - a.x
   const abz = b.z - a.z
   const lenSq = abx * abx + abz * abz
@@ -218,7 +218,14 @@ export function footprintCorners(
   }))
 }
 
-function samplePoints(corners: Point2[]): Point2[] {
+/** The corners plus the middle of each side: enough to catch a straddled edge. */
+export function footprintSamples(
+  x: number,
+  z: number,
+  rotationYDeg: number,
+  footprint: Footprint,
+): Point2[] {
+  const corners = footprintCorners(x, z, rotationYDeg, footprint)
   const samples = [...corners]
   for (let i = 0; i < corners.length; i++) {
     const a = corners[i]
@@ -228,61 +235,13 @@ function samplePoints(corners: Point2[]): Point2[] {
   return samples
 }
 
-export function poseInsidePolygon(
-  x: number,
-  z: number,
-  rotationYDeg: number,
-  footprint: Footprint,
-  poly: Point2[],
-): boolean {
-  return samplePoints(footprintCorners(x, z, rotationYDeg, footprint)).every((p) =>
-    pointInPolygon(p, poly),
-  )
-}
-
-/** Approximate: falls back to the centroid when the footprint cannot fit locally. */
-export function clampPoseToPolygon(
-  x: number,
-  z: number,
-  rotationYDeg: number,
-  footprint: Footprint,
-  poly: Point2[],
-): Point2 {
-  let px = x
-  let pz = z
-
-  for (let iteration = 0; iteration < 10; iteration++) {
-    const samples = samplePoints(footprintCorners(px, pz, rotationYDeg, footprint))
-    let worst: { dx: number; dz: number; distSq: number } | null = null
-
-    for (const sample of samples) {
-      if (pointInPolygon(sample, poly)) continue
-      const boundary = closestPointOnPolygon(sample, poly)
-      const dx = boundary.x - sample.x
-      const dz = boundary.z - sample.z
-      const distSq = dx * dx + dz * dz
-      if (!worst || distSq > worst.distSq) worst = { dx, dz, distSq }
-    }
-
-    if (!worst) return { x: px, z: pz }
-
-    px += worst.dx * 1.02
-    pz += worst.dz * 1.02
-  }
-
-  if (poseInsidePolygon(px, pz, rotationYDeg, footprint, poly)) return { x: px, z: pz }
-
-  const centroid = polygonCentroid(poly)
-  return { x: centroid.x, z: centroid.z }
-}
-
 /** Half-extent of the rotated footprint projected onto a direction (by angle). */
-function supportRadius(footprint: Footprint, rotationYDeg: number, dirAngleDeg: number): number {
+export function supportRadius(footprint: Footprint, rotationYDeg: number, dirAngleDeg: number): number {
   const rel = (rotationYDeg - dirAngleDeg) * RAD
   return (Math.abs(Math.cos(rel)) * footprint.width) / 2 + (Math.abs(Math.sin(rel)) * footprint.depth) / 2
 }
 
-function lerpAngleDeg(from: number, to: number, t: number): number {
+export function lerpAngleDeg(from: number, to: number, t: number): number {
   const delta = ((to - from + 540) % 360) - 180
   return from + delta * t
 }
@@ -302,78 +261,6 @@ export function nearestEdgeAlignedRotation(fromDeg: number, edgeAngleDeg: number
   return ((best % 360) + 360) % 360
 }
 
-export type EdgeSnapResult = {
-  x: number
-  z: number
-  rotationYDeg: number
-  snapped: boolean
-}
-
-/** `ramp` is the push past contact, in meters, for full alignment with the edge. */
-export function progressiveEdgeSnap(
-  rawX: number,
-  rawZ: number,
-  freeRotationDeg: number,
-  footprint: Footprint,
-  poly: Point2[],
-  ramp = 0.55,
-): EdgeSnapResult {
-  const centroid = polygonCentroid(poly)
-  let best: { penetration: number; edgeAngleDeg: number } | null = null
-
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i]
-    const b = poly[(i + 1) % poly.length]
-    const abx = b.x - a.x
-    const abz = b.z - a.z
-    const len = Math.hypot(abx, abz)
-    if (len < 1e-9) continue
-
-    const dirX = abx / len
-    const dirZ = abz / len
-    let nx = abz / len
-    let nz = -abx / len
-    const midX = (a.x + b.x) / 2
-    const midZ = (a.z + b.z) / 2
-    if (nx * (midX - centroid.x) + nz * (midZ - centroid.z) < 0) {
-      nx = -nx
-      nz = -nz
-    }
-
-    // Only edges the center faces, i.e. projecting within the segment span.
-    const along = (rawX - a.x) * dirX + (rawZ - a.z) * dirZ
-    const margin = Math.max(footprint.width, footprint.depth) / 2
-    if (along < -margin || along > len + margin) continue
-
-    const signedDist = (rawX - a.x) * nx + (rawZ - a.z) * nz
-    const support = supportRadius(footprint, freeRotationDeg, (Math.atan2(-nx, nz) * 180) / Math.PI)
-    const penetration = signedDist + support
-
-    if (penetration > 0 && (!best || penetration > best.penetration)) {
-      best = {
-        penetration,
-        edgeAngleDeg: (Math.atan2(-dirX, dirZ) * 180) / Math.PI,
-      }
-    }
-  }
-
-  if (!best) {
-    const clamped = clampPoseToPolygon(rawX, rawZ, freeRotationDeg, footprint, poly)
-    return { ...clamped, rotationYDeg: freeRotationDeg, snapped: false }
-  }
-
-  const t = Math.min(best.penetration / ramp, 1)
-  const target = nearestEdgeAlignedRotation(freeRotationDeg, best.edgeAngleDeg)
-  const rotationYDeg = lerpAngleDeg(freeRotationDeg, target, t)
-  const clamped = clampPoseToPolygon(rawX, rawZ, rotationYDeg, footprint, poly)
-
-  return { ...clamped, rotationYDeg, snapped: true }
-}
-
-export function footprintFitsPolygon(footprint: Footprint, poly: Point2[]): boolean {
-  const centroid = polygonCentroid(poly)
-  return [0, 90].some((rotation) => {
-    const pose = clampPoseToPolygon(centroid.x, centroid.z, rotation, footprint, poly)
-    return poseInsidePolygon(pose.x, pose.z, rotation, footprint, poly)
-  })
-}
+// Everything that asks "may this thing stand here" lives in ./region: a piece of
+// furniture is held by the zones it is allowed into, which is one polygon only
+// in the simple case.

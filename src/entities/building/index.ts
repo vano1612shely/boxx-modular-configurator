@@ -116,7 +116,15 @@ export {
   type EdgeSnapResult,
   type Region,
 } from './lib/region'
-export { canCut, cutPolygon, type CutFailure, type CutResult } from './lib/zone-cut'
+export {
+  canCut,
+  cutPolygon,
+  onOutline,
+  OUTLINE_GRAB,
+  type CutFailure,
+  type CutResult,
+  type OutlineHit,
+} from './lib/zone-cut'
 export {
   acceptingFloor,
   isDivided,

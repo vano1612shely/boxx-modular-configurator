@@ -4,7 +4,8 @@ import { useDocumentInfo } from '@payloadcms/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
-  closestPointOnPolygon,
+  onOutline,
+  pointInPolygon,
   computeSideAxes,
   containingFloor,
   cutPolygon,
@@ -84,15 +85,6 @@ export type ModelNode = {
 
 function modelUrlOf(model: number | Model | null | undefined): string | null {
   return typeof model === 'object' ? assetUrl(model) : null
-}
-
-/** How near a wall a click has to land to be taken as meaning that wall (meters). */
-const OUTLINE_GRAB = 0.4
-
-function pullToOutline(outline: Point2[], point: Point2): Point2 {
-  if (outline.length < 3) return point
-  const on = closestPointOnPolygon(point, outline)
-  return Math.hypot(on.x - point.x, on.z - point.z) <= OUTLINE_GRAB ? on : point
 }
 
 
@@ -258,17 +250,21 @@ export function useSceneEditorModel() {
   /**
    * Splits the picked zone — or the whole room, the first time — along the cut.
    *
+   * Takes the path rather than reading it back out of state: the click that
+   * lands on the second wall both finishes the line and commits it, and that
+   * click's own point has not reached state yet.
+   *
    * Both halves lose any authored area: the figure that was typed in described
    * the floor before it was divided, and leaving it on either half would state
    * a size neither one is. The trace takes over until somebody types a new one.
    */
-  const finishZoneCut = () => {
+  const commitZoneCut = (path: Point2[]) => {
     if (selectedRoomIndex === null) return
     const room = draft?.rooms?.[selectedRoomIndex]
     if (!room) return
 
     const existing = roomZones(room.zones)
-    const result = cutPolygon(cutTarget(room), cutPoints)
+    const result = cutPolygon(cutTarget(room), path)
     if (!result.ok) {
       setCutError(result.reason)
       return
@@ -646,17 +642,43 @@ export function useSceneEditorModel() {
     if (mode === 'cut-zone') {
       const room = selectedRoomIndex === null ? null : draft?.rooms?.[selectedRoomIndex]
       if (!room) return
+
       const outline = cutTarget(room)
+      // Aiming at a wall with a mouse lands near it rather than on it, so a
+      // click inside the grab distance is pulled onto the wall itself. The
+      // editor has been drawing that wall highlighted the whole time.
+      const wall = onOutline(outline, { x, z })
+
+      // A cut runs wall to wall, so the first click has to be on one.
+      if (cutPoints.length === 0) {
+        if (!wall) {
+          setCutError('ends-off-outline')
+          return
+        }
+        setCutError(null)
+        setCutPoints([wall.point])
+        return
+      }
+
+      // Reaching a wall again is the end of the line, and the end of the line
+      // is the whole cut — there is nothing left to confirm.
+      if (wall) {
+        commitZoneCut([...cutPoints, wall.point])
+        return
+      }
+
+      // Everything between the two walls is a corner, and a corner outside the
+      // floor being divided is not a corner of anything.
+      if (!pointInPolygon({ x, z }, outline)) {
+        setCutError('leaves-the-room')
+        return
+      }
+
+      const last = cutPoints[cutPoints.length - 1]
+      if (last && last.x === x && last.z === z) return
 
       setCutError(null)
-      setCutPoints((points) => {
-        const last = points[points.length - 1]
-        if (last && last.x === x && last.z === z) return points
-        // The first point belongs on a wall, and aiming at one with a mouse
-        // lands near it rather than on it. Corners after that stay where they
-        // were put — a corner pulled onto the outline would leave the room.
-        return [...points, points.length === 0 ? pullToOutline(outline, { x, z }) : { x, z }]
-      })
+      setCutPoints((points) => [...points, { x, z }])
       return
     }
   }
@@ -833,8 +855,12 @@ export function useSceneEditorModel() {
     selectedZoneKey,
     cutPoints,
     cutError,
+    /** The floor the cut divides, so the canvas can light up the wall under the pointer. */
+    cutOutline:
+      selectedRoomIndex === null || !draft?.rooms?.[selectedRoomIndex]
+        ? []
+        : cutTarget(draft.rooms[selectedRoomIndex]),
     onSelectZone: setSelectedZoneKey,
-    onFinishZoneCut: finishZoneCut,
     onCancelZoneCut: () => {
       setCutPoints([])
       setCutError(null)

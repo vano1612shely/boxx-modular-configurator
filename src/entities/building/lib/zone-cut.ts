@@ -1,12 +1,16 @@
 import { pointInPolygon, polygonSignedArea, type Point2 } from './polygon'
 
 /**
- * How far a cut's first or last point may sit from the outline (meters).
+ * How near a wall a point has to land to count as being on it (meters).
  *
  * Generous, because the admin aims at a wall with a mouse: the point is pulled
- * onto the outline rather than rejected. Past this it was not a wall they meant.
+ * onto the outline rather than rejected. Past this it was not a wall they meant,
+ * and the click is a corner inside the room instead.
+ *
+ * The editor highlights the wall under the cursor using the same figure, so
+ * what will happen on click is on screen before it happens.
  */
-const ON_OUTLINE = 0.25
+export const OUTLINE_GRAB = 0.25
 
 /** Areas under this are slivers, not zones (m²). */
 const MIN_AREA = 0.01
@@ -62,6 +66,21 @@ function properlyCross(a1: Point2, a2: Point2, b1: Point2, b2: Point2): boolean 
 
 /** Where a point sits on the outline: which edge, and how far along it. */
 type Anchor = { index: number; t: number; point: Point2 }
+
+/** A wall under the pointer: the edge it is, and where on it the point lands. */
+export type OutlineHit = { index: number; point: Point2 }
+
+/**
+ * The wall a point is near enough to be taken as meaning, or null.
+ *
+ * What the editor draws a highlight for and what a cut accepts as an end are
+ * the same question, so they are the same call.
+ */
+export function onOutline(polygon: Point2[], p: Point2): OutlineHit | null {
+  const found = anchorOn(polygon, p)
+  if (!found || found.distance > OUTLINE_GRAB) return null
+  return { index: found.anchor.index, point: rounded(found.anchor.point) }
+}
 
 function anchorOn(polygon: Point2[], p: Point2): { anchor: Anchor; distance: number } | null {
   let best: Anchor | null = null
@@ -130,7 +149,7 @@ export function cutPolygon(polygon: Point2[], path: Point2[]): CutResult {
   const head = anchorOn(polygon, path[0])
   const tail = anchorOn(polygon, path[path.length - 1])
   if (!head || !tail) return { ok: false, reason: 'ends-off-outline' }
-  if (head.distance > ON_OUTLINE || tail.distance > ON_OUTLINE) {
+  if (head.distance > OUTLINE_GRAB || tail.distance > OUTLINE_GRAB) {
     return { ok: false, reason: 'ends-off-outline' }
   }
 

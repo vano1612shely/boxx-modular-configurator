@@ -1,5 +1,8 @@
 'use client'
 
+// Before any Canvas: r3f builds a THREE.Clock the moment a store is created.
+import '@/shared/three/quiet-deprecations'
+
 import { useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'

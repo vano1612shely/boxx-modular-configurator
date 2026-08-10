@@ -11,9 +11,9 @@ import { button, s } from '../../editor-styles'
 
 const WHY_NOT: Record<CutFailure, string> = {
   'short-path': 'A cut needs at least a start and an end.',
-  'ends-off-outline': 'Both ends have to sit on a wall. Click the wall itself, not near it.',
+  'ends-off-outline': 'Start on a wall — the one lit up under the pointer.',
   'ends-together': 'The cut ends where it started, so there is nothing on either side of it.',
-  'leaves-the-room': 'The line steps outside the floor it is dividing.',
+  'leaves-the-room': 'Corners go inside the floor being divided, or on one of its walls.',
   'crosses-itself': 'The line crosses itself. Undo the last corner and go round the other way.',
   'empty-side': 'One side of that cut has no floor in it.',
 }
@@ -117,9 +117,10 @@ export function RoomZonesSection({ vm, room }: { vm: SceneEditorVm; room: RoomDo
         <div style={s.card}>
           <h3 style={s.heading}>Dividing {target ? target.name : room.name}</h3>
           <p style={s.hint}>
-            Click a wall to start, then click your way across the floor — as many corners as you
-            need. Finish on any wall, the one you started from included. The line is not a wall:
-            it is only where one zone stops and the next begins.
+            The wall under the pointer lights up. Click it to start, click your way across the
+            floor — as many corners as you need — then click any wall to finish, the one you
+            started from included. Touching a wall again is the cut: it saves itself. The line is
+            not a wall; it is only where one zone stops and the next begins.
           </p>
           {/* Corners land on a 5 cm grid, so the lengths are what you can aim
               for — a segment reading 0.80 is 80 cm, not 79 rounded up. */}
@@ -137,14 +138,6 @@ export function RoomZonesSection({ vm, room }: { vm: SceneEditorVm; room: RoomDo
             {(reason) => <p style={{ ...s.hint, color: '#f87171' }}>{WHY_NOT[reason]}</p>}
           </Show>
           <div style={s.row}>
-            <button
-              type="button"
-              style={button('primary')}
-              disabled={vm.cutPoints.length < 2}
-              onClick={vm.onFinishZoneCut}
-            >
-              Divide
-            </button>
             <button
               type="button"
               style={button()}

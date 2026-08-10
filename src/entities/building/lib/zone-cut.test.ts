@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { polygonSignedArea, type Point2 } from './polygon'
-import { cutPolygon, type CutFailure } from './zone-cut'
+import { cutPolygon, onOutline, OUTLINE_GRAB, type CutFailure } from './zone-cut'
 
 /** 6 × 4, wound clockwise in XZ; 24 m². */
 const ROOM: Point2[] = [
@@ -174,5 +174,39 @@ describe('cutPolygon', () => {
 
   it('refuses a single point', () => {
     expect(refusal(ROOM, [{ x: 3, z: 0 }])).toBe('short-path')
+  })
+})
+
+// The editor lights up whatever this returns and starts or finishes the cut on
+// whatever this returns, so a mismatch between them is not possible by
+// construction — the highlight is the promise the click keeps.
+describe('onOutline', () => {
+  it('names the wall a point is aimed at, and where on it', () => {
+    const hit = onOutline(ROOM, { x: 3, z: 0.1 })
+    expect(hit).toEqual({ index: 0, point: { x: 3, z: 0 } })
+  })
+
+  it('finds the far wall as readily as the near one', () => {
+    expect(onOutline(ROOM, { x: 3, z: 3.95 })?.index).toBe(2)
+    expect(onOutline(ROOM, { x: 0.1, z: 2 })?.index).toBe(3)
+  })
+
+  it('has nothing to say out in the middle of the floor', () => {
+    expect(onOutline(ROOM, { x: 3, z: 2 })).toBeNull()
+  })
+
+  it('lets go exactly where a cut would stop accepting the point', () => {
+    expect(onOutline(ROOM, { x: 3, z: OUTLINE_GRAB - 0.01 })).not.toBeNull()
+    expect(onOutline(ROOM, { x: 3, z: OUTLINE_GRAB + 0.01 })).toBeNull()
+  })
+
+  it('rounds to the same decimals the cut stores', () => {
+    const hit = onOutline(ROOM, { x: 1.23456, z: 0.02 })
+    expect(hit?.point).toEqual({ x: 1.235, z: 0 })
+  })
+
+  it('has nothing to say about an outline that is not one', () => {
+    expect(onOutline([{ x: 0, z: 0 }, { x: 1, z: 0 }], { x: 0.5, z: 0 })).not.toBeNull()
+    expect(onOutline([], { x: 0, z: 0 })).toBeNull()
   })
 })

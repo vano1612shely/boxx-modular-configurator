@@ -1,5 +1,8 @@
 'use client'
 
+// Before any Canvas: r3f builds a THREE.Clock the moment a store is created.
+import '@/shared/three/quiet-deprecations'
+
 import { useFormFields } from '@payloadcms/ui'
 import { CameraControls, useGLTF } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'

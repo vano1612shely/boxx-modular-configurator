@@ -1,5 +1,8 @@
 'use client'
 
+// Before any Canvas: r3f builds a THREE.Clock the moment a store is created.
+import '@/shared/three/quiet-deprecations'
+
 import { CameraControls, Edges, Grid, Line, OrthographicCamera, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import CameraControlsImpl from 'camera-controls'
@@ -33,6 +36,7 @@ import {
 import {
   fitDistance,
   locateOnWalls,
+  onOutline,
   mapRoom,
   planOpeningPlacements,
   RoomShell,
@@ -137,6 +141,11 @@ type RoomOpeningPatch = { along: number; width: number; height: number; sill: nu
 const GRID = 0.05
 function snap(value: number): number {
   return Math.round(value / GRID) * GRID
+}
+
+/** The point a click at this spot would actually use. */
+function snapPoint(p: { x: number; z: number }): { x: number; z: number } {
+  return { x: snap(p.x), z: snap(p.z) }
 }
 
 function isPrimaryButton(event: ThreeEvent<PointerEvent>): boolean {
@@ -1290,6 +1299,12 @@ function EditorScene({
 
   const nodeBox = vm.selectedNode?.box ?? null
 
+  // The wall the next click would land on, or null while the pointer is out in
+  // the middle of the floor. Drawn, and used by nothing else: the model asks
+  // the same question of the click itself, so the two cannot disagree.
+  const cutWall =
+    vm.mode === 'cut-zone' && cursor ? onOutline(vm.cutOutline, snapPoint(cursor)) : null
+
   const floorPlane = floorPlaneBounds(vm.modelFootprint)
 
   return (
@@ -1648,8 +1663,39 @@ function EditorScene({
       </Show>
 
       {/* The cut in progress. Drawn on top of the zone tints, in white, because
-          it is the one line on the plan that will never be built. */}
-      <Show when={vm.mode === 'cut-zone' && vm.cutPoints.length > 0}>
+          it is the one line on the plan that will never be built. Pink is
+          reserved for walls: the wall under the pointer, and the point already
+          anchored to one. */}
+      <Show when={vm.mode === 'cut-zone'}>
+        <Show when={cutWall}>
+          {(wall) => (
+            <group>
+              <Line
+                points={[
+                  [
+                    vm.cutOutline[wall.index].x,
+                    vm.floorPlaneY + 0.09,
+                    vm.cutOutline[wall.index].z,
+                  ],
+                  [
+                    vm.cutOutline[(wall.index + 1) % vm.cutOutline.length].x,
+                    vm.floorPlaneY + 0.09,
+                    vm.cutOutline[(wall.index + 1) % vm.cutOutline.length].z,
+                  ],
+                ]}
+                color="#f472b6"
+                lineWidth={5}
+              />
+              <ScreenScaled position={[wall.point.x, vm.floorPlaneY + 0.1, wall.point.z]}>
+                <mesh>
+                  <sphereGeometry args={[0.1, 16, 16]} />
+                  <meshBasicMaterial color="#f472b6" />
+                </mesh>
+              </ScreenScaled>
+            </group>
+          )}
+        </Show>
+
         <For each={vm.cutPoints} getKey={(_, i) => i}>
           {(point, i) => (
             <ScreenScaled position={[point.x, vm.floorPlaneY + 0.09, point.z]}>
@@ -1672,7 +1718,9 @@ function EditorScene({
             gapSize={0.12}
           />
         </Show>
-        <Show when={cursor !== null}>
+        {/* Ends at the wall when there is one under the pointer, so the line
+            shows exactly where the click will land — and that it will finish. */}
+        <Show when={vm.cutPoints.length > 0 && cursor !== null}>
           <Line
             points={[
               [
@@ -1680,10 +1728,14 @@ function EditorScene({
                 vm.floorPlaneY + 0.08,
                 vm.cutPoints[vm.cutPoints.length - 1]?.z ?? 0,
               ],
-              [cursor?.x ?? 0, vm.floorPlaneY + 0.08, cursor?.z ?? 0],
+              [
+                cutWall?.point.x ?? cursor?.x ?? 0,
+                vm.floorPlaneY + 0.08,
+                cutWall?.point.z ?? cursor?.z ?? 0,
+              ],
             ]}
-            color="#ffffff"
-            lineWidth={1}
+            color={cutWall ? '#f472b6' : '#ffffff'}
+            lineWidth={cutWall ? 2 : 1}
             dashed
             dashSize={0.15}
             gapSize={0.12}

@@ -6,6 +6,7 @@ import {
   TEXTURED_SURFACES,
   WALL_SIDES,
 } from '@/modules/shared/room-shell'
+import { ROOM_TYPE_OPTIONS } from '@/modules/shared/room-types'
 import type { BuildingLine, BuildingModel, Model } from '@/payload-types'
 
 import type {
@@ -14,9 +15,11 @@ import type {
   OpeningFit,
   OpeningKind,
   OpeningModelStyle,
+  Point2,
   RoofConfig,
   RoomOpening,
   RoomShellConfig,
+  RoomType,
   RoomVertex,
   Room,
   ShellSurface,
@@ -24,9 +27,11 @@ import type {
   SurfaceStyle,
   Vec3Tuple,
   WallSide,
+  Zone,
   ZoneBox,
 } from '../model/types'
 import { assetUrl, type UploadDoc } from '@/shared/lib'
+import { ZONE_TINTS } from '@/shared/three/scene-tokens'
 
 import { sortFloors } from './building-floors'
 import { autoAssignSides, computeSideAxes } from './room-shell'
@@ -104,6 +109,10 @@ function isSunDirection(value: unknown): value is SunDirection {
   return typeof value === 'string' && value in SUN_BEARINGS
 }
 
+function isRoomType(value: unknown): value is RoomType {
+  return ROOM_TYPE_OPTIONS.some((option) => option.value === value)
+}
+
 // Legacy rows carry no `side`, or the schema default on every vertex; both mean
 // unassigned, so the grouping is derived from geometry instead.
 export function roomVertices(doc: RoomDoc): RoomVertex[] {
@@ -151,6 +160,37 @@ export function roomOpenings(value: unknown): RoomOpening[] {
     })
   }
   return openings
+}
+
+/** The zones JSON column — keep only records that describe a real piece of floor. */
+export function roomZones(value: unknown): Zone[] {
+  if (!Array.isArray(value)) return []
+
+  const zones: Zone[] = []
+  for (const entry of value) {
+    const zone = entry as Partial<Zone> | null
+    if (!zone || typeof zone.key !== 'string' || !Array.isArray(zone.polygon)) continue
+
+    const polygon = zone.polygon
+      .filter((p): p is Point2 => typeof p?.x === 'number' && typeof p?.z === 'number')
+      .map((p) => ({ x: p.x, z: p.z }))
+    if (polygon.length < 3) continue
+
+    zones.push({
+      key: zone.key,
+      name: typeof zone.name === 'string' && zone.name ? zone.name : zone.key,
+      roomType: isRoomType(zone.roomType) ? zone.roomType : 'other',
+      // Zero is a figure someone typed; only an empty field means "work it out".
+      areaSqFt: typeof zone.areaSqFt === 'number' ? zone.areaSqFt : null,
+      areaSqM: typeof zone.areaSqM === 'number' ? zone.areaSqM : null,
+      color: typeof zone.color === 'string' && zone.color ? zone.color : ZONE_TINTS[0],
+      polygon,
+    })
+  }
+
+  // A lone zone is the room over again, under a second name — and it would put
+  // a picker on screen with one thing in it.
+  return zones.length > 1 ? zones : []
 }
 
 function isOpeningFit(value: unknown): value is OpeningFit {
@@ -253,6 +293,7 @@ export function mapRoom(room: RoomDoc): Room {
     areaSqFt: typeof room.areaSqFt === 'number' ? room.areaSqFt : null,
     areaSqM: typeof room.areaSqM === 'number' ? room.areaSqM : null,
     floorPolygon,
+    zones: roomZones((room as { zones?: unknown }).zones),
     shell: roomShell(room, floorPolygon),
     openings: roomOpenings(room.openings),
     surfaces: roomSurfaces(room),

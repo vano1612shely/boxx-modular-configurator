@@ -102,6 +102,27 @@ export type CameraConfig = CameraPreset & {
   maxPolarDeg: number
 }
 
+/**
+ * A slice of one room's floor, with a use of its own.
+ *
+ * A conference half and a kitchen half of the same room, with nothing built
+ * between them: separate types, separate areas, separate furniture, but one
+ * shell, one ceiling height and one camera — all of which belong to the room.
+ * Zones tile the room they are cut from, so their areas add up to it.
+ */
+export type Zone = {
+  key: string
+  name: string
+  roomType: RoomType
+  /** Authored floor area. Either half null means "work that unit out". */
+  areaSqFt: number | null
+  areaSqM: number | null
+  /** Floor tint, so the halves are tellable apart. Hex, from ZONE_TINTS. */
+  color: string
+  /** Sub-outline of the room floor. No sides: a zone has no walls of its own. */
+  polygon: Point2[]
+}
+
 export type Room = {
   key: string
   name: string
@@ -111,6 +132,8 @@ export type Room = {
   areaSqM: number | null
   /** Floor outline in the XZ plane; doubles as the interior face of the walls. */
   floorPolygon: RoomVertex[]
+  /** Empty for an undivided room, which is every room until someone cuts one. */
+  zones: Zone[]
   shell: RoomShellConfig
   openings: RoomOpening[]
   surfaces: Record<ShellSurface, SurfaceStyle>

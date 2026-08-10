@@ -163,3 +163,79 @@ describe('mapBuildingScene — wall assignment', () => {
     expect(room.floorPolygon.map((p) => p.side)).toEqual(['w1', 'w1', 'w2', 'w3', 'w4'])
   })
 })
+
+describe('mapBuildingScene — zones', () => {
+  const HALVES = [
+    {
+      key: 'conf',
+      name: 'Conference',
+      roomType: 'conference',
+      color: '#3b82f6',
+      polygon: [
+        { x: 0, z: 0 },
+        { x: 3, z: 0 },
+        { x: 3, z: 4 },
+        { x: 0, z: 4 },
+      ],
+    },
+    {
+      key: 'kitchen',
+      name: 'Kitchen',
+      roomType: 'kitchen',
+      areaSqM: 12,
+      polygon: [
+        { x: 3, z: 0 },
+        { x: 6, z: 0 },
+        { x: 6, z: 4 },
+        { x: 3, z: 4 },
+      ],
+    },
+  ]
+
+  it('leaves a room nobody cut undivided', () => {
+    const [room] = mapBuildingScene(doc([legacyRoom()])).rooms
+    expect(room.zones).toEqual([])
+  })
+
+  it('reads the halves back with their own type, area and tint', () => {
+    const divided = legacyRoom({ zones: HALVES } as Partial<RoomDoc>)
+    const [room] = mapBuildingScene(doc([divided])).rooms
+
+    expect(room.zones.map((zone) => zone.roomType)).toEqual(['conference', 'kitchen'])
+    expect(room.zones[1].areaSqM).toBe(12)
+    expect(room.zones[1].areaSqFt).toBeNull()
+    expect(room.zones[0].color).toBe('#3b82f6')
+  })
+
+  it('gives a zone stored without a tint one to be going on with', () => {
+    const divided = legacyRoom({ zones: HALVES } as Partial<RoomDoc>)
+    const [room] = mapBuildingScene(doc([divided])).rooms
+
+    expect(room.zones[1].color).toMatch(/^#[0-9a-f]{6}$/i)
+  })
+
+  // A single zone is the room over again under a second name, and it would put
+  // a picker on screen with one thing in it.
+  it('treats one zone as no zones', () => {
+    const divided = legacyRoom({ zones: [HALVES[0]] } as Partial<RoomDoc>)
+    const [room] = mapBuildingScene(doc([divided])).rooms
+
+    expect(room.zones).toEqual([])
+  })
+
+  it('drops a zone whose outline could not enclose anything', () => {
+    const divided = legacyRoom({
+      zones: [...HALVES, { key: 'sliver', name: 'Sliver', polygon: [{ x: 0, z: 0 }] }],
+    } as Partial<RoomDoc>)
+    const [room] = mapBuildingScene(doc([divided])).rooms
+
+    expect(room.zones.map((zone) => zone.key)).toEqual(['conf', 'kitchen'])
+  })
+
+  it('ignores a zones column that is not a list at all', () => {
+    const divided = legacyRoom({ zones: { conf: true } } as unknown as Partial<RoomDoc>)
+    const [room] = mapBuildingScene(doc([divided])).rooms
+
+    expect(room.zones).toEqual([])
+  })
+})

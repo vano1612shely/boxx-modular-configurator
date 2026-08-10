@@ -38,3 +38,24 @@ export const HIGHLIGHT = {
   /** Warm grey, so the drag ghost belongs to the same family as the ground. */
   ghost: '#a7a29a',
 } as const
+
+/**
+ * Floor tints for the zones of one room.
+ *
+ * Laid on the floor at a tenth of their strength, so they read as areas rather
+ * than as paint. Distinguishable rather than harmonious — telling the kitchen
+ * half from the conference half at a glance is the whole job — but kept off the
+ * brand's own cherry and mango, which already mean "selected" and "blocked".
+ * A zone is handed the first one nobody in its room has taken, so no two are
+ * alike and the colour stays put between saves.
+ */
+export const ZONE_TINTS = [
+  '#3b82f6',
+  '#10b981',
+  '#a855f7',
+  '#f59e0b',
+  '#06b6d4',
+  '#ec4899',
+  '#84cc16',
+  '#6366f1',
+] as const

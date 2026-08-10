@@ -360,6 +360,18 @@ export interface BuildingModel {
             }[]
           | null;
         /**
+         * Parts of this room with a use of their own — a conference half and a kitchen half with no partition between them. Cut in the Scene Editor. Empty means the room is one space.
+         */
+        zones?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        /**
          * The focused-room view is generated from these numbers — the building glb is never cut.
          */
         shell?: {
@@ -968,6 +980,7 @@ export interface BuildingModelsSelect<T extends boolean = true> {
               side?: T;
               id?: T;
             };
+        zones?: T;
         shell?:
           | T
           | {

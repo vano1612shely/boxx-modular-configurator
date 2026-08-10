@@ -329,6 +329,17 @@ export const BuildingModels: CollectionConfig = {
                   ],
                 },
                 {
+                  // JSON for the same reason as `openings` below: Payload
+                  // re-inserts array rows on update, so row ids are not stable.
+                  // Entries are { key, name, roomType, areaSqFt, areaSqM, color, polygon }.
+                  name: 'zones',
+                  type: 'json',
+                  admin: {
+                    description:
+                      'Parts of this room with a use of their own — a conference half and a kitchen half with no partition between them. Cut in the Scene Editor. Empty means the room is one space.',
+                  },
+                },
+                {
                   name: 'shell',
                   type: 'group',
                   admin: {

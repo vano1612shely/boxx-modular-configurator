@@ -28,6 +28,7 @@ function room(
     areaSqFt: null,
     areaSqM: null,
     floorPolygon: polygon,
+    zones: [],
     shell: {
       floorY: overrides.floorY ?? 0,
       wallHeight: overrides.wallHeight ?? 2.5,

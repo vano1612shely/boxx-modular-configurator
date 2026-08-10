@@ -21,6 +21,7 @@ export type {
   TexturedSurface,
   Vec3Tuple,
   WallSide,
+  Zone,
   ZoneBox,
 } from './model/types'
 export { OPENING_KINDS, SHELL_SURFACES, TEXTURED_SURFACES, WALL_SIDES } from './model/types'
@@ -115,3 +116,15 @@ export {
   type Region,
 } from './lib/region'
 export { canCut, cutPolygon, type CutFailure, type CutResult } from './lib/zone-cut'
+export {
+  acceptingFloor,
+  isDivided,
+  nextZoneTint,
+  reachableFloor,
+  reachableGroups,
+  zoneAccepts,
+  zoneArea,
+  zoneAt,
+  zoneNamesJoined,
+  zoneOf,
+} from './lib/zones'

@@ -29,7 +29,17 @@ export function RoomHotspots({ rooms, focusedKey, onFocusRoom }: Props) {
   return (
     <For each={rooms} getKey={(room) => room.key}>
       {(room) => (
-        <Html position={anchorOf(room)} center zIndexRange={[10, 0]}>
+        <Html
+          position={anchorOf(room)}
+          center
+          zIndexRange={[10, 0]}
+          // Only the marker itself is clickable, never the box drei wraps it
+          // in. Here the two nearly coincide, but the rule is worth keeping
+          // where it is cheap: a wrapper that catches drags is invisible, and
+          // the symptom — a patch of building that will not turn — looks like
+          // anything but a div.
+          style={{ pointerEvents: 'none' }}
+        >
           {/* Inside a room every marker goes: this one has nowhere left to
               take you, and the rest belong to rooms you cannot reach from here.
               What the room is and how big it is now lives in the header panel,
@@ -42,7 +52,7 @@ export function RoomHotspots({ rooms, focusedKey, onFocusRoom }: Props) {
                 event.stopPropagation()
                 onFocusRoom(room.key)
               }}
-              className="group flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="group pointer-events-auto flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <Chip
                 tone="glass"

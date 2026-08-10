@@ -501,13 +501,20 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
           position={[0, height + 0.25, 0]}
           zIndexRange={[20, 0]}
           calculatePosition={keepOnScreen}
+          // drei's own wrapper sits *at* the anchor and takes the size of what
+          // is inside it, while the bar below is shifted off that anchor by
+          // half its width and all of its height. The wrapper is therefore an
+          // invisible box hanging down and to the right of the toolbar, over
+          // bare canvas — and it swallowed every orbit drag that began there.
+          // The bar takes its events back on the line below.
+          style={{ pointerEvents: 'none' }}
         >
           {/* Anchored by its bottom edge, not its middle. Centred, half the bar
               hung down over the top of the furniture it was there to change,
               which meant clicking away to see what a change had done. drei puts
               `center` on a wrapper it owns, so the shift has to be done here. */}
           <div
-            className="flex -translate-x-1/2 -translate-y-full flex-col items-center gap-2"
+            className="pointer-events-auto flex -translate-x-1/2 -translate-y-full flex-col items-center gap-2"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => {
               event.stopPropagation()

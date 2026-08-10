@@ -29,7 +29,7 @@ import {
   type Object3D,
 } from 'three'
 
-import type { BuildingScene, RoomZone } from '@/entities/building'
+import type { BuildingScene, Room } from '@/entities/building'
 import {
   clampPoseToPolygon,
   progressiveEdgeSnap,
@@ -209,7 +209,7 @@ function PlacementGhost({ placement, pkg, floorY = 0 }: GhostProps) {
 type ItemProps = {
   placement: PlacedPackage
   pkg: FurniturePackageEntity
-  room: RoomZone
+  room: Room
   grabOffsetRef: MutableRefObject<GrabOffset>
   obstacles: Obstacle[]
 }

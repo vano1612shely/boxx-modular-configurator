@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 
-import type { BuildingScene, RoomZone } from '@/entities/building'
+import type { BuildingScene, Room } from '@/entities/building'
 import { findFloor, roomsOnFloor } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 
@@ -15,12 +15,12 @@ export function useSceneViewerModel(building: BuildingScene) {
   const previewRoomKey = useConfiguratorSession((s) => s.previewRoomKey)
   const previewRoom = useConfiguratorSession((s) => s.previewRoom)
 
-  const focusedRoom = useMemo<RoomZone | null>(
+  const focusedRoom = useMemo<Room | null>(
     () => building.rooms.find((room) => room.key === focusedRoomKey) ?? null,
     [building.rooms, focusedRoomKey],
   )
 
-  const previewedRoom = useMemo<RoomZone | null>(
+  const previewedRoom = useMemo<Room | null>(
     () => building.rooms.find((room) => room.key === previewRoomKey) ?? null,
     [building.rooms, previewRoomKey],
   )

@@ -102,7 +102,7 @@ export type CameraConfig = CameraPreset & {
   maxPolarDeg: number
 }
 
-export type RoomZone = {
+export type Room = {
   key: string
   name: string
   roomType: RoomType
@@ -157,7 +157,7 @@ export type BuildingScene = {
   roofBlocks: ZoneBox[]
   roofModel: RoofConfig | null
   hiddenNodePaths: string[]
-  rooms: RoomZone[]
+  rooms: Room[]
 }
 
 export { OPENING_KINDS, SHELL_SURFACES, TEXTURED_SURFACES, WALL_SIDES }

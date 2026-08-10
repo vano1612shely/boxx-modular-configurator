@@ -24,13 +24,13 @@ import {
   windowBeamCone,
   windowBeamHalfSize,
 } from '../lib/sun-patch'
-import type { RoomZone, Vec3Tuple } from '../model/types'
+import type { Room, Vec3Tuple } from '../model/types'
 
 type Bounds = { min: Vec3Tuple; max: Vec3Tuple }
 
 type Props = {
   bounds: Bounds | null
-  focusedRoom: RoomZone | null
+  focusedRoom: Room | null
   exposure?: number
 }
 
@@ -218,7 +218,7 @@ function WindowSun({ placement, ray, exposure }: { placement: OpeningPlacement; 
   )
 }
 
-function WindowSuns({ room, exposure }: { room: RoomZone; exposure: number }) {
+function WindowSuns({ room, exposure }: { room: Room; exposure: number }) {
   const glazed = useMemo(
     () =>
       planOpeningPlacements(room.floorPolygon, room.shell, room.openings).filter(
@@ -245,7 +245,7 @@ function WindowSuns({ room, exposure }: { room: RoomZone; exposure: number }) {
   )
 }
 
-function RoomKey({ room, intensity }: { room: RoomZone; intensity: number }) {
+function RoomKey({ room, intensity }: { room: Room; intensity: number }) {
   const light = useRef<DirectionalLight>(null)
   const [tx, ty, tz] = roomFocusTarget(room)
   const axis = room.shell.sideAxes[roomFeatureSide(room)] ?? { x: 0, z: -1 }

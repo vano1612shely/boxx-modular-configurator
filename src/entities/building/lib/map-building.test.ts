@@ -5,7 +5,7 @@ import type { BuildingModel } from '@/payload-types'
 
 import { mapBuildingScene } from './map-building'
 
-type Room = NonNullable<BuildingModel['rooms']>[number]
+type RoomDoc = NonNullable<BuildingModel['rooms']>[number]
 
 const LINE = {
   id: 1,
@@ -17,7 +17,7 @@ const LINE = {
 
 const MODEL = { id: 2, url: '/api/models/file/demo.glb' }
 
-function legacyRoom(overrides: Partial<Room> = {}): Room {
+function legacyRoom(overrides: Partial<RoomDoc> = {}): RoomDoc {
   return {
     key: 'office-1',
     name: 'Office 1',
@@ -30,10 +30,10 @@ function legacyRoom(overrides: Partial<Room> = {}): Room {
     ],
     cameraPreset: { position: { x: 3, y: 5, z: 9 }, target: { x: 3, y: 0.8, z: 2 } },
     ...overrides,
-  } as Room
+  } as RoomDoc
 }
 
-function doc(rooms: Room[]): BuildingModel {
+function doc(rooms: RoomDoc[]): BuildingModel {
   return {
     id: 7,
     title: 'Demo',
@@ -57,7 +57,7 @@ describe('mapBuildingScene — generated room parameters', () => {
   it('clamps nonsense dimensions instead of emitting inverted geometry', () => {
     const broken = legacyRoom({
       shell: { wallHeight: 0, wallThickness: -1, floorThickness: 0 },
-    } as Partial<Room>)
+    } as Partial<RoomDoc>)
     const [room] = mapBuildingScene(doc([broken])).rooms
 
     expect(room.shell.wallHeight).toBe(0.1)
@@ -74,7 +74,7 @@ describe('mapBuildingScene — generated room parameters', () => {
   it('prefers stored values over derived ones', () => {
     const stored = legacyRoom({
       shell: { floorY: 0.5, wallHeight: 3.2, wallThickness: 0.2 },
-    } as Partial<Room>)
+    } as Partial<RoomDoc>)
     const [room] = mapBuildingScene(doc([stored])).rooms
 
     expect(room.shell.floorY).toBe(0.5)
@@ -94,7 +94,7 @@ describe('mapBuildingScene — generated room parameters', () => {
       surfaces: {
         wallInner: { texture: { id: 4, url: '/api/textures/file/oak.webp' }, tileWidth: 2 },
       },
-    } as Partial<Room>)
+    } as Partial<RoomDoc>)
     const [room] = mapBuildingScene(doc([textured])).rooms
 
     expect(room.surfaces.wallInner.url).toBe('/api/textures/file/oak.webp')
@@ -109,7 +109,7 @@ describe('mapBuildingScene — generated room parameters', () => {
         { side: 'w2', along: 1 },
         'not an opening',
       ],
-    } as Partial<Room>)
+    } as Partial<RoomDoc>)
     const [room] = mapBuildingScene(doc([withOpenings])).rooms
 
     expect(room.openings.map((o) => o.id)).toEqual(['a'])
@@ -118,14 +118,14 @@ describe('mapBuildingScene — generated room parameters', () => {
   it('fills opening defaults by kind', () => {
     const withOpenings = legacyRoom({
       openings: [{ id: 'w', side: 'w1', kind: 'window', along: 1 }],
-    } as Partial<Room>)
+    } as Partial<RoomDoc>)
     const [room] = mapBuildingScene(doc([withOpenings])).rooms
 
     expect(room.openings[0]).toMatchObject({ width: 1.2, height: 1.2, sill: 0.9 })
   })
 
   it('survives a room whose outline is too short to be a room', () => {
-    const broken = legacyRoom({ floorPolygon: [{ x: 0, z: 0 }] } as Partial<Room>)
+    const broken = legacyRoom({ floorPolygon: [{ x: 0, z: 0 }] } as Partial<RoomDoc>)
     const [room] = mapBuildingScene(doc([broken])).rooms
 
     expect(room.floorPolygon).toEqual([])
@@ -142,7 +142,7 @@ describe('mapBuildingScene — wall assignment', () => {
         { x: 6, z: 4, side: 'w1' },
         { x: 0, z: 4, side: 'w1' },
       ],
-    } as Partial<Room>)
+    } as Partial<RoomDoc>)
     const [room] = mapBuildingScene(doc([stamped])).rooms
 
     expect(new Set(room.floorPolygon.map((p) => p.side)).size).toBe(4)
@@ -157,7 +157,7 @@ describe('mapBuildingScene — wall assignment', () => {
         { x: 6, z: 4, side: 'w3' },
         { x: 0, z: 4, side: 'w4' },
       ],
-    } as Partial<Room>)
+    } as Partial<RoomDoc>)
     const [room] = mapBuildingScene(doc([assigned])).rooms
 
     expect(room.floorPolygon.map((p) => p.side)).toEqual(['w1', 'w1', 'w2', 'w3', 'w4'])

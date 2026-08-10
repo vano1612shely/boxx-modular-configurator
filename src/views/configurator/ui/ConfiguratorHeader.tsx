@@ -3,7 +3,7 @@
 import { ArrowLeft, ChevronDown, DoorOpen } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import type { BuildingScene, RoomZone, SummaryFact } from '@/entities/building'
+import type { BuildingScene, Room, SummaryFact } from '@/entities/building'
 import { buildingSummary, roomArea } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { changeSelectionHref, type IntakeAnswers } from '@/features/building-intake'
@@ -119,7 +119,7 @@ function FactsPanel({
 }
 
 /** Name is in the bar beside it, so the panel states what the bar cannot. */
-function roomFacts(room: RoomZone, unit: AreaUnit): SummaryFact[] {
+function roomFacts(room: Room, unit: AreaUnit): SummaryFact[] {
   return [
     { label: 'Type', value: ROOM_TYPE_LABELS.get(room.roomType) ?? room.roomType },
     // Always present: a room has an outline, so there is always an area to

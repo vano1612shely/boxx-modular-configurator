@@ -33,14 +33,14 @@ import {
 import {
   fitDistance,
   locateOnWalls,
-  mapRoomZone,
+  mapRoom,
   planOpeningPlacements,
   RoomShell,
   roomVertices,
   SceneLighting,
   type OpeningPlacement,
   type RoomDoc,
-  type RoomZone,
+  type Room,
   type WallSide,
 } from '@/entities/building'
 import { createNodeResolver, isTreeVisible, nodePathOf } from '@/shared/three/node-path'
@@ -436,7 +436,7 @@ function ShellPreview({
   onPlace,
   onSelect,
 }: {
-  zone: RoomZone
+  zone: Room
   placements: OpeningPlacement[]
   placing: boolean
   onPlace: (side: WallSide, along: number) => void
@@ -851,7 +851,7 @@ function EditorScene({
 
   const openRoom = vm.roomMode ? (rooms[vm.selectedRoomIndex as number] ?? null) : null
   const openZone = useMemo(
-    () => (openRoom ? mapRoomZone(openRoom) : null),
+    () => (openRoom ? mapRoom(openRoom) : null),
     [openRoom],
   )
   const openingPlacements = useMemo(

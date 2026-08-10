@@ -4,7 +4,7 @@ import {
   orbitRadius,
   polygonBounds,
   type CameraPreset,
-  type RoomZone,
+  type Room,
 } from '@/entities/building'
 import type { ViewMode } from '@/entities/configurator-session'
 
@@ -25,7 +25,7 @@ export type ViewScope = {
  * Anchored at the room's own floor level, not y=0: the model sits on a base
  * that belongs to no room.
  */
-export function roomScope(room: RoomZone, fov: number): ViewScope {
+export function roomScope(room: Room, fov: number): ViewScope {
   const { minX, minZ, maxX, maxZ } = polygonBounds(room.floorPolygon)
   const { floorY, wallHeight } = room.shell
 

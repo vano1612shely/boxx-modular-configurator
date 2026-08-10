@@ -3,21 +3,21 @@
 import { Html } from '@react-three/drei'
 import { Plus } from 'lucide-react'
 
-import type { RoomZone } from '@/entities/building'
+import type { Room } from '@/entities/building'
 import { polygonCentroid, roomFloorTopY } from '@/entities/building'
 import { cn } from '@/shared/lib'
 import { Chip } from '@/shared/ui/boxx'
 import { For } from '@/shared/ui/control-flow'
 
 type Props = {
-  rooms: RoomZone[]
+  rooms: Room[]
   /** The room being looked at, or null while the whole building is. */
   focusedKey: string | null
   onFocusRoom: (key: string) => void
 }
 
 /** Head height over the room, so the marker reads as belonging to it. */
-function anchorOf(room: RoomZone): [number, number, number] {
+function anchorOf(room: Room): [number, number, number] {
   const centroid = polygonCentroid(room.floorPolygon)
   return [centroid.x, roomFloorTopY(room) + 1.1, centroid.z]
 }

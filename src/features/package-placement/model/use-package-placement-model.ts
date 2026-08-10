@@ -3,7 +3,7 @@
 import { useGLTF } from '@react-three/drei'
 import { useEffect, useMemo } from 'react'
 
-import type { BuildingScene, RoomZone } from '@/entities/building'
+import type { BuildingScene, Room } from '@/entities/building'
 import { footprintFitsPolygon, polygonCentroid } from '@/entities/building'
 import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
@@ -33,7 +33,7 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   const addPackage = useConfiguration((s) => s.addPackage)
   const removePackage = useConfiguration((s) => s.removePackage)
 
-  const focusedRoom = useMemo<RoomZone | null>(
+  const focusedRoom = useMemo<Room | null>(
     () => building.rooms.find((room) => room.key === focusedRoomKey) ?? null,
     [building.rooms, focusedRoomKey],
   )

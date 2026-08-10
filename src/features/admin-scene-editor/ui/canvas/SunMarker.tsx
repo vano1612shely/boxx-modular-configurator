@@ -2,13 +2,13 @@
 
 import { Line } from '@react-three/drei'
 
-import { polygonBounds, roomSunBearing, sunHeading, type RoomZone } from '@/entities/building'
+import { polygonBounds, roomSunBearing, sunHeading, type Room } from '@/entities/building'
 
 import { ScreenScaled } from './handles'
 
 const SUN_COLOR = '#fbbf24'
 
-export function SunMarker({ room }: { room: RoomZone }) {
+export function SunMarker({ room }: { room: Room }) {
   if (room.floorPolygon.length < 3) return null
 
   const { minX, minZ, maxX, maxZ } = polygonBounds(room.floorPolygon)

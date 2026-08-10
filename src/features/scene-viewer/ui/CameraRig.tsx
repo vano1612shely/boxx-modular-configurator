@@ -6,7 +6,7 @@ import CameraControlsImpl from 'camera-controls'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, MathUtils, Spherical, Vector3 } from 'three'
 
-import type { BuildingFloor, BuildingScene, RoomZone } from '@/entities/building'
+import type { BuildingFloor, BuildingScene, Room } from '@/entities/building'
 import { floorExtent, frameBuilding, frameExtent, orbitable } from '@/entities/building'
 import { useConfiguratorSession, type BuildingBounds } from '@/entities/configurator-session'
 
@@ -23,18 +23,18 @@ import { dollySpeedFor } from '../lib/wheel-dolly'
 
 type Props = {
   building: BuildingScene
-  focusedRoom: RoomZone | null
-  previewedRoom: RoomZone | null
+  focusedRoom: Room | null
+  previewedRoom: Room | null
   floor: BuildingFloor | null
   enabled?: boolean
 }
 
 function scopeFor(
   building: BuildingScene,
-  focusedRoom: RoomZone | null,
+  focusedRoom: Room | null,
   buildingBounds: BuildingBounds | null,
   floor: BuildingFloor | null,
-  previewedRoom: RoomZone | null,
+  previewedRoom: Room | null,
 ): ViewScope | null {
   const fov = building.camera.fov
 

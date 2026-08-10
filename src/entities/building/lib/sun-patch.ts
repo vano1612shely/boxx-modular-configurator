@@ -1,6 +1,6 @@
 import { SUN_BEARINGS } from '@/modules/shared/room-shell'
 
-import type { Point2, RoomZone, Vec3Tuple, WallSide } from '../model/types'
+import type { Point2, Room, Vec3Tuple, WallSide } from '../model/types'
 
 /** Sun height above the horizon, in radians (~35°). */
 export const SUN_ELEVATION = 0.62
@@ -35,7 +35,7 @@ export function bearingOf(direction: Point2): number {
 }
 
 /** What the admin set, or the wall carrying the most glass. */
-export function roomSunBearing(room: RoomZone): number {
+export function roomSunBearing(room: Room): number {
   const chosen = room.shell.sunDirection
   if (chosen) return SUN_BEARINGS[chosen]
 

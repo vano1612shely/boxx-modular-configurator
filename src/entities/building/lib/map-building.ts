@@ -18,7 +18,7 @@ import type {
   RoomOpening,
   RoomShellConfig,
   RoomVertex,
-  RoomZone,
+  Room,
   ShellSurface,
   SunDirection,
   SurfaceStyle,
@@ -242,7 +242,7 @@ function roomSurfaces(doc: RoomDoc): Record<ShellSurface, SurfaceStyle> {
   ) as Record<ShellSurface, SurfaceStyle>
 }
 
-export function mapRoomZone(room: RoomDoc): RoomZone {
+export function mapRoom(room: RoomDoc): Room {
   const floorPolygon = roomVertices(room)
 
   return {
@@ -283,7 +283,7 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
   const camera = doc.sceneConfig?.camera
   const hiddenNodePaths = zoneNodePaths(doc.sceneConfig?.hiddenNodePaths)
 
-  const rooms: RoomZone[] = (doc.rooms ?? []).map(mapRoomZone)
+  const rooms: Room[] = (doc.rooms ?? []).map(mapRoom)
 
   return {
     id: doc.id,

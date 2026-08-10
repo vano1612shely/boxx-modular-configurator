@@ -3,14 +3,14 @@
 import { useMemo, useRef, useState } from 'react'
 import { Shape, ShapeGeometry } from 'three'
 
-import type { RoomZone } from '@/entities/building'
+import type { Room } from '@/entities/building'
 import { roomFloorTopY } from '@/entities/building'
 import { HIGHLIGHT } from '@/shared/three/scene-tokens'
 import { For } from '@/shared/ui/control-flow'
 import { setSceneCursor } from '@/shared/ui/scene-cursor'
 
 type Props = {
-  rooms: RoomZone[]
+  rooms: Room[]
   previewedKey: string | null
   onPreviewRoom: (key: string) => void
 }
@@ -26,7 +26,7 @@ const DRAG_SLOP = 4
  * sends the shape's +Y to world −Z. Feeding it −z back is what keeps the room
  * over the room it was traced from rather than mirrored across the building.
  */
-function floorGeometry(room: RoomZone): ShapeGeometry {
+function floorGeometry(room: Room): ShapeGeometry {
   const shape = new Shape()
   room.floorPolygon.forEach((point, index) => {
     if (index === 0) shape.moveTo(point.x, -point.z)
@@ -41,7 +41,7 @@ function RoomFloor({
   previewed,
   onPreview,
 }: {
-  room: RoomZone
+  room: Room
   previewed: boolean
   onPreview: () => void
 }) {

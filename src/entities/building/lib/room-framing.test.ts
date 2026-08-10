@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { RoomOpening, RoomZone } from '../model/types'
+import type { RoomOpening, Room } from '../model/types'
 import {
   extentWithoutSite,
   frameBuilding,
@@ -16,7 +16,7 @@ import { autoAssignSides, computeSideAxes } from './room-shell'
 function room(
   points: Array<[number, number]>,
   overrides: { floorY?: number; wallHeight?: number; openings?: RoomOpening[] } = {},
-): RoomZone {
+): Room {
   const plain = points.map(([x, z]) => ({ x, z }))
   const sides = autoAssignSides(plain)
   const polygon = plain.map((p, i) => ({ ...p, side: sides[i] }))
@@ -38,8 +38,8 @@ function room(
       sunDirection: null,
     },
     openings: overrides.openings ?? [],
-    surfaces: {} as RoomZone['surfaces'],
-    openingModels: {} as RoomZone['openingModels'],
+    surfaces: {} as Room['surfaces'],
+    openingModels: {} as Room['openingModels'],
     // Hostile fixture: target 30 cm from position, both far from the room.
     cameraPreset: { position: [-5.63, 2.46, -2.43], target: [-5.43, 2.37, -2.71] },
   }

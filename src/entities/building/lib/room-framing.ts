@@ -1,4 +1,4 @@
-import type { CameraPreset, RoomZone, Vec3Tuple, WallSide } from '../model/types'
+import type { CameraPreset, Room, Vec3Tuple, WallSide } from '../model/types'
 import { WALL_SIDES } from '../model/types'
 import { areaIn, type AreaUnit } from '@/shared/lib'
 import { polygonBounds, polygonSignedArea } from './polygon'
@@ -11,7 +11,7 @@ const MARGIN = 1.18
 const EYE = 0.45
 
 /** The wall carrying the most opening area. */
-export function roomFeatureSide(room: RoomZone): WallSide {
+export function roomFeatureSide(room: Room): WallSide {
   let best = WALL_SIDES[0]
   let bestArea = -1
 
@@ -40,7 +40,7 @@ export function roomFeatureSide(room: RoomZone): WallSide {
  * Nothing is stored back: a number written down when the outline was drawn would
  * go quietly stale the next time anybody moved a corner.
  */
-export function roomArea(room: RoomZone, unit: AreaUnit): number {
+export function roomArea(room: Room, unit: AreaUnit): number {
   return areaIn(
     unit,
     { sqft: room.areaSqFt, sqm: room.areaSqM },
@@ -54,13 +54,13 @@ export function fitDistance(radius: number, fovDeg: number): number {
   return (Math.max(radius, 0.1) / Math.max(Math.sin(half), 0.05)) * MARGIN
 }
 
-export function roomFocusTarget(room: RoomZone): Vec3Tuple {
+export function roomFocusTarget(room: Room): Vec3Tuple {
   const { minX, minZ, maxX, maxZ } = polygonBounds(room.floorPolygon)
   const { floorY, wallHeight } = room.shell
   return [(minX + maxX) / 2, floorY + wallHeight * EYE, (minZ + maxZ) / 2]
 }
 
-export function frameRoom(room: RoomZone, fovDeg: number): CameraPreset {
+export function frameRoom(room: Room, fovDeg: number): CameraPreset {
   const { minX, minZ, maxX, maxZ } = polygonBounds(room.floorPolygon)
   const { wallHeight } = room.shell
   const target = roomFocusTarget(room)

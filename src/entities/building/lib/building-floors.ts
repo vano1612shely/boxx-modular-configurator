@@ -1,4 +1,4 @@
-import type { BuildingFloor, RoomZone, Vec3Tuple } from '../model/types'
+import type { BuildingFloor, Room, Vec3Tuple } from '../model/types'
 
 /** Metres of slack on a storey boundary, so a slab sitting on it counts as in. */
 const EDGE = 1e-4
@@ -65,17 +65,17 @@ export function floorForY(floors: BuildingFloor[], y: number): BuildingFloor | n
  * move a whole floor's worth of rooms downstairs. These are what the editor
  * shows the admin.
  */
-export function roomsOffEveryFloor(rooms: RoomZone[], floors: BuildingFloor[]): RoomZone[] {
+export function roomsOffEveryFloor(rooms: Room[], floors: BuildingFloor[]): Room[] {
   if (floors.length === 0) return []
   return rooms.filter((room) => containingFloor(floors, room.shell.floorY) === null)
 }
 
 /** The rooms a visitor may still reach; every room while no storey is picked. */
 export function roomsOnFloor(
-  rooms: RoomZone[],
+  rooms: Room[],
   floors: BuildingFloor[],
   floorKey: string | null,
-): RoomZone[] {
+): Room[] {
   const floor = findFloor(floors, floorKey)
   if (!floor) return rooms
   return rooms.filter((room) => floorForY(floors, room.shell.floorY)?.key === floor.key)

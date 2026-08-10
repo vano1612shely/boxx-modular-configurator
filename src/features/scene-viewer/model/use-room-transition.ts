@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react'
 
-import type { RoomZone } from '@/entities/building'
+import type { Room } from '@/entities/building'
 
-export function useRoomTransition(room: RoomZone | null): {
+export function useRoomTransition(room: Room | null): {
   /** The room to render — a frame behind the one that was clicked. */
-  staged: RoomZone | null
+  staged: Room | null
   /** True while the click has not been staged yet; the veil should be up. */
   settling: boolean
 } {
-  const [staged, setStaged] = useState<RoomZone | null>(room)
+  const [staged, setStaged] = useState<Room | null>(room)
 
   const key = room?.key ?? null
   const stagedKey = staged?.key ?? null

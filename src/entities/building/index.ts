@@ -14,7 +14,7 @@ export type {
   RoomShellConfig,
   RoomType,
   RoomVertex,
-  RoomZone,
+  Room,
   ShellSurface,
   SunDirection,
   SurfaceStyle,
@@ -27,7 +27,7 @@ export { OPENING_KINDS, SHELL_SURFACES, TEXTURED_SURFACES, WALL_SIDES } from './
 
 export {
   mapBuildingScene,
-  mapRoomZone,
+  mapRoom,
   roomOpenings,
   roomVertices,
   zoneNodePaths,

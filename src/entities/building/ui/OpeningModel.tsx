@@ -5,7 +5,7 @@ import { useEffect, useMemo } from 'react'
 import { Box3, MathUtils, Vector3, type Mesh } from 'three'
 
 import type { OpeningPlacement } from '../lib/room-shell'
-import type { OpeningFit, OpeningModelStyle, RoomZone } from '../model/types'
+import type { OpeningFit, OpeningModelStyle, Room } from '../model/types'
 import { OPENING_KINDS } from '../model/types'
 
 type Props = {
@@ -99,7 +99,7 @@ function fitScale(size: Vector3, width: number, height: number, fit: OpeningFit)
   return new Vector3(sx, sy, (sx + sy) / 2)
 }
 
-export function preloadOpeningModels(rooms: RoomZone[]) {
+export function preloadOpeningModels(rooms: Room[]) {
   for (const room of rooms) {
     for (const kind of OPENING_KINDS) {
       const url = room.openingModels[kind]?.url

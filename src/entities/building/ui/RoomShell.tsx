@@ -25,12 +25,12 @@ import {
 } from '../lib/room-shell'
 import { resolveRoomVisibility, type RoomVisibility } from '../lib/room-visibility'
 import { useSurfaceTextures } from '../lib/use-surface-textures'
-import type { OpeningKind, RoomZone, ShellSurface } from '../model/types'
+import type { OpeningKind, Room, ShellSurface } from '../model/types'
 import { OPENING_KINDS } from '../model/types'
 import { OpeningModel } from './OpeningModel'
 
 type Props = {
-  room: RoomZone
+  room: Room
 }
 
 const SURFACE_COLORS: Record<ShellSurface, string> = {

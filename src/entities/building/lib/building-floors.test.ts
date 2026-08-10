@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { BuildingFloor, RoomZone, Vec3Tuple } from '../model/types'
+import type { BuildingFloor, Room, Vec3Tuple } from '../model/types'
 import {
   containingFloor,
   findFloor,
@@ -23,8 +23,8 @@ function floor(key: string, minY: number, maxY: number): BuildingFloor {
 const GROUND = floor('ground', 0, 3)
 const UPPER = floor('upper', 3, 6)
 
-function roomAt(key: string, floorY: number): RoomZone {
-  return { key, shell: { floorY } } as RoomZone
+function roomAt(key: string, floorY: number): Room {
+  return { key, shell: { floorY } } as Room
 }
 
 describe('sortFloors', () => {

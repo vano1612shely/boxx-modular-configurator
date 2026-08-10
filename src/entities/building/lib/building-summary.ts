@@ -1,7 +1,18 @@
 import type { BuildingScene } from '../model/types'
 import { areaIn, formatArea, type AreaUnit } from '@/shared/lib'
 
-export type SummaryFact = { label: string; value: string }
+export type SummaryFact = {
+  label: string
+  value: string
+  /**
+   * This is the row the unit switch belongs beside.
+   *
+   * Carried on the fact rather than matched on the label so the switch cannot
+   * outlive the figure: a building with no area authored has no such row, and
+   * therefore no control offering to convert a number that is not there.
+   */
+  inUnits?: boolean
+}
 
 const NUMBER = new Intl.NumberFormat('en-US')
 const MONEY = new Intl.NumberFormat('en-US', {
@@ -38,7 +49,7 @@ export function buildingSummary(building: BuildingScene, unit: AreaUnit): Summar
 
   const area = areaIn(unit, { sqft: building.sqft, sqm: building.sqm }, null)
   if (area !== null) {
-    facts.push({ label: 'Approx. floor area', value: formatArea(area, unit) })
+    facts.push({ label: 'Approx. floor area', value: formatArea(area, unit), inUnits: true })
   }
 
   const dimensions = unit === 'sqft' ? building.dimensions : building.dimensionsMetric

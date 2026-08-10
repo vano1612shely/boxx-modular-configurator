@@ -93,3 +93,20 @@ describe('buildingSummary', () => {
     expect(buildingSummary(bare, 'sqft')).toHaveLength(1)
   })
 })
+
+describe('the unit switch', () => {
+  // The control belongs to one figure, and there is no figure to convert when
+  // nobody wrote an area down — so the panel must not offer to convert it.
+  it('is offered only on the area row', () => {
+    const marked = buildingSummary(scene(), 'sqft').filter((fact) => fact.inUnits)
+
+    expect(marked).toHaveLength(1)
+    expect(marked[0].label).toBe('Approx. floor area')
+  })
+
+  it('is not offered at all when no area was authored', () => {
+    const areaLess = buildingSummary(scene({ sqft: null, sqm: null }), 'sqft')
+
+    expect(areaLess.some((fact) => fact.inUnits)).toBe(false)
+  })
+})

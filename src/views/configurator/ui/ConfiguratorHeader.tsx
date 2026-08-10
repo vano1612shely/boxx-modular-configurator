@@ -8,11 +8,54 @@ import { buildingSummary, roomArea } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { changeSelectionHref, type IntakeAnswers } from '@/features/building-intake'
 import { ROOM_TYPE_OPTIONS } from '@/modules/shared/room-types'
-import { areaIn, cn, formatArea, type AreaUnit } from '@/shared/lib'
+import { areaIn, areaUnitLabel, AREA_UNITS, cn, formatArea, type AreaUnit } from '@/shared/lib'
 import { Card, Chip, Eyebrow, FloatingBar, Pill, PillLink, SceneOverlay } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
 
 const ROOM_TYPE_LABELS = new Map(ROOM_TYPE_OPTIONS.map((o) => [o.value, o.label]))
+
+/**
+ * The ft²/m² switch, sized to sit on the same line as the figure it converts.
+ *
+ * Beside the number rather than in a row of its own: it is a property of that
+ * one figure, and a panel-wide control implied it governed the whole list.
+ */
+function UnitSwitch({
+  unit,
+  onUnit,
+}: {
+  unit: AreaUnit
+  onUnit: (unit: AreaUnit) => void
+}) {
+  return (
+    <span
+      role="group"
+      aria-label="Units"
+      className="inline-flex shrink-0 overflow-hidden rounded-full ring-1 ring-border"
+    >
+      <For each={AREA_UNITS} getKey={(value) => value}>
+        {(value) => (
+          <button
+            type="button"
+            aria-pressed={unit === value}
+            onClick={() => onUnit(value)}
+            className={cn(
+              // Roomier for a finger, tight for a cursor: the two sit side by
+              // side, so the worst a mis-tap can do is pick the other unit.
+              'px-2 py-1 text-[0.625rem] leading-4 transition-colors',
+              'desktop:px-1.5 desktop:py-px',
+              unit === value
+                ? 'bg-ink text-surface'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {areaUnitLabel(value)}
+          </button>
+        )}
+      </For>
+    </span>
+  )
+}
 
 /**
  * The facts panel: open on desktop, behind a chevron on the phone.
@@ -55,32 +98,22 @@ function FactsPanel({
       <dl className="flex flex-col gap-2">
         <For each={facts} getKey={(fact) => fact.label}>
           {(fact) => (
-            <div className="flex items-baseline justify-between gap-6">
+            <div className="flex items-center justify-between gap-4">
               <Eyebrow as="dt" className="shrink-0">
                 {fact.label}
               </Eyebrow>
-              <dd className="text-right text-sm font-medium tabular-nums">{fact.value}</dd>
+              <dd className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-right text-sm font-medium tabular-nums">
+                  {fact.value}
+                </span>
+                <Show when={fact.inUnits}>
+                  <UnitSwitch unit={unit} onUnit={onUnit} />
+                </Show>
+              </dd>
             </div>
           )}
         </For>
       </dl>
-
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-        <Eyebrow>Units</Eyebrow>
-        <FloatingBar className="shadow-none ring-0">
-          <Pill
-            variant="ghost"
-            size="sm"
-            selected={unit === 'sqft'}
-            onClick={() => onUnit('sqft')}
-          >
-            ft²
-          </Pill>
-          <Pill variant="ghost" size="sm" selected={unit === 'sqm'} onClick={() => onUnit('sqm')}>
-            m²
-          </Pill>
-        </FloatingBar>
-      </div>
     </Card>
   )
 }
@@ -89,7 +122,9 @@ function FactsPanel({
 function roomFacts(room: RoomZone, unit: AreaUnit): SummaryFact[] {
   return [
     { label: 'Type', value: ROOM_TYPE_LABELS.get(room.roomType) ?? room.roomType },
-    { label: 'Approx. floor area', value: formatArea(roomArea(room, unit), unit) },
+    // Always present: a room has an outline, so there is always an area to
+    // measure even when nobody has written one down.
+    { label: 'Approx. floor area', value: formatArea(roomArea(room, unit), unit), inUnits: true },
   ]
 }
 

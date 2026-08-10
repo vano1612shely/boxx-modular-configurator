@@ -1253,7 +1253,9 @@ function EditorScene({
   }
 
   const handleGroundPointerMove = (event: ThreeEvent<PointerEvent>) => {
-    if (vm.mode === 'draw-room') setCursor({ x: event.point.x, z: event.point.z })
+    if (vm.mode === 'draw-room' || vm.mode === 'cut-zone') {
+      setCursor({ x: event.point.x, z: event.point.z })
+    }
   }
 
   const handleGroundPointerUp = (event: ThreeEvent<PointerEvent>) => {
@@ -1465,6 +1467,30 @@ function EditorScene({
               </ScreenScaled>
               </Show>
 
+              {/* Only the room being worked on: zone tints over every room at
+                  once would repaint the whole plan. */}
+              <Show when={isSelected && vm.roomMode}>
+                <For each={vm.zones} getKey={(zone) => zone.key}>
+                  {(zone) => (
+                    <group>
+                      <RoomShape
+                        polygon={zone.polygon}
+                        color={zone.color}
+                        opacity={vm.selectedZoneKey === zone.key ? 0.34 : 0.16}
+                        y={baseY + 0.04}
+                      />
+                      <Line
+                        points={[...zone.polygon, zone.polygon[0]].map(
+                          (p) => [p.x, baseY + 0.06, p.z] as [number, number, number],
+                        )}
+                        color={zone.color}
+                        lineWidth={vm.selectedZoneKey === zone.key ? 3 : 1.5}
+                      />
+                    </group>
+                  )}
+                </For>
+              </Show>
+
               <Show when={isSelected && vm.mode === 'select'}>
                 <For each={polygon} getKey={(_, i) => i}>
                   {(point, pointIndex) => (
@@ -1617,6 +1643,50 @@ function EditorScene({
             dashed
             dashSize={0.2}
             gapSize={0.15}
+          />
+        </Show>
+      </Show>
+
+      {/* The cut in progress. Drawn on top of the zone tints, in white, because
+          it is the one line on the plan that will never be built. */}
+      <Show when={vm.mode === 'cut-zone' && vm.cutPoints.length > 0}>
+        <For each={vm.cutPoints} getKey={(_, i) => i}>
+          {(point, i) => (
+            <ScreenScaled position={[point.x, vm.floorPlaneY + 0.09, point.z]}>
+              <mesh>
+                <sphereGeometry args={[i === 0 ? 0.12 : 0.08, 16, 16]} />
+                <meshBasicMaterial color={i === 0 ? '#f472b6' : '#ffffff'} />
+              </mesh>
+            </ScreenScaled>
+          )}
+        </For>
+        <Show when={vm.cutPoints.length > 1}>
+          <Line
+            points={vm.cutPoints.map(
+              (p) => [p.x, vm.floorPlaneY + 0.08, p.z] as [number, number, number],
+            )}
+            color="#ffffff"
+            lineWidth={2}
+            dashed
+            dashSize={0.3}
+            gapSize={0.12}
+          />
+        </Show>
+        <Show when={cursor !== null}>
+          <Line
+            points={[
+              [
+                vm.cutPoints[vm.cutPoints.length - 1]?.x ?? 0,
+                vm.floorPlaneY + 0.08,
+                vm.cutPoints[vm.cutPoints.length - 1]?.z ?? 0,
+              ],
+              [cursor?.x ?? 0, vm.floorPlaneY + 0.08, cursor?.z ?? 0],
+            ]}
+            color="#ffffff"
+            lineWidth={1}
+            dashed
+            dashSize={0.15}
+            gapSize={0.12}
           />
         </Show>
       </Show>

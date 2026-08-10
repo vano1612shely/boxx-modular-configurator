@@ -31,6 +31,7 @@ export {
   mapRoom,
   roomOpenings,
   roomVertices,
+  roomZones,
   zoneNodePaths,
   type RoomDoc,
 } from './lib/map-building'

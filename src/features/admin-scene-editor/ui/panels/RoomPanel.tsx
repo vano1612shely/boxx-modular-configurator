@@ -15,6 +15,7 @@ import { RoomOpeningModelsSection } from './room/RoomOpeningModelsSection'
 import { RoomOpeningsSection } from './room/RoomOpeningsSection'
 import { RoomSurfacesSection } from './room/RoomSurfacesSection'
 import { RoomWallsSection } from './room/RoomWallsSection'
+import { RoomZonesSection } from './room/RoomZonesSection'
 import type { PanelProps } from './shared'
 
 const VIEW_OPTIONS = [
@@ -93,6 +94,12 @@ export function RoomPanel({ vm }: PanelProps) {
                 vm.onSetMode('place-opening')
               },
             },
+            {
+              label: '✂ Divide',
+              title: 'Split this floor into zones with their own use',
+              active: vm.mode === 'cut-zone',
+              onSelect: () => vm.onSetMode('cut-zone'),
+            },
           ]}
         />
 
@@ -119,6 +126,10 @@ export function RoomPanel({ vm }: PanelProps) {
       </div>
 
       <div style={{ marginTop: 10 }}>
+        <Accordion title="Zones" badge={vm.zones.length} defaultOpen={vm.zones.length > 0}>
+          <RoomZonesSection vm={vm} room={room} />
+        </Accordion>
+
         <Accordion title="Openings" badge={openingCount} defaultOpen>
           <RoomOpeningsSection vm={vm} roomIndex={roomIndex} room={room} />
         </Accordion>

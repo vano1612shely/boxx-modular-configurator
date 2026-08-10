@@ -4,25 +4,33 @@ import { useDocumentInfo } from '@payloadcms/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
+  closestPointOnPolygon,
   computeSideAxes,
   containingFloor,
+  cutPolygon,
   floorForY,
   autoAssignSides,
+  nextZoneTint,
   reanchorOpenings,
   rectifyPolygon,
   roomOpenings,
   roomVertices,
+  roomZones,
   zoneNodePaths,
   type BuildingFloor,
+  type CutFailure,
   type OpeningFit,
   type OpeningKind,
+  type Point2,
   type RoomOpening,
+  type RoomType,
   type RoomVertex,
   type SunDirection,
   type Extent,
   type Vec3Tuple,
   type TexturedSurface,
   type WallSide,
+  type Zone,
 } from '@/entities/building'
 import { SHELL_DEFAULTS } from '@/modules/shared/room-shell'
 import { assetUrl } from '@/shared/lib'
@@ -46,6 +54,7 @@ export type EditorMode =
   | 'block-roof'
   | 'place-opening'
   | 'floor-level'
+  | 'cut-zone'
 
 export { blockRefKey, defaultYRange, sameBlockRef }
 export type { BlockRef, BlockScope, EditorBox }
@@ -76,6 +85,15 @@ function modelUrlOf(model: number | Model | null | undefined): string | null {
   return typeof model === 'object' ? assetUrl(model) : null
 }
 
+/** How near a wall a click has to land to be taken as meaning that wall (meters). */
+const OUTLINE_GRAB = 0.4
+
+function pullToOutline(outline: Point2[], point: Point2): Point2 {
+  if (outline.length < 3) return point
+  const on = closestPointOnPolygon(point, outline)
+  return Math.hypot(on.x - point.x, on.z - point.z) <= OUTLINE_GRAB ? on : point
+}
+
 
 export function useSceneEditorModel() {
   const { id } = useDocumentInfo()
@@ -91,6 +109,12 @@ export function useSceneEditorModel() {
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null)
   const [openingKind, setOpeningKind] = useState<OpeningKind>('door')
   const openingSeq = useRef(1)
+  /** The cut being drawn: wall to wall, through as many corners as it takes. */
+  const [cutPoints, setCutPoints] = useState<Point2[]>([])
+  const [cutError, setCutError] = useState<CutFailure | null>(null)
+  /** Which zone the next cut divides; null means the room itself. */
+  const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null)
+  const zoneSeq = useRef(1)
   const [selectedBlocks, setSelectedBlocks] = useState<BlockRef[]>([])
   const selectedBlock = selectedBlocks.length
     ? selectedBlocks[selectedBlocks.length - 1]
@@ -213,6 +237,100 @@ export function useSceneEditorModel() {
     setDrawingPoints([])
     setMode('select')
     setSelectedRoomIndex(nextIndex)
+  }
+
+  const roomOutline = (room: DraftRoom): Point2[] =>
+    roomVertices(room).map((v) => ({ x: v.x, z: v.z }))
+
+  /** The outline the next cut divides: a zone if one is picked, else the room. */
+  const cutTarget = (room: DraftRoom): Point2[] => {
+    const zone = roomZones(room.zones).find((z) => z.key === selectedZoneKey)
+    return zone ? zone.polygon : roomOutline(room)
+  }
+
+  const freshZoneKey = (taken: ReadonlyArray<string>): string => {
+    let key = `zone-${zoneSeq.current++}`
+    while (taken.includes(key)) key = `zone-${zoneSeq.current++}`
+    return key
+  }
+
+  /**
+   * Splits the picked zone — or the whole room, the first time — along the cut.
+   *
+   * Both halves lose any authored area: the figure that was typed in described
+   * the floor before it was divided, and leaving it on either half would state
+   * a size neither one is. The trace takes over until somebody types a new one.
+   */
+  const finishZoneCut = () => {
+    if (selectedRoomIndex === null) return
+    const room = draft?.rooms?.[selectedRoomIndex]
+    if (!room) return
+
+    const existing = roomZones(room.zones)
+    const result = cutPolygon(cutTarget(room), cutPoints)
+    if (!result.ok) {
+      setCutError(result.reason)
+      return
+    }
+
+    const [near, far] = result.parts
+    const divided = existing.find((zone) => zone.key === selectedZoneKey) ?? null
+    const keys = existing.map((zone) => zone.key)
+    const tints = existing.filter((zone) => zone.key !== divided?.key).map((zone) => zone.color)
+
+    const kept: Zone = {
+      key: divided?.key ?? freshZoneKey(keys),
+      name: divided?.name ?? room.name,
+      roomType: (divided?.roomType ?? room.roomType) as RoomType,
+      areaSqFt: null,
+      areaSqM: null,
+      color: divided?.color ?? nextZoneTint(tints),
+      polygon: near,
+    }
+    const added: Zone = {
+      key: freshZoneKey([...keys, kept.key]),
+      name: 'New zone',
+      roomType: kept.roomType,
+      areaSqFt: null,
+      areaSqM: null,
+      color: nextZoneTint([...tints, kept.color]),
+      polygon: far,
+    }
+
+    const zones = divided
+      ? existing.flatMap((zone) => (zone.key === divided.key ? [kept, added] : [zone]))
+      : [kept, added]
+
+    patchRoom(selectedRoomIndex, (r) => ({ ...r, zones }))
+    setCutPoints([])
+    setCutError(null)
+    setSelectedZoneKey(added.key)
+    setMode('select')
+  }
+
+  const updateZone = (key: string, update: Partial<Zone>) => {
+    if (selectedRoomIndex === null) return
+    patchRoom(selectedRoomIndex, (room) => ({
+      ...room,
+      zones: roomZones(room.zones).map((zone) =>
+        zone.key === key ? { ...zone, ...update } : zone,
+      ),
+    }))
+  }
+
+  /**
+   * Puts the room back together as one space.
+   *
+   * All of them at once, never one: zones tile the room, so removing a single
+   * one would leave a hole in the floor that nothing owns. Recutting is two
+   * clicks, and undo still has the old set.
+   */
+  const clearZones = () => {
+    if (selectedRoomIndex === null) return
+    patchRoom(selectedRoomIndex, (room) => ({ ...room, zones: [] }))
+    setSelectedZoneKey(null)
+    setCutPoints([])
+    setCutError(null)
   }
 
   // Openings are addressed by arc length, so any outline edit must re-anchor
@@ -513,6 +631,23 @@ export function useSceneEditorModel() {
       })
       return
     }
+
+    if (mode === 'cut-zone') {
+      const room = selectedRoomIndex === null ? null : draft?.rooms?.[selectedRoomIndex]
+      if (!room) return
+      const outline = cutTarget(room)
+
+      setCutError(null)
+      setCutPoints((points) => {
+        const last = points[points.length - 1]
+        if (last && last.x === x && last.z === z) return points
+        // The first point belongs on a wall, and aiming at one with a mouse
+        // lands near it rather than on it. Corners after that stay where they
+        // were put — a corner pulled onto the outline would leave the room.
+        return [...points, points.length === 0 ? pullToOutline(outline, { x, z }) : { x, z }]
+      })
+      return
+    }
   }
 
   const save = async () => {
@@ -607,8 +742,10 @@ export function useSceneEditorModel() {
     onSetMode: (next: EditorMode) => {
       setMode(next)
       setDrawingPoints([])
+      setCutPoints([])
+      setCutError(null)
       if (next !== 'select') setSelectedBlock(null)
-      if (next === 'draw-room') setPlanMode(true)
+      if (next === 'draw-room' || next === 'cut-zone') setPlanMode(true)
       if (next === 'floor-level') {
         // Seen from straight above, the drag ray is parallel to the plane it moves.
         setPlanMode(false)
@@ -622,6 +759,8 @@ export function useSceneEditorModel() {
     onUndo: undo,
     onEscape: () => {
       setDrawingPoints([])
+      setCutPoints([])
+      setCutError(null)
       if (mode !== 'select') {
         setMode('select')
         return
@@ -637,13 +776,19 @@ export function useSceneEditorModel() {
       setSelectedRoomIndex(index)
       setSelectedBlock(null)
       setSelectedNodePaths([])
+      setSelectedZoneKey(null)
+      setCutPoints([])
+      setCutError(null)
       setMode('select')
     },
     onExitRoom: () => {
       setSelectedRoomIndex(null)
       setSelectedBlock(null)
       setSelectedOpeningId(null)
+      setSelectedZoneKey(null)
       setDrawingPoints([])
+      setCutPoints([])
+      setCutError(null)
       setMode('select')
     },
     onSelectBlock: setSelectedBlock,
@@ -672,6 +817,24 @@ export function useSceneEditorModel() {
       setDrawingPoints([])
       setMode('select')
     },
+
+    zones: selectedRoomIndex === null ? [] : roomZones(draft?.rooms?.[selectedRoomIndex]?.zones),
+    selectedZoneKey,
+    cutPoints,
+    cutError,
+    onSelectZone: setSelectedZoneKey,
+    onFinishZoneCut: finishZoneCut,
+    onCancelZoneCut: () => {
+      setCutPoints([])
+      setCutError(null)
+      setMode('select')
+    },
+    onUndoCutPoint: () => {
+      setCutError(null)
+      setCutPoints((points) => points.slice(0, -1))
+    },
+    onUpdateZone: updateZone,
+    onClearZones: clearZones,
     onAddBlock: addBlock,
     onUpdateBlock: updateBlock,
     onRemoveBlock: removeBlock,

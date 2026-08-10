@@ -45,6 +45,8 @@ export const MODE_HINTS: Partial<Record<EditorMode, string>> = {
   'block-roof':
     'Drag a rectangle over the roof area. The volume is created at roof height — drag its arrows to adjust.',
   'place-opening': 'Click a wall of the generated room to drop the opening there.',
+  'cut-zone':
+    'The 2D plan turns on automatically. Click a wall to start the dividing line, click your way across the floor, and finish on any wall. Nothing is built along it — it only says where one zone ends.',
   'floor-level':
     'Drag the blue plane to the level people walk on, or click a surface of the model to take its height. Press Done when it sits right.',
 }

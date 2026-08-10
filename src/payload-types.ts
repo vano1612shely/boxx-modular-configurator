@@ -201,6 +201,9 @@ export interface BuildingModel {
    */
   unitCount: number;
   restroomCount?: number | null;
+  /**
+   * Overall size of the building. Rooms carry their own floor area and will not add up to this — walls, corridors and plant are not in any room.
+   */
   sqft?: number | null;
   /**
    * Display size, e.g. 24' x 56'.

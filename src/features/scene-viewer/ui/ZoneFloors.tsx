@@ -85,7 +85,12 @@ function ZoneFloor({
         // The one you are in goes clear. Its tint was there to say "this is a
         // separate place you could go to", and once you are in it the answer is
         // the panel on the left, not paint on the floor you are standing on.
-        opacity={active ? 0 : hovered ? 0.22 : 0.12}
+        //
+        // 0.18 rather than something lighter: the floor is a warm sand, and a
+        // cool tint any fainter than this lands as plain grey — which breaks
+        // the one thing the colour is for, tying a name in the panel to a piece
+        // of floor in the room.
+        opacity={active ? 0 : hovered ? 0.26 : 0.18}
         depthWrite={false}
       />
     </mesh>

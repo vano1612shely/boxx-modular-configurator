@@ -4100,106 +4100,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.quiz_settings": {
-      "name": "quiz_settings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "logo_id": {
-          "name": "logo_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "step1_eyebrow": {
-          "name": "step1_eyebrow",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'Find your solution'"
-        },
-        "step1_title": {
-          "name": "step1_title",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'What kind of building do you need?'"
-        },
-        "step1_description": {
-          "name": "step1_description",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "step2_title": {
-          "name": "step2_title",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'How much space do you need?'"
-        },
-        "step2_description": {
-          "name": "step2_description",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp(3) with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp(3) with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "quiz_settings_logo_idx": {
-          "name": "quiz_settings_logo_idx",
-          "columns": [
-            {
-              "expression": "logo_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "quiz_settings_logo_id_images_id_fk": {
-          "name": "quiz_settings_logo_id_images_id_fk",
-          "tableFrom": "quiz_settings",
-          "tableTo": "images",
-          "columnsFrom": [
-            "logo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.display_settings": {
       "name": "display_settings",
       "schema": "",
@@ -4380,6 +4280,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "25d8885b-67eb-4756-9e02-b9b76e0ac4ee",
+  "id": "4fabbbf7-3c16-41a4-b427-8d6428ca9e07",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

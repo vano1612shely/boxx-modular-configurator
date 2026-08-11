@@ -7,6 +7,7 @@ import { damp, dampAngle } from 'maath/easing'
 import {
   Suspense,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -34,6 +35,7 @@ import {
   clampPoseToRegion,
   progressiveEdgeSnapRegion,
   reachableFloor,
+  type Region,
   roomFloorTopY,
   roomsOnFloor,
 } from '@/entities/building'
@@ -397,6 +399,28 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
   const introPlayedRef = useRef(false)
 
+  /**
+   * The frame loop owns where this piece sits and which way it faces, and React
+   * must not also write them.
+   *
+   * `position` and `rotation` props are re-applied on every render, and a drag
+   * renders on every pointer move — so the piece was being snapped to the raw
+   * pointer while the damping below was left with nothing to smooth. Some frames
+   * got a snap and some got an eased step, which is what a stuttering drag is
+   * made of. The turn had it worse: the progressive edge snap nudges the angle
+   * continuously, so it was being jumped every move too.
+   *
+   * Seeded once on the way in; after that the loop eases to whatever the store
+   * says, which is the whole reason the damping is there.
+   */
+  useLayoutEffect(() => {
+    groupRef.current?.position.set(placement.x, floorY, placement.z)
+    rotationRef.current?.rotation.set(0, MathUtils.degToRad(placement.rotationYDeg), 0)
+    // Mount only. Later changes are the frame loop's business, and listing them
+    // here would put the snap straight back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useFrame((_, delta) => {
     const group = groupRef.current
     const rotation = rotationRef.current
@@ -428,6 +452,14 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
   const footprint = footprintOf(pkg.id, pkg.footprint)
 
+  // Asked once per pose rather than once per render: the turn button re-reads
+  // it on every commit, and working out the reachable floor classifies every
+  // zone edge in the room.
+  const turnFloor = useMemo(
+    () => reachableFloor(room, pkg.compatibleRoomTypes, placement.x, placement.z),
+    [room, pkg.compatibleRoomTypes, placement.x, placement.z],
+  )
+
   /** Where a turn would land, or null when there is something in the way. */
   const resolveRotation = (nextDeg: number) => {
     const detented =
@@ -435,13 +467,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
         ? (Math.round(nextDeg / 90) * 90 + 360) % 360
         : nextDeg
 
-    const clamped = clampPoseToRegion(
-      placement.x,
-      placement.z,
-      detented,
-      footprint,
-      reachableFloor(room, pkg.compatibleRoomTypes, placement.x, placement.z),
-    )
+    const clamped = clampPoseToRegion(placement.x, placement.z, detented, footprint, turnFloor)
 
     return collidesWithAny({ ...clamped, rotationYDeg: detented, footprint }, obstacles)
       ? null
@@ -462,9 +488,11 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const nextQuarter = signedDegrees(placement.rotationYDeg) + 90
   const canTurn = isSelected && !isDragging && resolveRotation(nextQuarter) !== null
 
+  // Neither group carries a `position` or `rotation` prop — see the layout
+  // effect above for why the frame loop has to be the only writer.
   return (
-    <group ref={groupRef} position={[placement.x, floorY, placement.z]}>
-      <group ref={rotationRef} rotation={[0, MathUtils.degToRad(placement.rotationYDeg), 0]}>
+    <group ref={groupRef}>
+      <group ref={rotationRef}>
         <group
           onPointerDown={handlePointerDown}
           onPointerOver={(event) => {
@@ -620,6 +648,11 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
   const lastValidRef = useRef<{ x: number; z: number; rotationYDeg: number } | null>(null)
   // Rotation at drag start; the progressive snap always blends from it.
   const freeRotationRef = useRef<{ instanceId: string; rotationYDeg: number } | null>(null)
+  // The floor this piece may cover, worked out once. It cannot change while the
+  // drag runs — the reachable zones are exactly the ones it cannot be carried
+  // out of — and rebuilding it per pointer move classified every zone edge
+  // twice for an answer that was already known.
+  const dragFloorRef = useRef<{ instanceId: string; region: Region } | null>(null)
 
   const endDrag = () => {
     const state = useConfiguration.getState()
@@ -633,6 +666,7 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
 
     lastValidRef.current = null
     freeRotationRef.current = null
+    dragFloorRef.current = null
     state.endDrag()
     useConfiguratorSession.getState().setInteractionLock(false)
     setSceneCursor('default')
@@ -662,16 +696,22 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
       }
     }
 
-    // Worked out from where the thing already stands, every move: the zones it
-    // may cross into depend on which one it is in, and a drag that reaches a
-    // friendly zone through an unfriendly one has to be stopped at the line
+    // Anchored on where the piece stood when the drag began: a drag that reaches
+    // a friendly zone through an unfriendly one has to be stopped at the line
     // rather than allowed to land on the far side of it.
+    if (dragFloorRef.current?.instanceId !== dragging) {
+      dragFloorRef.current = {
+        instanceId: dragging,
+        region: reachableFloor(room, pkg.compatibleRoomTypes, placement.x, placement.z),
+      }
+    }
+
     const snapped = progressiveEdgeSnapRegion(
       pointX + grabOffsetRef.current.x,
       pointZ + grabOffsetRef.current.z,
       freeRotationRef.current.rotationYDeg,
       footprint,
-      reachableFloor(room, pkg.compatibleRoomTypes, placement.x, placement.z),
+      dragFloorRef.current.region,
     )
 
     const obstacles = obstaclesFor(

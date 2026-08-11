@@ -93,13 +93,18 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   )
 
   /**
-   * A section per zone, or just the one the visitor picked.
+   * What is on offer for each piece of floor, and whether it would fit.
    *
-   * Whether a package fits is asked of the whole floor it is allowed on rather
-   * than of one zone: a table welcome in both halves of an open-plan room may
-   * lie across the line between them, and calling it too large would be a lie.
+   * Deliberately blind to what has been placed: answering "does this fit" walks
+   * the floor a dozen times per package, and `placed` changes on every pointer
+   * move of a drag. Tying the two together made every drag re-measure the whole
+   * catalogue, which is exactly as slow as it sounds.
+   *
+   * Fit is asked of the whole floor a package is allowed on rather than of one
+   * zone: a table welcome in both halves of an open-plan room may lie across
+   * the line between them, and calling it too large would be a lie.
    */
-  const sections = useMemo<FloorSection[]>(() => {
+  const catalogue = useMemo(() => {
     const room = focusedRoom
     if (!room) return []
 
@@ -117,32 +122,49 @@ export function usePackagePlacementModel({ building, packages }: Args) {
         {
           key: room.key,
           name: room.name,
-          color: null,
-          zone: null,
+          color: null as string | null,
+          zone: null as Zone | null,
           offers,
           groups: splitByRecommendation(offers, room.roomType),
-          placed: placedInFocusedRoom,
         },
       ]
     }
 
-    return (activeZone ? [activeZone] : room.zones).map((zone) => {
+    return room.zones.map((zone) => {
       const offers = offersFor((types) => zoneAccepts(zone, types))
       return {
         key: zone.key,
         name: zone.name,
-        color: zone.color,
-        zone,
+        color: zone.color as string | null,
+        zone: zone as Zone | null,
         offers,
         groups: splitByRecommendation(offers, zone.roomType),
-        placed: placedInFocusedRoom.filter(
-          (item) => zoneAt(room, item.x, item.z)?.key === zone.key,
-        ),
       }
     })
-  }, [focusedRoom, packages, activeZone, placedInFocusedRoom])
+  }, [focusedRoom, packages])
 
-  const offers = useMemo(() => sections.flatMap((section) => section.offers), [sections])
+  /** Which of them to show, and what is standing in each. Cheap, so it may follow a drag. */
+  const sections = useMemo<FloorSection[]>(() => {
+    const room = focusedRoom
+    if (!room) return []
+
+    const shown = activeZone
+      ? catalogue.filter((section) => section.zone?.key === activeZone.key)
+      : catalogue
+
+    return shown.map((section) => ({
+      ...section,
+      placed: section.zone
+        ? placedInFocusedRoom.filter(
+            (item) => zoneAt(room, item.x, item.z)?.key === section.zone?.key,
+          )
+        : placedInFocusedRoom,
+    }))
+  }, [catalogue, focusedRoom, activeZone, placedInFocusedRoom])
+
+  // From the catalogue, not from `sections`: this feeds the preloader, and each
+  // preload walks suspend-react's whole global cache. It must not churn.
+  const offers = useMemo(() => catalogue.flatMap((section) => section.offers), [catalogue])
 
   useEffect(() => {
     for (const offer of offers) {
@@ -188,7 +210,7 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     isSplit: sections.length > 1,
     sections,
     offers,
-    isEmpty: offers.length === 0,
+    isEmpty: sections.every((section) => section.offers.length === 0),
     placedInFocusedRoom,
     onAddPackage: addToSection,
     onRemovePackage: removePackage,

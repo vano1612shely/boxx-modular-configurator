@@ -2,7 +2,8 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
-import type { AreaUnit } from '@/shared/lib'
+import { QUIZ_COPY_DEFAULTS, type QuizCopy } from '@/modules/shared/quiz-copy'
+import { assetUrl, type AreaUnit } from '@/shared/lib'
 import type { IntakeLine } from '@/features/building-intake'
 import type { IntegrationOptions } from '@/features/quote-summary'
 
@@ -42,6 +43,38 @@ export async function getIntegrationOptions(): Promise<IntegrationOptions> {
   return {
     enablePostMessage: settings.enablePostMessage ?? true,
     targetOrigin: settings.targetOrigin ?? '*',
+  }
+}
+
+/** An emptied box means "use the wording nobody has changed", not "show nothing". */
+function textOr(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() !== '' ? value : fallback
+}
+
+/**
+ * The wording on the two questions asked before the building is shown.
+ *
+ * Descriptions are the exception to the rule above: they have no default, and
+ * empty is the answer that hides them.
+ */
+export async function getQuizCopy(): Promise<QuizCopy> {
+  const payload = await getPayload({ config })
+  const settings = await payload.findGlobal({ slug: 'quiz-settings', depth: 1 })
+
+  const step1 = settings.step1 ?? {}
+  const step2 = settings.step2 ?? {}
+
+  return {
+    logoUrl: typeof settings.logo === 'object' ? assetUrl(settings.logo) : null,
+    step1: {
+      eyebrow: textOr(step1.eyebrow, QUIZ_COPY_DEFAULTS.step1.eyebrow),
+      title: textOr(step1.title, QUIZ_COPY_DEFAULTS.step1.title),
+      description: typeof step1.description === 'string' ? step1.description : '',
+    },
+    step2: {
+      title: textOr(step2.title, QUIZ_COPY_DEFAULTS.step2.title),
+      description: typeof step2.description === 'string' ? step2.description : '',
+    },
   }
 }
 

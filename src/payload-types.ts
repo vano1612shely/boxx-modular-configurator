@@ -103,10 +103,12 @@ export interface Config {
   fallbackLocale: null;
   globals: {
     'integration-settings': IntegrationSetting;
+    'quiz-settings': QuizSetting;
     'display-settings': DisplaySetting;
   };
   globalsSelect: {
     'integration-settings': IntegrationSettingsSelect<false> | IntegrationSettingsSelect<true>;
+    'quiz-settings': QuizSettingsSelect<false> | QuizSettingsSelect<true>;
     'display-settings': DisplaySettingsSelect<false> | DisplaySettingsSelect<true>;
   };
   locale: null;
@@ -1301,6 +1303,42 @@ export interface IntegrationSetting {
   createdAt?: string | null;
 }
 /**
+ * Headings on the two questions asked before the building is shown. The choices themselves come from the catalogue.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "quiz-settings".
+ */
+export interface QuizSetting {
+  id: number;
+  /**
+   * Shown above the questions. Left empty, nothing stands in its place.
+   */
+  logo?: (number | null) | Image;
+  step1?: {
+    /**
+     * The small line above the question.
+     */
+    eyebrow?: string | null;
+    title?: string | null;
+    /**
+     * Optional. A sentence under the question; empty shows nothing.
+     */
+    description?: string | null;
+  };
+  /**
+   * The small line above this one is the building line the visitor just picked, so it is not set here.
+   */
+  step2?: {
+    title?: string | null;
+    /**
+     * Optional. A sentence under the question; empty shows nothing.
+     */
+    description?: string | null;
+  };
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
  * How figures are shown to visitors.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1330,6 +1368,29 @@ export interface IntegrationSettingsSelect<T extends boolean = true> {
       };
   enablePostMessage?: T;
   targetOrigin?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "quiz-settings_select".
+ */
+export interface QuizSettingsSelect<T extends boolean = true> {
+  logo?: T;
+  step1?:
+    | T
+    | {
+        eyebrow?: T;
+        title?: T;
+        description?: T;
+      };
+  step2?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

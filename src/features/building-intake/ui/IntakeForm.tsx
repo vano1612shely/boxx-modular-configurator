@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 
+import type { QuizCopy } from '@/modules/shared/quiz-copy'
 import { Card, Eyebrow, Field, OptionGroup, Pill, Progress } from '@/shared/ui/boxx'
 import { Match, Show, Switch } from '@/shared/ui/control-flow'
 
@@ -21,6 +22,8 @@ type Props = {
   region?: string
   /** Answers to open on, when the visitor came back to change them. */
   answers?: IntakeAnswers
+  /** Headings, from the admin. Already resolved, so every string here is real. */
+  copy: QuizCopy
 }
 
 const UNIT_LABEL = { offices: 'Offices', classrooms: 'Classrooms' } as const
@@ -28,7 +31,10 @@ const UNIT_LABEL = { offices: 'Offices', classrooms: 'Classrooms' } as const
 const heading =
   'text-[1.5625rem] leading-[1.3] font-medium text-foreground desktop:text-[2.1875rem]'
 
-export function IntakeForm({ lines, region, answers }: Props) {
+/** Wraps at the reader's own line length, and keeps the blank lines it was typed with. */
+const description = 'max-w-prose text-sm whitespace-pre-line text-muted-foreground'
+
+export function IntakeForm({ lines, region, answers, copy }: Props) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   // Opens on step 1 rather than jumping to the sizing: the complaint was that
@@ -78,14 +84,28 @@ export function IntakeForm({ lines, region, answers }: Props) {
       hairline
       className="flex w-full max-w-xl flex-col gap-block desktop:p-block"
     >
+      <Show when={copy.logoUrl}>
+        {(url) => (
+          // Decorative: the question below it is the page's heading, and a brand
+          // mark read out before it would only get in the way. Plain <img> for
+          // the same reason MediaTile uses one — the file is served by this app
+          // and sized in CSS, so a loader in front of it buys nothing.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="" className="h-8 w-auto self-start object-contain" />
+        )}
+      </Show>
+
       <Progress step={step} total={2} />
 
       <Switch>
         <Match when={step === 1}>
           <div className="flex flex-col gap-block">
             <div className="flex flex-col gap-2">
-              <Eyebrow>Find your solution</Eyebrow>
-              <h1 className={heading}>What kind of building do you need?</h1>
+              <Eyebrow>{copy.step1.eyebrow}</Eyebrow>
+              <h1 className={heading}>{copy.step1.title}</h1>
+              <Show when={copy.step1.description}>
+                {(text) => <p className={description}>{text}</p>}
+              </Show>
             </div>
 
             <OptionGroup
@@ -100,10 +120,15 @@ export function IntakeForm({ lines, region, answers }: Props) {
         <Match when={step === 2}>
           <div className="flex flex-col gap-block">
             <div className="flex flex-col gap-2">
+              {/* Not editable: this is the line just picked, and saying anything
+                  else here would lose the one thing it confirms. */}
               <Show when={line?.name}>
                 <Eyebrow>{line?.name}</Eyebrow>
               </Show>
-              <h1 className={heading}>How much space do you need?</h1>
+              <h1 className={heading}>{copy.step2.title}</h1>
+              <Show when={copy.step2.description}>
+                {(text) => <p className={description}>{text}</p>}
+              </Show>
             </div>
 
             <div className="flex flex-col gap-card">

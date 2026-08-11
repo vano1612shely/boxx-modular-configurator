@@ -4,7 +4,12 @@ import { changeSelectionHref, IntakeForm } from '@/features/building-intake'
 import { Callout, CenteredPanel } from '@/shared/ui/boxx'
 
 import { getBuildingScene } from '../api/get-building-scene'
-import { getDefaultAreaUnit, getIntakeLines, getIntegrationOptions } from '../api/get-catalog'
+import {
+  getDefaultAreaUnit,
+  getIntakeLines,
+  getIntegrationOptions,
+  getQuizCopy,
+} from '../api/get-catalog'
 import { getPackagesForLine } from '../api/get-packages'
 import { resolveRegionScope } from '../api/regions'
 import { ConfiguratorScreen } from './ConfiguratorScreen'
@@ -40,11 +45,11 @@ export async function ConfiguratorView({ searchParams }: Props) {
   const answers = { line: building, units, restrooms }
 
   if (!building || changing) {
-    const lines = await getIntakeLines(region)
+    const [lines, copy] = await Promise.all([getIntakeLines(region), getQuizCopy()])
 
     return (
       <main className="flex min-h-dvh items-center justify-center bg-background p-4">
-        <IntakeForm lines={lines} region={regionCode} answers={answers} />
+        <IntakeForm lines={lines} region={regionCode} answers={answers} copy={copy} />
       </main>
     )
   }

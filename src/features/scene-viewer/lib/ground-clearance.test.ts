@@ -3,7 +3,13 @@ import { PerspectiveCamera } from 'three'
 import * as THREE from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { eyeHeight, groundOffsetLimit, GROUND_MARGIN, type EyePose } from './ground-clearance'
+import {
+  eyeHeight,
+  groundOffsetLimit,
+  GROUND_MARGIN,
+  maxPolarForClearance,
+  type EyePose,
+} from './ground-clearance'
 
 beforeAll(() => {
   CameraControlsImpl.install({ THREE })
@@ -98,5 +104,67 @@ describe('groundOffsetLimit', () => {
   // would read as "slide this far down", which is the opposite of the truth.
   it('never goes negative when the eye is already under', () => {
     expect(groundOffsetLimit({ radius: 2, phi: Math.PI / 2, targetY: -3 }, 0)).toBe(0)
+  })
+})
+
+describe('maxPolarForClearance', () => {
+  const GROUND = 0.4
+
+  /** Eye height for a plain orbit, which is what this limit governs. */
+  const eyeAt = (radius: number, phi: number, targetY: number) =>
+    eyeHeight({ radius, phi, targetY }, 0)
+
+  it('lets the orbit tip all the way when the eye cannot reach the floor', () => {
+    // Target a metre and a half up, orbiting closer than that: even level with
+    // the target the eye stays above the floor.
+    expect(maxPolarForClearance(0.5, 1.5, GROUND)).toBe(Math.PI)
+  })
+
+  it('lands exactly where the eye meets the floor, at the radius asked about', () => {
+    const limit = maxPolarForClearance(4, 1.2, GROUND)
+
+    expect(limit).toBeGreaterThan(0)
+    expect(eyeAt(4, limit, 1.2)).toBeCloseTo(GROUND + GROUND_MARGIN, 6)
+  })
+
+  // The case the visitor actually hits: looking at something standing on the
+  // floor, where tipping the orbit is the only thing lowering the eye. One
+  // authored angle cannot serve both radii here.
+  it('tightens as the visitor zooms in on something at floor level', () => {
+    const far = maxPolarForClearance(12, GROUND, GROUND)
+    const near = maxPolarForClearance(2, GROUND, GROUND)
+
+    expect(near).toBeLessThan(far)
+    expect(eyeAt(2, near, GROUND)).toBeCloseTo(GROUND + GROUND_MARGIN, 6)
+    expect(eyeAt(12, far, GROUND)).toBeCloseTo(GROUND + GROUND_MARGIN, 6)
+  })
+
+  // Above the floor by more than the orbit is long, tipping past level still
+  // leaves the eye clear — the limit is a height question, not an angle one.
+  it('allows past level when the target sits well above the floor', () => {
+    expect(maxPolarForClearance(4, 1.2, GROUND)).toBeGreaterThan(Math.PI / 2)
+  })
+
+  it('refuses to tip at all when even looking straight down would be too low', () => {
+    // Target already under the floor and the orbit too short to lift the eye out.
+    expect(maxPolarForClearance(0.1, -1, GROUND)).toBe(0)
+  })
+
+  it('holds the eye clear at every angle it allows', () => {
+    for (const radius of [0.5, 2, 6, 20]) {
+      for (const targetY of [-0.5, 0.4, 1.2, 3]) {
+        const limit = maxPolarForClearance(radius, targetY, GROUND)
+        if (limit === 0) continue
+        for (const t of [0.25, 0.5, 0.9, 1]) {
+          expect(eyeAt(radius, limit * t, targetY)).toBeGreaterThanOrEqual(
+            GROUND + GROUND_MARGIN - 1e-6,
+          )
+        }
+      }
+    }
+  })
+
+  it('answers for a degenerate radius rather than returning NaN', () => {
+    expect(maxPolarForClearance(0, 1, GROUND)).toBe(Math.PI)
   })
 })

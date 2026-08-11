@@ -47,3 +47,27 @@ export function groundOffsetLimit(pose: EyePose, groundY: number): number {
   const headroom = eyeHeight(pose, 0) - (groundY + GROUND_MARGIN)
   return Math.max(0, headroom / drop)
 }
+
+/**
+ * How far the orbit may tip before the eye itself drops through the floor.
+ *
+ * `maxPolarAngle` alone cannot answer this. It is one fixed angle, while how
+ * low a given angle puts the eye depends entirely on the orbit radius: 85° is
+ * a comfortable three-quarter view from across the site and is under the floor
+ * from two metres out. Zooming in and then dragging is exactly that sequence,
+ * which is how a visitor ends up looking at the underside of a floor slab.
+ *
+ * So the answer is recomputed from the live radius: the largest angle whose
+ * eye still clears the floor, or `PI` when the radius is short enough that no
+ * angle can reach it. Zero when even looking straight down would not clear it,
+ * which is the honest answer to an impossible ask rather than a silent pass.
+ */
+export function maxPolarForClearance(radius: number, targetY: number, groundY: number): number {
+  if (!(radius > 1e-6)) return Math.PI
+
+  const needed = (groundY + GROUND_MARGIN - targetY) / radius
+  if (needed <= -1) return Math.PI
+  if (needed >= 1) return 0
+
+  return Math.acos(needed)
+}

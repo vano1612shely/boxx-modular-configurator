@@ -1,7 +1,7 @@
 'use client'
 
 import { CameraControls } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import CameraControlsImpl from 'camera-controls'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, MathUtils, Spherical, Vector3 } from 'three'
@@ -13,7 +13,7 @@ import { useConfiguratorSession, type BuildingBounds } from '@/entities/configur
 import { applyPreset } from '../lib/apply-preset'
 import { cameraLimits } from '../lib/camera-limits'
 import { clampOffsetToLimit } from '../lib/clamp-offset'
-import { groundOffsetLimit } from '../lib/ground-clearance'
+import { groundOffsetLimit, maxPolarForClearance } from '../lib/ground-clearance'
 import { offsetLimit, panSpeedFactor } from '../lib/pan-resistance'
 import { quarterTurn } from '../lib/quarter-turn'
 import { pinPose } from '../lib/pin-pose'
@@ -122,9 +122,30 @@ export function CameraRig({
     controls.polarRotateSpeed = polarRotateSpeed(camera.minPolarDeg, camera.maxPolarDeg)
   }, [size, camera])
 
-  // The floor under whatever is being looked at: the site for the building, the
-  // storey's own base for a storey, the room's walkable level for a room.
-  const groundY = scope ? scope.min[1] : null
+  /**
+   * The level people walk on, which is not the bottom of anything.
+   *
+   * `scope.min[1]` is the lowest geometry in view — the underside of the
+   * chassis, the site plate, whatever the model happens to reach down to. It
+   * sits well below the floor, and holding the eye above *it* let the camera
+   * settle in the gap and look up through the floor slab at the room above.
+   *
+   * The walkable level is authored: a storey carries its own, a room carries
+   * the level its shell is built on, and a building without storeys is read
+   * from the rooms standing on it. Only when there are no rooms at all is there
+   * nothing better than the geometry.
+   */
+  const groundY = useMemo(() => {
+    if (focusedRoom) return focusedRoom.shell.floorY
+    if (previewedRoom) return previewedRoom.shell.floorY
+    if (floor) return floor.floorY
+
+    const levels = building.rooms.map((room) => room.shell.floorY)
+    if (levels.length > 0) return Math.min(...levels)
+
+    return scope ? scope.min[1] : null
+  }, [focusedRoom, previewedRoom, floor, building.rooms, scope])
+
   const groundRef = useRef<number | null>(null)
 
   // Declared above the listeners so it has landed before any of them can fire,
@@ -134,6 +155,35 @@ export function CameraRig({
   }, [groundY])
 
   const fov = camera.fov
+  const authoredMaxPolar = MathUtils.degToRad(camera.maxPolarDeg)
+
+  /**
+   * Re-tightens the tip limit every frame against the radius it is currently
+   * true for.
+   *
+   * A single authored `maxPolarAngle` cannot hold: the same angle that frames
+   * the building nicely from across the site puts the eye under the floor from
+   * two metres out, so zooming in and then dragging walks straight through it.
+   * Recomputed here because the radius changes under the visitor's hand, and
+   * written on the controls rather than through the prop because React only
+   * re-renders when something it knows about changes — a dolly is not that.
+   */
+  useFrame(() => {
+    const controls = controlsRef.current
+    const ground = groundRef.current
+    if (!controls || ground === null) {
+      if (controls) controls.maxPolarAngle = authoredMaxPolar
+      return
+    }
+
+    const { radius } = controls.getSpherical(SPHERICAL_SCRATCH, true)
+    const { y } = controls.getTarget(TARGET_SCRATCH, true)
+
+    controls.maxPolarAngle = Math.min(
+      authoredMaxPolar,
+      maxPolarForClearance(radius, y, ground),
+    )
+  })
 
   useEffect(() => {
     const controls = controlsRef.current
@@ -382,7 +432,7 @@ export function CameraRig({
       minDistance={limits.min}
       maxDistance={limits.max}
       minPolarAngle={minPolar}
-      maxPolarAngle={MathUtils.degToRad(camera.maxPolarDeg)}
+      maxPolarAngle={authoredMaxPolar}
       smoothTime={SMOOTH_TIME}
       draggingSmoothTime={DRAGGING_SMOOTH_TIME}
     />

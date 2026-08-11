@@ -25,7 +25,7 @@ import {
   Raycaster,
   Vector2,
   Vector3,
-  type Camera,
+
   type Group,
   type Object3D,
 } from 'three'
@@ -49,6 +49,11 @@ import { For, Show } from '@/shared/ui/control-flow'
 import { setSceneCursor } from '@/shared/ui/scene-cursor'
 
 import { collidesWithAny } from '../lib/placement-geometry'
+import {
+  toolbarPositioner,
+  TOOLBAR_REACH,
+  TOOLBAR_REACH_OPEN,
+} from '../lib/toolbar-position'
 import { footprintOf, setMeasuredFootprint } from '../lib/measured-footprints'
 
 const ROTATION_TICKS = [-180, -90, 0, 90, 180] as const
@@ -240,61 +245,6 @@ const TURN = 0.12
 /** The little swell as a piece arrives. Its own thing, not a response to input. */
 const POP_IN = 0.14
 
-const TOOLBAR_MARGIN_X = 130
-/**
- * Asymmetric, because the toolbar hangs off the bottom of its anchor point: it
- * grows upward, and the slider grows above it again, so all of that has to fit
- * over the anchor while almost nothing needs to fit under it.
- */
-/**
- * Clears the header column, not just the header bar. When the selected item is
- * off-frame the toolbar parks at this margin — top-left — which is exactly where
- * the room's facts panel sits, and the header paints over the canvas.
- */
-const TOOLBAR_MARGIN_TOP = 220
-const TOOLBAR_MARGIN_BOTTOM = 16
-
-const ANCHOR = new Vector3()
-const CAMERA_POS = new Vector3()
-const CAMERA_DIR = new Vector3()
-const TO_ANCHOR = new Vector3()
-
-/**
- * drei pins <Html> to a projected world point, so zooming in walks the toolbar
- * off the edge and out of reach. Same projection, then clamped into the
- * viewport so it slides along the border instead of leaving.
- */
-function keepOnScreen(
-  el: Object3D,
-  camera: Camera,
-  size: { width: number; height: number },
-): number[] {
-  const anchor = ANCHOR.setFromMatrixPosition(el.matrixWorld)
-  const cameraPos = CAMERA_POS.setFromMatrixPosition(camera.matrixWorld)
-
-  // Behind the near plane, project() mirrors the point through the origin,
-  // which would pin the bar to the opposite edge from the item it belongs to.
-  const inFront =
-    TO_ANCHOR.subVectors(anchor, cameraPos).dot(camera.getWorldDirection(CAMERA_DIR)) > 0
-
-  const projected = anchor.project(camera)
-  const ndcX = inFront ? projected.x : -projected.x
-  const ndcY = inFront ? projected.y : -projected.y
-
-  const marginX = Math.min(TOOLBAR_MARGIN_X, size.width / 2)
-  const marginTop = Math.min(TOOLBAR_MARGIN_TOP, size.height / 2)
-  const marginBottom = Math.min(TOOLBAR_MARGIN_BOTTOM, size.height / 2)
-
-  return [
-    MathUtils.clamp(ndcX * (size.width / 2) + size.width / 2, marginX, size.width - marginX),
-    MathUtils.clamp(
-      -(ndcY * (size.height / 2)) + size.height / 2,
-      marginTop,
-      size.height - marginBottom,
-    ),
-  ]
-}
-
 /** Stored 0…360 rotation expressed as −180…180. */
 function signedDegrees(rotationYDeg: number): number {
   const wrapped = ((Math.round(rotationYDeg) % 360) + 360) % 360
@@ -454,8 +404,18 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
     damp(group.scale, 'x', 1, POP_IN, delta)
     damp(group.scale, 'y', 1, POP_IN, delta)
     damp(group.scale, 'z', 1, POP_IN, delta)
-    damp(group.position, 'x', placement.x, FOLLOW, delta)
-    damp(group.position, 'z', placement.z, FOLLOW, delta)
+
+    // Under the finger it goes exactly where the finger is. The easing below is
+    // for moves the visitor did not make by hand — a turn nudging a piece off a
+    // wall, a blocked drag being put back — where a jump would read as a glitch.
+    // Applied to a drag it only added lag to a position that was already right.
+    if (isDragging) {
+      group.position.x = placement.x
+      group.position.z = placement.z
+    } else {
+      damp(group.position, 'x', placement.x, FOLLOW, delta)
+      damp(group.position, 'z', placement.z, FOLLOW, delta)
+    }
     group.position.y = floorY
     dampAngle(rotation.rotation, 'y', MathUtils.degToRad(placement.rotationYDeg), TURN, delta)
   })
@@ -471,6 +431,11 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   }
 
   const footprint = footprintOf(pkg.id, pkg.footprint)
+
+  const positionToolbar = useMemo(
+    () => toolbarPositioner(footprint, height, rotateOpen ? TOOLBAR_REACH_OPEN : TOOLBAR_REACH),
+    [footprint, height, rotateOpen],
+  )
 
   // Asked once per pose rather than once per render: the turn button re-reads
   // it on every commit, and working out the reachable floor classifies every
@@ -548,7 +513,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
         <Html
           position={[0, height + 0.25, 0]}
           zIndexRange={[20, 0]}
-          calculatePosition={keepOnScreen}
+          calculatePosition={positionToolbar}
           // drei's own wrapper sits *at* the anchor and takes the size of what
           // is inside it, while the bar below is shifted off that anchor by
           // half its width and all of its height. The wrapper is therefore an
@@ -557,11 +522,11 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
           // The bar takes its events back on the line below.
           style={{ pointerEvents: 'none' }}
         >
-          {/* Anchored by its bottom edge, not its middle. Centred, half the bar
-              hung down over the top of the furniture it was there to change,
-              which meant clicking away to see what a change had done. drei puts
+          {/* Anchored by its bottom edge, not its middle, so the point handed
+              back above is the one edge that has to clear the piece. drei puts
               `center` on a wrapper it owns, so the shift has to be done here. */}
           <div
+
             className="pointer-events-auto flex -translate-x-1/2 -translate-y-full flex-col items-center gap-2"
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => {

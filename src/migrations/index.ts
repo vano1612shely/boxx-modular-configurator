@@ -9,6 +9,8 @@ import * as migration_20260806_200448_add_recommended_for from './20260806_20044
 import * as migration_20260806_200729_add_building_facts from './20260806_200729_add_building_facts';
 import * as migration_20260810_115345_add_area_units from './20260810_115345_add_area_units';
 import * as migration_20260811_084336_add_room_zones from './20260811_084336_add_room_zones';
+import * as migration_20260811_084654_drop_display_settings from './20260811_084654_drop_display_settings';
+import * as migration_20260811_084840_add_configurator_settings from './20260811_084840_add_configurator_settings';
 
 export const migrations = [
   {
@@ -64,6 +66,16 @@ export const migrations = [
   {
     up: migration_20260811_084336_add_room_zones.up,
     down: migration_20260811_084336_add_room_zones.down,
-    name: '20260811_084336_add_room_zones'
+    name: '20260811_084336_add_room_zones',
+  },
+  {
+    up: migration_20260811_084654_drop_display_settings.up,
+    down: migration_20260811_084654_drop_display_settings.down,
+    name: '20260811_084654_drop_display_settings',
+  },
+  {
+    up: migration_20260811_084840_add_configurator_settings.up,
+    down: migration_20260811_084840_add_configurator_settings.down,
+    name: '20260811_084840_add_configurator_settings'
   },
 ];

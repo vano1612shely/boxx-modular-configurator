@@ -103,13 +103,11 @@ export interface Config {
   fallbackLocale: null;
   globals: {
     'integration-settings': IntegrationSetting;
-    'quiz-settings': QuizSetting;
-    'display-settings': DisplaySetting;
+    'configurator-settings': ConfiguratorSetting;
   };
   globalsSelect: {
     'integration-settings': IntegrationSettingsSelect<false> | IntegrationSettingsSelect<true>;
-    'quiz-settings': QuizSettingsSelect<false> | QuizSettingsSelect<true>;
-    'display-settings': DisplaySettingsSelect<false> | DisplaySettingsSelect<true>;
+    'configurator-settings': ConfiguratorSettingsSelect<false> | ConfiguratorSettingsSelect<true>;
   };
   locale: null;
   widgets: {
@@ -1303,13 +1301,31 @@ export interface IntegrationSetting {
   createdAt?: string | null;
 }
 /**
- * The words on the questions asked before a building is shown, and on the two screens those questions can end at. The choices themselves come from the catalogue.
+ * The page itself: how it is shared, what it asks, and the units it answers in.
  *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "quiz-settings".
+ * via the `definition` "configurator-settings".
  */
-export interface QuizSetting {
+export interface ConfiguratorSetting {
   id: number;
+  meta?: {
+    /**
+     * The browser tab, the search result heading, and the bold line on a shared link.
+     */
+    title?: string | null;
+    /**
+     * The grey line under both. Around 160 characters is what a search result shows before it trims.
+     */
+    description?: string | null;
+    /**
+     * The picture a shared link unfurls with. 1200 × 630 is what most places crop to; left empty, the link unfurls without one.
+     */
+    ogImage?: (number | null) | Image;
+    /**
+     * The tab icon. A square PNG or SVG. Left empty, the app’s own icon is used.
+     */
+    favicon?: (number | null) | Image;
+  };
   /**
    * Shown above the questions. Left empty, nothing stands in its place.
    */
@@ -1325,7 +1341,7 @@ export interface QuizSetting {
      */
     description?: string | null;
     /**
-     * Names the list of lines for a screen reader, and sits above it.
+     * Names the list of lines for screen readers. Not shown on screen — the question above it does that job for everyone else.
      */
     listLabel?: string | null;
   };
@@ -1383,17 +1399,6 @@ export interface QuizSetting {
      */
     action?: string | null;
   };
-  updatedAt?: string | null;
-  createdAt?: string | null;
-}
-/**
- * How figures are shown to visitors.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "display-settings".
- */
-export interface DisplaySetting {
-  id: number;
   /**
    * Unit floor areas open in. A visitor can switch it for their own session, and their choice does not change this.
    */
@@ -1422,9 +1427,17 @@ export interface IntegrationSettingsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "quiz-settings_select".
+ * via the `definition` "configurator-settings_select".
  */
-export interface QuizSettingsSelect<T extends boolean = true> {
+export interface ConfiguratorSettingsSelect<T extends boolean = true> {
+  meta?:
+    | T
+    | {
+        title?: T;
+        description?: T;
+        ogImage?: T;
+        favicon?: T;
+      };
   logo?: T;
   step1?:
     | T
@@ -1461,15 +1474,6 @@ export interface QuizSettingsSelect<T extends boolean = true> {
         body?: T;
         action?: T;
       };
-  updatedAt?: T;
-  createdAt?: T;
-  globalType?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "display-settings_select".
- */
-export interface DisplaySettingsSelect<T extends boolean = true> {
   areaUnit?: T;
   updatedAt?: T;
   createdAt?: T;

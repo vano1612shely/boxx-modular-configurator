@@ -1,10 +1,9 @@
 import type { PayloadModule } from '../types'
 
-import { DisplaySettings } from './globals/display-settings'
-import { QuizSettings } from './globals/quiz-settings'
+import { ConfiguratorSettings } from './globals/configurator-settings'
 
 export const settingsModule: PayloadModule = {
-  globals: [QuizSettings, DisplaySettings],
+  globals: [ConfiguratorSettings],
 }
 
-export { DisplaySettings, QuizSettings }
+export { ConfiguratorSettings }

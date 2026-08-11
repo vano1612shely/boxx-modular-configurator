@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
+import { PAGE_META_DEFAULTS, type PageMeta } from '@/modules/shared/page-meta'
 import { QUIZ_COPY_DEFAULTS, type QuizCopy } from '@/modules/shared/quiz-copy'
 import { assetUrl, type AreaUnit } from '@/shared/lib'
 import type { IntakeLine } from '@/features/building-intake'
@@ -59,7 +60,7 @@ function textOr(value: unknown, fallback: string): string {
  */
 export async function getQuizCopy(): Promise<QuizCopy> {
   const payload = await getPayload({ config })
-  const settings = await payload.findGlobal({ slug: 'quiz-settings', depth: 1 })
+  const settings = await payload.findGlobal({ slug: 'configurator-settings', depth: 1 })
 
   const step1 = settings.step1 ?? {}
   const step2 = settings.step2 ?? {}
@@ -101,6 +102,30 @@ export async function getQuizCopy(): Promise<QuizCopy> {
 }
 
 /**
+ * What a link to the configurator says about itself.
+ *
+ * The title and description are written once and used for both the page's own
+ * tags and the Open Graph pair, because they answer the same question and a
+ * second copy would only be the one somebody forgot to update. Pictures have no
+ * fallback: a link is better unfurled bare than with the wrong image.
+ */
+export async function getPageMeta(): Promise<PageMeta> {
+  const payload = await getPayload({ config })
+  const settings = await payload.findGlobal({ slug: 'configurator-settings', depth: 1 })
+  const meta = settings.meta ?? {}
+
+  const favicon = typeof meta.favicon === 'object' ? meta.favicon : null
+
+  return {
+    title: textOr(meta.title, PAGE_META_DEFAULTS.title),
+    description: textOr(meta.description, PAGE_META_DEFAULTS.description),
+    ogImageUrl: typeof meta.ogImage === 'object' ? assetUrl(meta.ogImage) : null,
+    faviconUrl: assetUrl(favicon),
+    faviconType: typeof favicon?.mimeType === 'string' ? favicon.mimeType : null,
+  }
+}
+
+/**
  * The unit floor areas open in.
  *
  * A site-wide default rather than a per-building one: it is a fact about who is
@@ -109,7 +134,7 @@ export async function getQuizCopy(): Promise<QuizCopy> {
  */
 export async function getDefaultAreaUnit(): Promise<AreaUnit> {
   const payload = await getPayload({ config })
-  const settings = await payload.findGlobal({ slug: 'display-settings' })
+  const settings = await payload.findGlobal({ slug: 'configurator-settings' })
 
   return settings.areaUnit === 'sqm' ? 'sqm' : 'sqft'
 }

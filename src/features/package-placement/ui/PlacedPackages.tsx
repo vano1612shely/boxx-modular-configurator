@@ -220,6 +220,26 @@ type ItemProps = {
 const OUTLINE_VALID = new Color(HIGHLIGHT.selected)
 const OUTLINE_INVALID = new Color(HIGHLIGHT.blocked)
 
+/**
+ * How long the frame loop takes to catch up, as maath smoothTime in seconds.
+ *
+ * Critically damped, so a piece is within a whisker of its target after roughly
+ * twice these figures: about 140 ms of travel and 240 ms of turn.
+ *
+ * `FOLLOW` is the one that decides whether dragging feels like moving a thing
+ * or like sending it instructions. It has to be short enough that the piece
+ * reads as being under the finger, and long enough to absorb the gaps between
+ * pointer events — the whole reason the pose is eased rather than assigned.
+ *
+ * `TURN` is longer because a quarter turn is a jump the eye needs help
+ * following; a piece that arrived at the new angle instantly would look like a
+ * different piece.
+ */
+const FOLLOW = 0.07
+const TURN = 0.12
+/** The little swell as a piece arrives. Its own thing, not a response to input. */
+const POP_IN = 0.14
+
 const TOOLBAR_MARGIN_X = 130
 /**
  * Asymmetric, because the toolbar hangs off the bottom of its anchor point: it
@@ -431,13 +451,13 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
       introPlayedRef.current = true
     }
 
-    damp(group.scale, 'x', 1, 0.14, delta)
-    damp(group.scale, 'y', 1, 0.14, delta)
-    damp(group.scale, 'z', 1, 0.14, delta)
-    damp(group.position, 'x', placement.x, 0.16, delta)
-    damp(group.position, 'z', placement.z, 0.16, delta)
+    damp(group.scale, 'x', 1, POP_IN, delta)
+    damp(group.scale, 'y', 1, POP_IN, delta)
+    damp(group.scale, 'z', 1, POP_IN, delta)
+    damp(group.position, 'x', placement.x, FOLLOW, delta)
+    damp(group.position, 'z', placement.z, FOLLOW, delta)
     group.position.y = floorY
-    dampAngle(rotation.rotation, 'y', MathUtils.degToRad(placement.rotationYDeg), 0.32, delta)
+    dampAngle(rotation.rotation, 'y', MathUtils.degToRad(placement.rotationYDeg), TURN, delta)
   })
 
   const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {

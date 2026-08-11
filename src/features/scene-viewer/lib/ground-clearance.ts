@@ -48,26 +48,48 @@ export function groundOffsetLimit(pose: EyePose, groundY: number): number {
   return Math.max(0, headroom / drop)
 }
 
+/** A pose with the tip angle left out, that being the thing being solved for. */
+export type OrbitPose = Omit<EyePose, 'phi'> & {
+  /** Focal offset along the camera's up axis. Positive is a view slid down. */
+  offsetY?: number
+}
+
 /**
  * How far the orbit may tip before the eye itself drops through the floor.
  *
  * `maxPolarAngle` alone cannot answer this. It is one fixed angle, while how
- * low a given angle puts the eye depends entirely on the orbit radius: 85° is
- * a comfortable three-quarter view from across the site and is under the floor
- * from two metres out. Zooming in and then dragging is exactly that sequence,
- * which is how a visitor ends up looking at the underside of a floor slab.
+ * low a given angle puts the eye depends on the rest of the pose: at the
+ * authored 85° the eye sits `radius * 0.087` above the target, so the same tilt
+ * that stands a metre clear from twelve metres out is three centimetres clear
+ * from half a metre. Tipping over and then zooming is exactly that sequence,
+ * and the top view — whose target is the bottom of the subject, not its middle
+ * — starts it already low.
  *
- * So the answer is recomputed from the live radius: the largest angle whose
- * eye still clears the floor, or `PI` when the radius is short enough that no
- * angle can reach it. Zero when even looking straight down would not clear it,
- * which is the honest answer to an impossible ask rather than a silent pass.
+ * `eyeHeight` in terms of `phi` is `radius * cos(phi) - offsetY * sin(phi)`,
+ * which is a single cosine of `phi` shifted by the angle the offset leans at.
+ * So the largest tilt that still clears the floor is one `acos`, and it accounts
+ * for a slid view as well as a tipped one — the two lower the eye together, and
+ * bounding either alone leaves the pair to walk through the floor.
+ *
+ * `PI` when nothing about the pose can reach the floor; zero when even looking
+ * straight down would not clear it, which is the honest answer to an impossible
+ * ask rather than a silent pass.
  */
-export function maxPolarForClearance(radius: number, targetY: number, groundY: number): number {
-  if (!(radius > 1e-6)) return Math.PI
+export function maxPolarForClearance(pose: OrbitPose, groundY: number): number {
+  const forward = pose.radius + (pose.offsetZ ?? 0)
+  const down = pose.offsetY ?? 0
+  const floor = groundY + GROUND_MARGIN
 
-  const needed = (groundY + GROUND_MARGIN - targetY) / radius
-  if (needed <= -1) return Math.PI
-  if (needed >= 1) return 0
+  // Straight down is as high as the eye gets: the offset slides across the
+  // ground from there, it does not lift. If that does not clear, nothing does,
+  // and a limit means "every tilt up to here clears" or it means nothing —
+  // clamping down to it has to be an improvement at any angle below it.
+  if (pose.targetY + forward < floor) return 0
 
-  return Math.acos(needed)
+  const reach = Math.hypot(forward, down)
+  if (!(reach > 1e-6)) return Math.PI
+
+  const lean = Math.atan2(down, forward)
+  const limit = Math.acos(Math.min(1, Math.max(-1, (floor - pose.targetY) / reach))) - lean
+  return Math.min(Math.PI, Math.max(0, limit))
 }

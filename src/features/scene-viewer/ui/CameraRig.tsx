@@ -13,7 +13,8 @@ import { useConfiguratorSession, type BuildingBounds } from '@/entities/configur
 import { applyPreset } from '../lib/apply-preset'
 import { cameraLimits } from '../lib/camera-limits'
 import { clampOffsetToLimit } from '../lib/clamp-offset'
-import { groundOffsetLimit, maxPolarForClearance } from '../lib/ground-clearance'
+import { groundOffsetLimit } from '../lib/ground-clearance'
+import { holdAboveGround } from '../lib/hold-above-ground'
 import { offsetLimit, panSpeedFactor } from '../lib/pan-resistance'
 import { quarterTurn } from '../lib/quarter-turn'
 import { pinPose } from '../lib/pin-pose'
@@ -158,31 +159,23 @@ export function CameraRig({
   const authoredMaxPolar = MathUtils.degToRad(camera.maxPolarDeg)
 
   /**
-   * Re-tightens the tip limit every frame against the radius it is currently
-   * true for.
+   * Re-applies the tip limit to the pose that already exists, every frame.
    *
-   * A single authored `maxPolarAngle` cannot hold: the same angle that frames
-   * the building nicely from across the site puts the eye under the floor from
-   * two metres out, so zooming in and then dragging walks straight through it.
-   * Recomputed here because the radius changes under the visitor's hand, and
-   * written on the controls rather than through the prop because React only
-   * re-renders when something it knows about changes — a dolly is not that.
+   * Driven from here rather than through the `maxPolarAngle` prop because React
+   * re-renders when something it knows about changes, and a dolly is not that —
+   * the radius moves under the visitor's hand with no render in sight, and it is
+   * the radius that decides how low a given tilt puts the eye.
    */
   useFrame(() => {
     const controls = controlsRef.current
     const ground = groundRef.current
-    if (!controls || ground === null) {
-      if (controls) controls.maxPolarAngle = authoredMaxPolar
+    if (!controls) return
+    if (ground === null) {
+      controls.maxPolarAngle = authoredMaxPolar
       return
     }
 
-    const { radius } = controls.getSpherical(SPHERICAL_SCRATCH, true)
-    const { y } = controls.getTarget(TARGET_SCRATCH, true)
-
-    controls.maxPolarAngle = Math.min(
-      authoredMaxPolar,
-      maxPolarForClearance(radius, y, ground),
-    )
+    holdAboveGround(controls, ground, authoredMaxPolar)
   })
 
   useEffect(() => {

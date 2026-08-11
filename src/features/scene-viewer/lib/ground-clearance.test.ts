@@ -117,11 +117,11 @@ describe('maxPolarForClearance', () => {
   it('lets the orbit tip all the way when the eye cannot reach the floor', () => {
     // Target a metre and a half up, orbiting closer than that: even level with
     // the target the eye stays above the floor.
-    expect(maxPolarForClearance(0.5, 1.5, GROUND)).toBe(Math.PI)
+    expect(maxPolarForClearance({ radius: 0.5, targetY: 1.5 }, GROUND)).toBe(Math.PI)
   })
 
   it('lands exactly where the eye meets the floor, at the radius asked about', () => {
-    const limit = maxPolarForClearance(4, 1.2, GROUND)
+    const limit = maxPolarForClearance({ radius: 4, targetY: 1.2 }, GROUND)
 
     expect(limit).toBeGreaterThan(0)
     expect(eyeAt(4, limit, 1.2)).toBeCloseTo(GROUND + GROUND_MARGIN, 6)
@@ -131,8 +131,8 @@ describe('maxPolarForClearance', () => {
   // floor, where tipping the orbit is the only thing lowering the eye. One
   // authored angle cannot serve both radii here.
   it('tightens as the visitor zooms in on something at floor level', () => {
-    const far = maxPolarForClearance(12, GROUND, GROUND)
-    const near = maxPolarForClearance(2, GROUND, GROUND)
+    const far = maxPolarForClearance({ radius: 12, targetY: GROUND }, GROUND)
+    const near = maxPolarForClearance({ radius: 2, targetY: GROUND }, GROUND)
 
     expect(near).toBeLessThan(far)
     expect(eyeAt(2, near, GROUND)).toBeCloseTo(GROUND + GROUND_MARGIN, 6)
@@ -142,29 +142,55 @@ describe('maxPolarForClearance', () => {
   // Above the floor by more than the orbit is long, tipping past level still
   // leaves the eye clear — the limit is a height question, not an angle one.
   it('allows past level when the target sits well above the floor', () => {
-    expect(maxPolarForClearance(4, 1.2, GROUND)).toBeGreaterThan(Math.PI / 2)
+    expect(maxPolarForClearance({ radius: 4, targetY: 1.2 }, GROUND)).toBeGreaterThan(
+      Math.PI / 2,
+    )
+  })
+
+  // A slid view lowers the eye by as much as a tipped one does, and the two
+  // arrive together: pan down at the horizon and the tilt that was legal a
+  // moment ago is half a metre under the slab.
+  it('counts a view slid downward against the tip it allows', () => {
+    const plain = maxPolarForClearance({ radius: 4, targetY: 1.2 }, GROUND)
+    const slid = maxPolarForClearance({ radius: 4, targetY: 1.2, offsetY: 0.8 }, GROUND)
+
+    expect(slid).toBeLessThan(plain)
+    expect(eyeHeight({ radius: 4, phi: slid, targetY: 1.2 }, 0.8)).toBeCloseTo(
+      GROUND + GROUND_MARGIN,
+      6,
+    )
+  })
+
+  // Sliding the view *up* buys tip back, which is the same statement read the
+  // other way round and the reason the offset belongs in the formula at all.
+  it('gives tip back to a view slid upward', () => {
+    expect(maxPolarForClearance({ radius: 2, targetY: GROUND, offsetY: -1 }, GROUND)).toBeGreaterThan(
+      maxPolarForClearance({ radius: 2, targetY: GROUND }, GROUND),
+    )
   })
 
   it('refuses to tip at all when even looking straight down would be too low', () => {
     // Target already under the floor and the orbit too short to lift the eye out.
-    expect(maxPolarForClearance(0.1, -1, GROUND)).toBe(0)
+    expect(maxPolarForClearance({ radius: 0.1, targetY: -1 }, GROUND)).toBe(0)
   })
 
   it('holds the eye clear at every angle it allows', () => {
     for (const radius of [0.5, 2, 6, 20]) {
       for (const targetY of [-0.5, 0.4, 1.2, 3]) {
-        const limit = maxPolarForClearance(radius, targetY, GROUND)
-        if (limit === 0) continue
-        for (const t of [0.25, 0.5, 0.9, 1]) {
-          expect(eyeAt(radius, limit * t, targetY)).toBeGreaterThanOrEqual(
-            GROUND + GROUND_MARGIN - 1e-6,
-          )
+        for (const offsetY of [-1.5, 0, 0.4, 2]) {
+          const limit = maxPolarForClearance({ radius, targetY, offsetY }, GROUND)
+          if (limit === 0) continue
+          for (const t of [0.25, 0.5, 0.9, 1]) {
+            expect(eyeHeight({ radius, phi: limit * t, targetY }, offsetY)).toBeGreaterThanOrEqual(
+              GROUND + GROUND_MARGIN - 1e-6,
+            )
+          }
         }
       }
     }
   })
 
   it('answers for a degenerate radius rather than returning NaN', () => {
-    expect(maxPolarForClearance(0, 1, GROUND)).toBe(Math.PI)
+    expect(maxPolarForClearance({ radius: 0, targetY: 1 }, GROUND)).toBe(Math.PI)
   })
 })

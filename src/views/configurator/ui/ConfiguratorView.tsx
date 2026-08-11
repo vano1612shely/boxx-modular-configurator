@@ -57,6 +57,8 @@ export async function ConfiguratorView({ searchParams }: Props) {
   const resolution = await getBuildingScene({ building, units, restrooms, region })
 
   if (resolution.status === 'not-found') {
+    const copy = await getQuizCopy()
+
     return (
       <CenteredPanel as="main">
         <Callout
@@ -66,23 +68,26 @@ export async function ConfiguratorView({ searchParams }: Props) {
           // Callout renders its title in a <p>, so the page keeps its h1 through ARIA.
           title={
             <span role="heading" aria-level={1}>
-              Nothing to configure yet
+              {copy.notFound.title}
             </span>
           }
           className="max-w-md"
         >
-          No buildings are available for this selection right now. Please try again shortly.
+          {copy.notFound.body}
         </Callout>
       </CenteredPanel>
     )
   }
 
   if (resolution.status === 'over-capacity') {
+    const copy = await getQuizCopy()
+
     return (
       <OverCapacityScreen
         lineName={resolution.lineName}
         requestedUnits={resolution.requestedUnits}
         adjustHref={changeSelectionHref(answers, regionCode)}
+        copy={copy.overCapacity}
       />
     )
   }

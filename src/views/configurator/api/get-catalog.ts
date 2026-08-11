@@ -63,17 +63,39 @@ export async function getQuizCopy(): Promise<QuizCopy> {
 
   const step1 = settings.step1 ?? {}
   const step2 = settings.step2 ?? {}
+  const notFound = settings.notFound ?? {}
+  const overCapacity = settings.overCapacity ?? {}
+
+  const D = QUIZ_COPY_DEFAULTS
 
   return {
     logoUrl: typeof settings.logo === 'object' ? assetUrl(settings.logo) : null,
     step1: {
-      eyebrow: textOr(step1.eyebrow, QUIZ_COPY_DEFAULTS.step1.eyebrow),
-      title: textOr(step1.title, QUIZ_COPY_DEFAULTS.step1.title),
+      eyebrow: textOr(step1.eyebrow, D.step1.eyebrow),
+      title: textOr(step1.title, D.step1.title),
       description: typeof step1.description === 'string' ? step1.description : '',
+      listLabel: textOr(step1.listLabel, D.step1.listLabel),
     },
     step2: {
-      title: textOr(step2.title, QUIZ_COPY_DEFAULTS.step2.title),
+      title: textOr(step2.title, D.step2.title),
       description: typeof step2.description === 'string' ? step2.description : '',
+      officesLabel: textOr(step2.officesLabel, D.step2.officesLabel),
+      classroomsLabel: textOr(step2.classroomsLabel, D.step2.classroomsLabel),
+      overCapacityHint: textOr(step2.overCapacityHint, D.step2.overCapacityHint),
+      restroomsLabel: textOr(step2.restroomsLabel, D.step2.restroomsLabel),
+      restroomsHint: textOr(step2.restroomsHint, D.step2.restroomsHint),
+      back: textOr(step2.back, D.step2.back),
+      submit: textOr(step2.submit, D.step2.submit),
+    },
+    notFound: {
+      title: textOr(notFound.title, D.notFound.title),
+      body: textOr(notFound.body, D.notFound.body),
+    },
+    overCapacity: {
+      chip: textOr(overCapacity.chip, D.overCapacity.chip),
+      title: textOr(overCapacity.title, D.overCapacity.title),
+      body: textOr(overCapacity.body, D.overCapacity.body),
+      action: textOr(overCapacity.action, D.overCapacity.action),
     },
   }
 }

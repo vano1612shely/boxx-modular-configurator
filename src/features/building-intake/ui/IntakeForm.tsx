@@ -26,8 +26,6 @@ type Props = {
   copy: QuizCopy
 }
 
-const UNIT_LABEL = { offices: 'Offices', classrooms: 'Classrooms' } as const
-
 const heading =
   'text-[1.5625rem] leading-[1.3] font-medium text-foreground desktop:text-[2.1875rem]'
 
@@ -109,7 +107,7 @@ export function IntakeForm({ lines, region, answers, copy }: Props) {
             </div>
 
             <OptionGroup
-              label="Building line"
+              label={copy.step1.listLabel}
               value={lineSlug}
               options={options}
               onChange={handlePick}
@@ -133,8 +131,12 @@ export function IntakeForm({ lines, region, answers, copy }: Props) {
 
             <div className="flex flex-col gap-card">
               <Field.Stepper
-                label={UNIT_LABEL[line?.unitLabel ?? 'offices']}
-                hint={overCapacity ? 'Beyond the largest standard size — we’ll quote it as a custom build.' : undefined}
+                label={
+                  line?.unitLabel === 'classrooms'
+                    ? copy.step2.classroomsLabel
+                    : copy.step2.officesLabel
+                }
+                hint={overCapacity ? copy.step2.overCapacityHint : undefined}
                 value={units}
                 onChange={setUnits}
                 min={1}
@@ -142,8 +144,8 @@ export function IntakeForm({ lines, region, answers, copy }: Props) {
               />
 
               <Field.Stepper
-                label="Restrooms"
-                hint="We’ll pick the closest model that covers it."
+                label={copy.step2.restroomsLabel}
+                hint={copy.step2.restroomsHint}
                 value={restrooms}
                 onChange={setRestrooms}
                 min={0}
@@ -153,11 +155,11 @@ export function IntakeForm({ lines, region, answers, copy }: Props) {
 
             <div className="flex flex-col gap-card desktop:flex-row">
               <Pill variant="secondary" size="lg" onClick={() => setStep(1)}>
-                Back
+                {copy.step2.back}
               </Pill>
 
               <Pill type="submit" variant="primary" size="lg" className="grow">
-                Show my building
+                {copy.step2.submit}
               </Pill>
             </div>
           </div>

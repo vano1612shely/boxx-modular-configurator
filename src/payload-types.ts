@@ -1303,7 +1303,7 @@ export interface IntegrationSetting {
   createdAt?: string | null;
 }
 /**
- * Headings on the two questions asked before the building is shown. The choices themselves come from the catalogue.
+ * The words on the questions asked before a building is shown, and on the two screens those questions can end at. The choices themselves come from the catalogue.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "quiz-settings".
@@ -1324,6 +1324,10 @@ export interface QuizSetting {
      * Optional. A sentence under the question; empty shows nothing.
      */
     description?: string | null;
+    /**
+     * Names the list of lines for a screen reader, and sits above it.
+     */
+    listLabel?: string | null;
   };
   /**
    * The small line above this one is the building line the visitor just picked, so it is not set here.
@@ -1334,6 +1338,50 @@ export interface QuizSetting {
      * Optional. A sentence under the question; empty shows nothing.
      */
     description?: string | null;
+    /**
+     * Counter label for lines that come in offices.
+     */
+    officesLabel?: string | null;
+    /**
+     * And for lines that come in classrooms.
+     */
+    classroomsLabel?: string | null;
+    /**
+     * Appears under the counter once the number passes the largest size on offer.
+     */
+    overCapacityHint?: string | null;
+    restroomsLabel?: string | null;
+    restroomsHint?: string | null;
+    /**
+     * Button back to step 1.
+     */
+    back?: string | null;
+    /**
+     * Button into the 3D view.
+     */
+    submit?: string | null;
+  };
+  /**
+   * Seen when no published building fits the answers — usually a region with an empty catalogue.
+   */
+  notFound?: {
+    title?: string | null;
+    body?: string | null;
+  };
+  overCapacity?: {
+    /**
+     * The small badge above the heading.
+     */
+    chip?: string | null;
+    title?: string | null;
+    /**
+     * Write {units} where the number they asked for should go, and {line} for the building line. Anything else in braces is left on screen as typed, so a misspelt name is visible rather than silently dropped.
+     */
+    body?: string | null;
+    /**
+     * Button back to the questions, with their answers still in them.
+     */
+    action?: string | null;
   };
   updatedAt?: string | null;
   createdAt?: string | null;
@@ -1384,12 +1432,34 @@ export interface QuizSettingsSelect<T extends boolean = true> {
         eyebrow?: T;
         title?: T;
         description?: T;
+        listLabel?: T;
       };
   step2?:
     | T
     | {
         title?: T;
         description?: T;
+        officesLabel?: T;
+        classroomsLabel?: T;
+        overCapacityHint?: T;
+        restroomsLabel?: T;
+        restroomsHint?: T;
+        back?: T;
+        submit?: T;
+      };
+  notFound?:
+    | T
+    | {
+        title?: T;
+        body?: T;
+      };
+  overCapacity?:
+    | T
+    | {
+        chip?: T;
+        title?: T;
+        body?: T;
+        action?: T;
       };
   updatedAt?: T;
   createdAt?: T;

@@ -175,6 +175,11 @@ export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
                   ⌖ Snap to selected objects
                 </button>
 
+                <p style={{ ...s.hint, marginTop: 6 }}>
+                  Drag the white puck to move the spot, the yellow arrows for height, and the blue
+                  grip round the ring to turn it. The fields above are the same numbers.
+                </p>
+
                 <p style={{ ...s.hint, marginTop: 10 }}>Choices</p>
 
                 <For each={variants} getKey={(variant, i) => variant.key || String(i)}>

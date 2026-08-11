@@ -55,6 +55,7 @@ import { For, Show } from '@/shared/ui/control-flow'
 
 import { defaultYRange, planCutY } from '../lib/blocks'
 import { floorPlaneBounds } from '../lib/floor-plane'
+import { bearingDeg, draggedYaw } from '../lib/slot-drag'
 
 import { SIDE_COLORS } from './editor-styles'
 
@@ -111,6 +112,18 @@ type DragState =
   | { kind: 'floor-plane'; cx: number; cz: number }
   | { kind: 'roof-move'; grabDX: number; grabDZ: number; y: number }
   | { kind: 'roof-height'; cx: number; cz: number; grabDY: number }
+  | { kind: 'slot-move'; index: number; grabDX: number; grabDZ: number; y: number }
+  | { kind: 'slot-height'; index: number; cx: number; cz: number; grabDY: number }
+  | {
+      kind: 'slot-yaw'
+      index: number
+      cx: number
+      cz: number
+      y: number
+      /** Bearing the grip was taken at, and the facing it belonged to. */
+      startBearing: number
+      startYaw: number
+    }
   | {
       kind: 'opening'
       id: string
@@ -1037,6 +1050,44 @@ function EditorScene({
       return
     }
 
+    if (drag.kind === 'slot-move') {
+      const hit = rayAtY(ray, drag.y)
+      if (!hit) return
+      const position = vm.exteriorSlots[drag.index]?.position
+      vm.onMoveSlot(
+        drag.index,
+        snap(hit.x - drag.grabDX),
+        position?.y ?? 0,
+        snap(hit.z - drag.grabDZ),
+      )
+      return
+    }
+
+    if (drag.kind === 'slot-height') {
+      const y = rayAtVertical(ray, drag.cx, drag.cz)
+      if (y === null) return
+      const position = vm.exteriorSlots[drag.index]?.position
+      vm.onMoveSlot(drag.index, position?.x ?? 0, snap(y - drag.grabDY), position?.z ?? 0)
+      return
+    }
+
+    if (drag.kind === 'slot-yaw') {
+      const hit = rayAtY(ray, drag.y)
+      if (!hit) return
+      vm.onSetSlotYaw(
+        drag.index,
+        Math.round(
+          draggedYaw({
+            startYaw: drag.startYaw,
+            startBearing: drag.startBearing,
+            bearing: bearingDeg(hit.x - drag.cx, hit.z - drag.cz),
+            currentYaw: vm.exteriorSlots[drag.index]?.yawDeg ?? 0,
+          }),
+        ),
+      )
+      return
+    }
+
     if (drag.kind === 'opening') {
       const hit = rayOnWall(ray, drag.center, drag.normal)
       if (!hit) return
@@ -1781,7 +1832,52 @@ function EditorScene({
         </Show>
       </Show>
 
-      <ExteriorSpots vm={vm} />
+      <ExteriorSpots
+        vm={vm}
+        register={registerHandle}
+        // The grab offset is taken on the spot's own ground plane, so a puck
+        // caught off centre does not snap the spot under the cursor.
+        onStartMove={(index, ray, y) => {
+          const t =
+            Math.abs(ray.direction.y) < 1e-6 ? null : (y - ray.origin.y) / ray.direction.y
+          const position = vm.exteriorSlots[index]?.position
+          if (t === null || t < 0) {
+            setDrag({ kind: 'slot-move', index, grabDX: 0, grabDZ: 0, y })
+            return
+          }
+          setDrag({
+            kind: 'slot-move',
+            index,
+            grabDX: ray.origin.x + ray.direction.x * t - (position?.x ?? 0),
+            grabDZ: ray.origin.z + ray.direction.z * t - (position?.z ?? 0),
+            y,
+          })
+        }}
+        onStartHeight={(index, ray, grip) => {
+          const y = rayAtVertical(ray, grip[0], grip[2])
+          setDrag({
+            kind: 'slot-height',
+            index,
+            cx: grip[0],
+            cz: grip[2],
+            grabDY: (y ?? grip[1]) - (vm.exteriorSlots[index]?.position?.y ?? 0),
+          })
+        }}
+        onStartYaw={(index, ray, centre) => {
+          const hit = rayAtY(ray, centre[1])
+          setDrag({
+            kind: 'slot-yaw',
+            index,
+            cx: centre[0],
+            cz: centre[2],
+            y: centre[1],
+            startBearing: hit
+              ? bearingDeg(hit.x - centre[0], hit.z - centre[2])
+              : (vm.exteriorSlots[index]?.yawDeg ?? 0),
+            startYaw: vm.exteriorSlots[index]?.yawDeg ?? 0,
+          })
+        }}
+      />
 
       <Show when={vm.roofModelUrl}>
         {(url) => (

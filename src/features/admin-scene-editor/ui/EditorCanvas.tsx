@@ -35,6 +35,7 @@ import {
 
 import {
   fitDistance,
+  hiddenExteriorNodes,
   locateOnWalls,
   onOutline,
   mapRoom,
@@ -42,6 +43,7 @@ import {
   RoomShell,
   roomVertices,
   SceneLighting,
+  zoneNodePaths,
   type OpeningPlacement,
   type RoomDoc,
   type Room,
@@ -66,6 +68,7 @@ import {
 } from '../model/use-scene-editor-model'
 
 import { CompassProbe, CompassRose } from './canvas/Compass'
+import { ExteriorSpots } from './canvas/ExteriorSpots'
 import { FloorPlaneGizmo } from './canvas/FloorPlaneGizmo'
 import { RoofModelGizmo } from './canvas/RoofModelGizmo'
 import { SunMarker } from './canvas/SunMarker'
@@ -343,9 +346,44 @@ function BuildingGlb({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prepared])
 
+  /**
+   * Objects an exterior spot owns but the previewed choice is not showing.
+   *
+   * Run through the same rule the client uses rather than a second copy of it,
+   * so what an admin previews here is what a visitor gets — the sharing between
+   * choices especially, where a deck listed by two of them must not blink as
+   * the preview steps past.
+   */
+  const exteriorHidden = useMemo(() => {
+    const slots = vm.exteriorSlots.map((slot, index) => ({
+      key: slot.key || String(index),
+      name: '',
+      position: [0, 0, 0] as [number, number, number],
+      yawDeg: 0,
+      defaultVariantKey: slot.defaultVariantKey ?? '',
+      variants: (slot.variants ?? []).map((variant, i) => ({
+        key: variant.key || String(i),
+        title: '',
+        description: null,
+        price: null,
+        thumbnailUrl: null,
+        nodes: zoneNodePaths(variant.nodes),
+        parts: [],
+      })),
+    }))
+
+    const chosen = vm.selectedSlotIndex === null ? null : slots[vm.selectedSlotIndex]
+    const previewed = chosen?.variants[vm.previewVariantIndex ?? 0]
+
+    return hiddenExteriorNodes(
+      slots,
+      chosen && previewed ? { [chosen.key]: previewed.key } : {},
+    )
+  }, [vm.exteriorSlots, vm.selectedSlotIndex, vm.previewVariantIndex])
+
   useEffect(() => {
     const removed: Object3D[] = []
-    for (const path of vm.hiddenNodePaths) {
+    for (const path of [...vm.hiddenNodePaths, ...exteriorHidden]) {
       const object = resolveAny(path)
       if (object) {
         object.visible = false
@@ -355,7 +393,7 @@ function BuildingGlb({
     return () => {
       for (const object of removed) object.visible = true
     }
-  }, [vm.hiddenNodePaths, resolveAny])
+  }, [vm.hiddenNodePaths, exteriorHidden, resolveAny])
 
   const ghost = vm.roomMode && vm.ghostModel
   const hiddenInRoom = vm.roomMode && !vm.ghostModel
@@ -1742,6 +1780,8 @@ function EditorScene({
           />
         </Show>
       </Show>
+
+      <ExteriorSpots vm={vm} />
 
       <Show when={vm.roofModelUrl}>
         {(url) => (

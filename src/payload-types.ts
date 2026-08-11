@@ -70,6 +70,7 @@ export interface Config {
     regions: Region;
     'building-lines': BuildingLine;
     'building-models': BuildingModel;
+    'exterior-options': ExteriorOption;
     'furniture-packages': FurniturePackage;
     quotes: Quote;
     images: Image;
@@ -86,6 +87,7 @@ export interface Config {
     regions: RegionsSelect<false> | RegionsSelect<true>;
     'building-lines': BuildingLinesSelect<false> | BuildingLinesSelect<true>;
     'building-models': BuildingModelsSelect<false> | BuildingModelsSelect<true>;
+    'exterior-options': ExteriorOptionsSelect<false> | ExteriorOptionsSelect<true>;
     'furniture-packages': FurniturePackagesSelect<false> | FurniturePackagesSelect<true>;
     quotes: QuotesSelect<false> | QuotesSelect<true>;
     images: ImagesSelect<false> | ImagesSelect<true>;
@@ -319,6 +321,64 @@ export interface BuildingModel {
       yawDeg?: number | null;
       scale?: number | null;
     };
+    /**
+     * Places outside the building where the visitor picks between a deck, stairs, a ramp and so on. A building with none of these is shown exactly as it is, with no panel. Set up visually in the Scene Editor.
+     */
+    exteriorSlots?:
+      | {
+          key: string;
+          name: string;
+          position?: {
+            x?: number | null;
+            y?: number | null;
+            z?: number | null;
+          };
+          yawDeg?: number | null;
+          /**
+           * What the visitor arrives on. Blank means the first one.
+           */
+          defaultVariantKey?: string | null;
+          /**
+           * What may be picked here. A choice can reveal objects already in the building model, or place models of its own, or both at once.
+           */
+          variants?:
+            | {
+                key: string;
+                option: number | ExteriorOption;
+                /**
+                 * Objects of the building model this choice shows. Claimed visually.
+                 */
+                nodes?:
+                  | {
+                      [k: string]: unknown;
+                    }
+                  | unknown[]
+                  | string
+                  | number
+                  | boolean
+                  | null;
+                /**
+                 * Models placed for this choice. Offsets are from the spot above, so moving the spot carries every choice with it.
+                 */
+                parts?:
+                  | {
+                      model: number | Model;
+                      position?: {
+                        x?: number | null;
+                        y?: number | null;
+                        z?: number | null;
+                      };
+                      yawDeg?: number | null;
+                      scale?: number | null;
+                      id?: string | null;
+                    }[]
+                  | null;
+                id?: string | null;
+              }[]
+            | null;
+          id?: string | null;
+        }[]
+      | null;
     /**
      * Objects hidden in the Scene Editor. Edited visually.
      */
@@ -596,6 +656,45 @@ export interface Image {
   };
 }
 /**
+ * Decks, stairs, ramps and canopies offered at an exterior spot. Placed per building in the Scene Editor.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "exterior-options".
+ */
+export interface ExteriorOption {
+  id: number;
+  title: string;
+  /**
+   * USD. Left blank the option is offered without a price.
+   */
+  price?: number | null;
+  thumbnail?: (number | null) | Image;
+  description?: string | null;
+  /**
+   * Models this option is made of, with the offsets they usually sit at. Copied into a building when the option is added there — later edits here do not move anything already placed. An option built entirely from objects already in the building model needs none of these.
+   */
+  parts?:
+    | {
+        model: number | Model;
+        position?: {
+          x?: number | null;
+          y?: number | null;
+          z?: number | null;
+        };
+        yawDeg?: number | null;
+        scale?: number | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Which lines this is offered for at all. Empty means every line. It only filters the picker — what a building actually offers is chosen there, spot by spot.
+   */
+  compatibleLines?: (number | BuildingLine)[] | null;
+  regions?: (number | Region)[] | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Tileable surface textures (walls, floors, ceilings, doors, windows). Re-encoded to webp and capped at 2048px on upload.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -761,6 +860,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'building-models';
         value: number | BuildingModel;
+      } | null)
+    | ({
+        relationTo: 'exterior-options';
+        value: number | ExteriorOption;
       } | null)
     | ({
         relationTo: 'furniture-packages';
@@ -962,6 +1065,45 @@ export interface BuildingModelsSelect<T extends boolean = true> {
               yawDeg?: T;
               scale?: T;
             };
+        exteriorSlots?:
+          | T
+          | {
+              key?: T;
+              name?: T;
+              position?:
+                | T
+                | {
+                    x?: T;
+                    y?: T;
+                    z?: T;
+                  };
+              yawDeg?: T;
+              defaultVariantKey?: T;
+              variants?:
+                | T
+                | {
+                    key?: T;
+                    option?: T;
+                    nodes?: T;
+                    parts?:
+                      | T
+                      | {
+                          model?: T;
+                          position?:
+                            | T
+                            | {
+                                x?: T;
+                                y?: T;
+                                z?: T;
+                              };
+                          yawDeg?: T;
+                          scale?: T;
+                          id?: T;
+                        };
+                    id?: T;
+                  };
+              id?: T;
+            };
         hiddenNodePaths?: T;
       };
   rooms?:
@@ -1058,6 +1200,35 @@ export interface BuildingModelsSelect<T extends boolean = true> {
             };
         id?: T;
       };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "exterior-options_select".
+ */
+export interface ExteriorOptionsSelect<T extends boolean = true> {
+  title?: T;
+  price?: T;
+  thumbnail?: T;
+  description?: T;
+  parts?:
+    | T
+    | {
+        model?: T;
+        position?:
+          | T
+          | {
+              x?: T;
+              y?: T;
+              z?: T;
+            };
+        yawDeg?: T;
+        scale?: T;
+        id?: T;
+      };
+  compatibleLines?: T;
+  regions?: T;
   updatedAt?: T;
   createdAt?: T;
 }

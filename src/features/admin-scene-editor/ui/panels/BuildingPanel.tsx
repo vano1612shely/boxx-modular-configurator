@@ -7,6 +7,7 @@ import { MODE_HINTS, Toolbar } from '../controls/Toolbar'
 import { SegmentedControl } from '../controls/SegmentedControl'
 import { button, s } from '../editor-styles'
 import { CameraSection } from './CameraSection'
+import { ExteriorSection } from './ExteriorSection'
 import { FloorLevelCard } from './FloorLevelCard'
 import { ModelNodesSection } from './ModelNodesSection'
 import { RoofModelSection } from './RoofModelSection'
@@ -138,6 +139,10 @@ export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
 
       <Accordion title="Roof — separate model" badge={vm.roofModelUrl ? 1 : 0}>
         <RoofModelSection vm={vm} />
+      </Accordion>
+
+      <Accordion title="Exterior — decks, stairs, ramps" badge={vm.exteriorSlots.length}>
+        <ExteriorSection vm={vm} />
       </Accordion>
 
       <Accordion title="Model objects" badge={vm.modelNodes.length}>

@@ -31,6 +31,7 @@ function scene(overrides: Partial<BuildingScene> = {}): BuildingScene {
     roofModel: null,
     hiddenNodePaths: [],
     rooms: [],
+    exteriorSlots: [],
     ...overrides,
   }
 }

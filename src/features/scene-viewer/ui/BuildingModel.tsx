@@ -1,17 +1,19 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, type Material, type Mesh, type Object3D } from 'three'
 
 import {
   extentWithoutSite,
   findFloor,
+  hiddenExteriorNodes,
   type BuildingScene,
   type PartExtent,
   type ZoneBox,
 } from '@/entities/building'
+import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 
 import { createNodeResolver } from '@/shared/three/node-path'
@@ -98,9 +100,24 @@ export function BuildingModel({ building }: Props) {
     useConfiguratorSession.getState().setBuildingBounds(measured)
   }, [preparedScene, hiddenNodePaths, resolveNode])
 
+  const exteriorSelection = useConfiguration((s) => s.exterior)
+
+  /**
+   * Objects an exterior spot owns but is not currently showing.
+   *
+   * Deliberately absent from the bounds above: measuring what is on screen would
+   * refly the camera every time a visitor tried a different ramp. Measuring the
+   * union instead leaves the frame still while the geometry inside it changes,
+   * which is what switching between choices should feel like.
+   */
+  const exteriorHidden = useMemo(
+    () => hiddenExteriorNodes(building.exteriorSlots, exteriorSelection),
+    [building.exteriorSlots, exteriorSelection],
+  )
+
   useEffect(() => {
     const removed: Object3D[] = []
-    for (const path of hiddenNodePaths) {
+    for (const path of [...hiddenNodePaths, ...exteriorHidden]) {
       const object = resolveNode(path)
       if (object) {
         object.visible = false
@@ -110,7 +127,77 @@ export function BuildingModel({ building }: Props) {
     return () => {
       for (const object of removed) object.visible = true
     }
-  }, [hiddenNodePaths, resolveNode])
+  }, [hiddenNodePaths, exteriorHidden, resolveNode])
+
+  /**
+   * Which spot each object of the model belongs to, for the ones that offer a
+   * choice. A spot with a single entry is scenery, not a picker, so it is left
+   * out and its geometry stays as inert as the walls.
+   */
+  const claimedBy = useMemo(() => {
+    const owners = new Map<Object3D, string>()
+    for (const slot of building.exteriorSlots) {
+      if (slot.variants.length < 2) continue
+      for (const variant of slot.variants) {
+        for (const path of variant.nodes) {
+          resolveNode(path)?.traverse((object) => owners.set(object, slot.key))
+        }
+      }
+    }
+    return owners
+  }, [building.exteriorSlots, resolveNode])
+
+  /**
+   * Whether a hit is ours to answer for, and which spot it lands on.
+   *
+   * The pointer is judged on the frontmost thing under it, across the whole
+   * scene, so a bought ramp standing in front of the wall keeps its own hover
+   * instead of the wall behind taking it away. Anything that is not part of this
+   * model is left to whoever drew it.
+   */
+  const ownerOf = (object: Object3D): { ours: boolean; slotKey: string | null } => {
+    let node: Object3D | null = object
+    while (node) {
+      const slotKey = claimedBy.get(node)
+      if (slotKey) return { ours: true, slotKey }
+      if (node === preparedScene) return { ours: true, slotKey: null }
+      node = node.parent
+    }
+    return { ours: false, slotKey: null }
+  }
+
+  const onPointerMove = (event: ThreeEvent<PointerEvent>) => {
+    const front = event.intersections[0]?.object
+    if (!front) return
+
+    const owner = ownerOf(front)
+    if (!owner.ours) return
+
+    const session = useConfiguratorSession.getState()
+    // Guarded because this runs on every pointer move over the building, and an
+    // unconditional write would re-render the panel at pointer rate.
+    if (session.hoveredSlotKey !== owner.slotKey) session.hoverExteriorSlot(owner.slotKey)
+  }
+
+  const onPointerOut = () => {
+    const session = useConfiguratorSession.getState()
+    if (session.hoveredSlotKey !== null) session.hoverExteriorSlot(null)
+  }
+
+  const onClick = (event: ThreeEvent<MouseEvent>) => {
+    const front = event.intersections[0]?.object
+    if (!front) return
+
+    const owner = ownerOf(front)
+    if (!owner.ours || owner.slotKey === null) return
+
+    event.stopPropagation()
+    useConfiguratorSession.getState().openExteriorSlot(owner.slotKey)
+  }
+
+  // Nothing claimed means nothing to answer for, and the model stays out of the
+  // pointer's way entirely rather than being raycast on every move for nothing.
+  const interactive = claimedBy.size > 0
 
   const showCeiling = useConfiguratorSession((s) => s.showCeiling)
   const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)
@@ -139,5 +226,13 @@ export function BuildingModel({ building }: Props) {
     controller.setHideBoxes(floor || !showCeiling ? building.roofBlocks : NOTHING_HIDDEN)
   })
 
-  return <primitive ref={rootRef} object={preparedScene} />
+  return (
+    <primitive
+      ref={rootRef}
+      object={preparedScene}
+      onPointerMove={interactive ? onPointerMove : undefined}
+      onPointerOut={interactive ? onPointerOut : undefined}
+      onClick={interactive ? onClick : undefined}
+    />
+  )
 }

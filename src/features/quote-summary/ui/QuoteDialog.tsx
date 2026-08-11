@@ -118,10 +118,34 @@ export function QuoteDialog({ building, packages, integration }: Props) {
                       )}
                     </For>
 
+                    <Show when={vm.quoteExterior.length > 0}>
+                      <div className="mt-3">
+                        <Eyebrow as="h3">Entrances</Eyebrow>
+                        <For each={vm.quoteExterior} getKey={(spot) => spot.slotKey}>
+                          {(spot) => (
+                            <div className="mt-1 flex justify-between gap-4 text-sm">
+                              <span>
+                                {spot.slotName}
+                                <span className="text-muted-foreground">{' · '}</span>
+                                {spot.title}
+                              </span>
+                              <Show when={spot.price}>
+                                {(price) => (
+                                  <span className="shrink-0 text-muted-foreground">
+                                    ${price.toLocaleString()}
+                                  </span>
+                                )}
+                              </Show>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+
                     {/* A total of $0 reads as free rather than as unpriced. */}
                     <Show when={vm.hasPrices}>
                       <div className="mt-3 flex justify-between gap-4 border-t pt-3 text-base font-medium">
-                        <span>Furniture total</span>
+                        <span>Total</span>
                         <span className="shrink-0">${vm.totalPrice.toLocaleString()}</span>
                       </div>
                     </Show>

@@ -8,6 +8,7 @@ import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import type { IntakeAnswers } from '@/features/building-intake'
+import { ExteriorPanel, ExteriorSlots } from '@/features/exterior-options'
 import type { AreaUnit } from '@/shared/lib'
 import { PackagePanel, PlacedPackages } from '@/features/package-placement'
 import { QuoteDialog, type IntegrationOptions } from '@/features/quote-summary'
@@ -34,6 +35,7 @@ function Scene({ building, packages }: SceneProps) {
   return (
     <SceneViewer building={building}>
       <PlacedPackages building={building} packages={packages} />
+      <ExteriorSlots building={building} />
     </SceneViewer>
   )
 }
@@ -100,6 +102,7 @@ export function ConfiguratorScreen({
       />
 
       <PackagePanel building={building} packages={packages} />
+      <ExteriorPanel building={building} />
       <QuoteDialog building={building} packages={packages} integration={integration} />
     </main>
   )

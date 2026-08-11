@@ -6,10 +6,20 @@ import type { PlacedPackage } from './types'
 
 type ConfigurationState = {
   placed: PlacedPackage[]
+  /**
+   * What is picked at each exterior spot, by spot key.
+   *
+   * Absent means the spot's own default, so nothing has to be seeded when a
+   * building loads and no effect can race the first frame. Typed here as plain
+   * keys rather than against the building's own type: this store knows what the
+   * visitor chose, not what a building offers.
+   */
+  exterior: Record<string, string>
   selectedInstanceId: string | null
   draggingInstanceId: string | null
   /** False while the dragged package overlaps another one or leaves its room. */
   dragValid: boolean
+  setExteriorVariant: (slotKey: string, variantKey: string) => void
   addPackage: (placement: Omit<PlacedPackage, 'instanceId'>) => string
   removePackage: (instanceId: string) => void
   movePackage: (instanceId: string, x: number, z: number) => void
@@ -23,9 +33,13 @@ type ConfigurationState = {
 
 export const useConfiguration = create<ConfigurationState>((set) => ({
   placed: [],
+  exterior: {},
   selectedInstanceId: null,
   draggingInstanceId: null,
   dragValid: true,
+
+  setExteriorVariant: (slotKey, variantKey) =>
+    set((state) => ({ exterior: { ...state.exterior, [slotKey]: variantKey } })),
 
   addPackage: (placement) => {
     const instanceId = uniqueId()
@@ -60,5 +74,5 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
   endDrag: () => set({ draggingInstanceId: null, dragValid: true }),
   setDragValid: (valid) => set({ dragValid: valid }),
   clear: () =>
-    set({ placed: [], selectedInstanceId: null, draggingInstanceId: null }),
+    set({ placed: [], exterior: {}, selectedInstanceId: null, draggingInstanceId: null }),
 }))

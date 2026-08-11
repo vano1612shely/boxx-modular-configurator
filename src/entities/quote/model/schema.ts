@@ -21,6 +21,14 @@ export const quotePackageSchema = z.object({
   rotationYDeg: z.number(),
 })
 
+export const quoteExteriorSchema = z.object({
+  slotKey: z.string(),
+  slotName: z.string(),
+  variantKey: z.string(),
+  title: z.string(),
+  price: z.number().nullable(),
+})
+
 export const quoteConfigurationSchema = z.object({
   buildingModelId: z.number().nullable(),
   buildingTitle: z.string(),
@@ -28,6 +36,9 @@ export const quoteConfigurationSchema = z.object({
   unitCount: z.number(),
   restroomCount: z.number(),
   packages: z.array(quotePackageSchema),
+  // What was picked at each exterior spot. Optional so quotes taken before
+  // there were any still parse.
+  exterior: z.array(quoteExteriorSchema).optional(),
   totalPrice: z.number(),
   submittedAt: z.iso.datetime(),
 })

@@ -141,6 +141,52 @@ export type Room = {
   cameraPreset: CameraPreset
 }
 
+/** One model placed for a choice, positioned in its spot's own frame. */
+export type ExteriorPart = {
+  url: string
+  position: Vec3Tuple
+  /** Degrees about Y, on top of the spot's own facing. */
+  yawDeg: number
+  scale: number
+}
+
+/**
+ * One card at an exterior spot — a deck, a deck with stairs, one with a ramp.
+ *
+ * Built from either source, or both at once: `nodes` are objects the building's
+ * own model already contains, which need no placing because a modeller placed
+ * them, and `parts` are models loaded on top. A choice reusing the built-in
+ * deck and adding a bought ramp is the case the pair exists for.
+ */
+export type ExteriorVariant = {
+  key: string
+  title: string
+  description: string | null
+  /** Optional: a spot may be offered with no price on it at all. */
+  price: number | null
+  thumbnailUrl: string | null
+  nodes: string[]
+  parts: ExteriorPart[]
+}
+
+/**
+ * A place outside the building where the visitor picks one of several choices.
+ *
+ * Not tied to a door. Rooms carry openings but nothing tells an exit from an
+ * internal doorway, so where an entrance is, is a fact only the admin knows —
+ * they drop the spot and drag it into place. Its position is what the parts are
+ * offset from, and where the visitor's click target sits.
+ */
+export type ExteriorSlot = {
+  key: string
+  name: string
+  position: Vec3Tuple
+  yawDeg: number
+  /** Always names a variant in the list — the mapping guarantees it. */
+  defaultVariantKey: string
+  variants: ExteriorVariant[]
+}
+
 /**
  * Regulatory thresholds only. What sizes exist is a fact about the published
  * models, not something to restate here.
@@ -181,6 +227,8 @@ export type BuildingScene = {
   roofModel: RoofConfig | null
   hiddenNodePaths: string[]
   rooms: Room[]
+  /** Empty for a building nobody has set exterior choices up on. */
+  exteriorSlots: ExteriorSlot[]
 }
 
 export { OPENING_KINDS, SHELL_SURFACES, TEXTURED_SURFACES, WALL_SIDES }

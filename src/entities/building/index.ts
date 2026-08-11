@@ -5,6 +5,9 @@ export type {
   BuildingScene,
   CameraConfig,
   CameraPreset,
+  ExteriorPart,
+  ExteriorSlot,
+  ExteriorVariant,
   OpeningFit,
   OpeningKind,
   OpeningModelStyle,
@@ -28,13 +31,25 @@ export { OPENING_KINDS, SHELL_SURFACES, TEXTURED_SURFACES, WALL_SIDES } from './
 
 export {
   mapBuildingScene,
+  mapExteriorOption,
   mapRoom,
   roomOpenings,
   roomVertices,
   roomZones,
   zoneNodePaths,
+  type ExteriorCatalogue,
+  type ExteriorOptionInfo,
   type RoomDoc,
 } from './lib/map-building'
+export {
+  claimedNodes,
+  hasExteriorChoices,
+  hiddenExteriorNodes,
+  revealedNodes,
+  selectedVariant,
+  slotOfNode,
+  type ExteriorSelection,
+} from './lib/exterior'
 export { roomFloorTopY } from './lib/floor'
 export {
   containingFloor,

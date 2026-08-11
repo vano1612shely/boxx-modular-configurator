@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
-import { zoneAt } from '@/entities/building'
+import { selectedVariant, zoneAt } from '@/entities/building'
 import { useConfiguration } from '@/entities/configuration'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import { quoteContactSchema, type QuoteConfiguration, type QuoteContact } from '@/entities/quote'
@@ -30,6 +30,7 @@ type SubmitState =
 
 export function useQuoteSummaryModel({ building, packages, integration }: Args) {
   const placed = useConfiguration((s) => s.placed)
+  const exterior = useConfiguration((s) => s.exterior)
   const [submitState, setSubmitState] = useState<SubmitState>({ phase: 'idle' })
 
   const packagesById = useMemo(() => new Map(packages.map((p) => [p.id, p])), [packages])
@@ -69,16 +70,41 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
     [placed, packagesById, roomsByKey],
   )
 
+  // One line per spot that offers a choice — a spot with a single entry is part
+  // of the building rather than something the customer picked.
+  const quoteExterior = useMemo(
+    () =>
+      building.exteriorSlots.flatMap((slot) => {
+        if (slot.variants.length < 2) return []
+        const variant = selectedVariant(slot, exterior)
+
+        return [
+          {
+            slotKey: slot.key,
+            slotName: slot.name,
+            variantKey: variant.key,
+            title: variant.title,
+            price: variant.price,
+          },
+        ]
+      }),
+    [building.exteriorSlots, exterior],
+  )
+
   const totalPrice = useMemo(
-    () => quotePackages.reduce((sum, p) => sum + (p.price ?? 0), 0),
-    [quotePackages],
+    () =>
+      quotePackages.reduce((sum, p) => sum + (p.price ?? 0), 0) +
+      quoteExterior.reduce((sum, e) => sum + (e.price ?? 0), 0),
+    [quotePackages, quoteExterior],
   )
 
   // A catalogue with no prices in it should not be summarised with a total of
   // zero, which reads as free rather than as unpriced.
   const hasPrices = useMemo(
-    () => quotePackages.some((p) => p.price !== null && p.price !== undefined),
-    [quotePackages],
+    () =>
+      quotePackages.some((p) => p.price !== null && p.price !== undefined) ||
+      quoteExterior.some((e) => e.price !== null),
+    [quotePackages, quoteExterior],
   )
 
   const packagesByRoom = useMemo(
@@ -93,6 +119,7 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
     unitCount: building.unitCount,
     restroomCount: building.restroomCount,
     packages: quotePackages,
+    exterior: quoteExterior,
     totalPrice,
     submittedAt: new Date().toISOString(),
   })
@@ -131,6 +158,7 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
   return {
     buildingTitle: building.title,
     quotePackages,
+    quoteExterior,
     packagesByRoom,
     hasPrices,
     totalPrice,

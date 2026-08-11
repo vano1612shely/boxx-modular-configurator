@@ -87,6 +87,31 @@ function modelUrlOf(model: number | Model | null | undefined): string | null {
   return typeof model === 'object' ? assetUrl(model) : null
 }
 
+type SlotDraft = NonNullable<NonNullable<Draft['sceneConfig']>['exteriorSlots']>[number]
+type VariantDraft = NonNullable<SlotDraft['variants']>[number]
+type PartDraft = NonNullable<VariantDraft['parts']>[number]
+
+/** One catalogue entry as the picker hands it over, parts and all. */
+export type ExteriorOptionRef = {
+  id: number
+  title: string
+  price: number | null
+  parts: PartDraft[]
+}
+
+/**
+ * A key nothing in the list is using.
+ *
+ * Keys outlive array indexes — Payload regenerates row ids on every save, and
+ * the visitor's pick is stored against the key — so reusing one would hand a
+ * visitor's choice to whatever took its place.
+ */
+function freeKey(rows: Array<{ key?: string | null }>, prefix: string): string {
+  let n = rows.length + 1
+  while (rows.some((row) => row.key === `${prefix}-${n}`)) n += 1
+  return `${prefix}-${n}`
+}
+
 
 export function useSceneEditorModel() {
   const { id } = useDocumentInfo()
@@ -117,6 +142,9 @@ export function useSceneEditorModel() {
   }, [])
   const [modelNodes, setModelNodes] = useState<ModelNode[]>([])
   const [selectedNodePaths, setSelectedNodePaths] = useState<string[]>([])
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null)
+  /** Which choice the viewport shows for the selected spot; null follows its default. */
+  const [previewVariantKey, setPreviewVariantKey] = useState<string | null>(null)
   const [roofHidden, setRoofHidden] = useState(true)
   /** Storey the viewport is cut down to, exactly as the visitor would see it. */
   const [previewFloorIndex, setPreviewFloorIndex] = useState<number | null>(null)
@@ -734,6 +762,109 @@ export function useSceneEditorModel() {
     setLooseFloorY(level)
   }
 
+  // ---- Exterior spots ------------------------------------------------------
+
+  const exteriorSlots = draft?.sceneConfig?.exteriorSlots ?? []
+  const selectedSlot =
+    selectedSlotIndex === null ? null : (exteriorSlots[selectedSlotIndex] ?? null)
+
+  const patchSlots = (update: (slots: SlotDraft[]) => SlotDraft[]) =>
+    patchDraft((d) => ({
+      ...d,
+      sceneConfig: {
+        ...d.sceneConfig,
+        exteriorSlots: update(d.sceneConfig?.exteriorSlots ?? []),
+      } as Draft['sceneConfig'],
+    }))
+
+  const patchSlot = (index: number, update: (slot: SlotDraft) => SlotDraft) =>
+    patchSlots((slots) => slots.map((slot, i) => (i === index ? update(slot) : slot)))
+
+  const patchVariant = (
+    slotIndex: number,
+    variantIndex: number,
+    update: (variant: VariantDraft) => VariantDraft,
+  ) =>
+    patchSlot(slotIndex, (slot) => ({
+      ...slot,
+      variants: (slot.variants ?? []).map((variant, i) =>
+        i === variantIndex ? update(variant) : variant,
+      ),
+    }))
+
+  /** The variant the viewport is showing for the selected spot. */
+  const previewVariantIndex = (() => {
+    const variants = selectedSlot?.variants ?? []
+    if (variants.length === 0) return null
+    const named = variants.findIndex((variant) => variant.key === previewVariantKey)
+    if (named >= 0) return named
+    const fallback = variants.findIndex(
+      (variant) => variant.key === selectedSlot?.defaultVariantKey,
+    )
+    return fallback >= 0 ? fallback : 0
+  })()
+
+  const addSlot = () => {
+    const index = exteriorSlots.length
+    // In front of the building rather than inside it: a spot dropped in the
+    // middle of the model is invisible, and the first thing an admin does is
+    // drag it out to a door anyway.
+    const centre = modelFootprint
+      ? {
+          x: (modelFootprint.minX + modelFootprint.maxX) / 2,
+          z: modelFootprint.maxZ + 1.5,
+        }
+      : { x: 0, z: 0 }
+
+    patchSlots((slots) => [
+      ...slots,
+      {
+        key: freeKey(slots, 'spot'),
+        name: `Entrance ${index + 1}`,
+        position: { x: centre.x, y: floorPlaneY, z: centre.z },
+        yawDeg: 0,
+        defaultVariantKey: '',
+        variants: [],
+      },
+    ])
+    setSelectedSlotIndex(index)
+    setPreviewVariantKey(null)
+  }
+
+  const addVariant = (slotIndex: number, option: ExteriorOptionRef) => {
+    patchSlot(slotIndex, (slot) => {
+      const variants = slot.variants ?? []
+      const key = freeKey(variants, 'choice')
+
+      return {
+        ...slot,
+        // The catalogue's parts are a starting point, copied in with their
+        // offsets so the admin drags from somewhere rather than from nowhere.
+        // Copied rather than linked: tidying the catalogue later must not move
+        // geometry that has already been lined up on a building.
+        variants: [
+          ...variants,
+          {
+            key,
+            option: option.id,
+            nodes: [],
+            parts: option.parts.map((part) => ({ ...part })),
+          },
+        ],
+        defaultVariantKey: slot.defaultVariantKey || key,
+      }
+    })
+  }
+
+  /** Takes whatever is selected in the outliner into this choice. */
+  const claimNodes = (slotIndex: number, variantIndex: number) => {
+    if (selectedNodePaths.length === 0) return
+    patchVariant(slotIndex, variantIndex, (variant) => ({
+      ...variant,
+      nodes: [...new Set([...zoneNodePaths(variant.nodes), ...selectedNodePaths])],
+    }))
+  }
+
   return {
     isLoading: !doc || !draft,
     doc,
@@ -755,6 +886,98 @@ export function useSceneEditorModel() {
     planMode,
     modelHeight,
     modelFootprint,
+    exteriorSlots,
+    selectedSlotIndex,
+    selectedSlot,
+    previewVariantIndex,
+    onAddSlot: addSlot,
+    onSelectSlot: (index: number | null) => {
+      setSelectedSlotIndex(index)
+      setPreviewVariantKey(null)
+    },
+    onRemoveSlot: (index: number) => {
+      patchSlots((slots) => slots.filter((_, i) => i !== index))
+      setSelectedSlotIndex(null)
+    },
+    onRenameSlot: (index: number, name: string) => patchSlot(index, (slot) => ({ ...slot, name })),
+    onMoveSlot: (index: number, x: number, y: number, z: number) =>
+      patchSlot(index, (slot) => ({ ...slot, position: { x, y, z } })),
+    onSetSlotYaw: (index: number, yawDeg: number) =>
+      patchSlot(index, (slot) => ({ ...slot, yawDeg })),
+    // The built-in geometry is where the modeller put it, which is very often
+    // not where a fresh spot lands. This moves the spot to the geometry rather
+    // than asking the admin to read coordinates off it.
+    onSnapSlotToSelection: (index: number) => {
+      const boxes = selectedNodePaths
+        .map((path) => modelNodes.find((node) => node.path === path)?.box)
+        .filter((box): box is EditorBox => Boolean(box))
+      if (boxes.length === 0) return
+
+      const minX = Math.min(...boxes.map((b) => b.min.x))
+      const maxX = Math.max(...boxes.map((b) => b.max.x))
+      const minZ = Math.min(...boxes.map((b) => b.min.z))
+      const maxZ = Math.max(...boxes.map((b) => b.max.z))
+      const minY = Math.min(...boxes.map((b) => b.min.y))
+
+      patchSlot(index, (slot) => ({
+        ...slot,
+        position: { x: (minX + maxX) / 2, y: minY, z: (minZ + maxZ) / 2 },
+      }))
+    },
+    onAddVariant: addVariant,
+    onRemoveVariant: (slotIndex: number, variantIndex: number) =>
+      patchSlot(slotIndex, (slot) => {
+        const variants = (slot.variants ?? []).filter((_, i) => i !== variantIndex)
+        const gone = (slot.variants ?? [])[variantIndex]?.key
+        return {
+          ...slot,
+          variants,
+          defaultVariantKey:
+            slot.defaultVariantKey === gone ? (variants[0]?.key ?? '') : slot.defaultVariantKey,
+        }
+      }),
+    onSetDefaultVariant: (slotIndex: number, variantKey: string) =>
+      patchSlot(slotIndex, (slot) => ({ ...slot, defaultVariantKey: variantKey })),
+    onPreviewVariant: setPreviewVariantKey,
+    onClaimNodes: claimNodes,
+    onUnclaimNode: (slotIndex: number, variantIndex: number, path: string) =>
+      patchVariant(slotIndex, variantIndex, (variant) => ({
+        ...variant,
+        nodes: zoneNodePaths(variant.nodes).filter((claimed) => claimed !== path),
+      })),
+    onMovePart: (
+      slotIndex: number,
+      variantIndex: number,
+      partIndex: number,
+      x: number,
+      y: number,
+      z: number,
+    ) =>
+      patchVariant(slotIndex, variantIndex, (variant) => ({
+        ...variant,
+        parts: (variant.parts ?? []).map((part, i) =>
+          i === partIndex ? { ...part, position: { x, y, z } } : part,
+        ),
+      })),
+    onSetPartYaw: (slotIndex: number, variantIndex: number, partIndex: number, yawDeg: number) =>
+      patchVariant(slotIndex, variantIndex, (variant) => ({
+        ...variant,
+        parts: (variant.parts ?? []).map((part, i) =>
+          i === partIndex ? { ...part, yawDeg } : part,
+        ),
+      })),
+    onSetPartScale: (slotIndex: number, variantIndex: number, partIndex: number, scale: number) =>
+      patchVariant(slotIndex, variantIndex, (variant) => ({
+        ...variant,
+        parts: (variant.parts ?? []).map((part, i) =>
+          i === partIndex ? { ...part, scale } : part,
+        ),
+      })),
+    onRemovePart: (slotIndex: number, variantIndex: number, partIndex: number) =>
+      patchVariant(slotIndex, variantIndex, (variant) => ({
+        ...variant,
+        parts: (variant.parts ?? []).filter((_, i) => i !== partIndex),
+      })),
     floors,
     storeyRoomCounts,
     roomsOffStoreys,

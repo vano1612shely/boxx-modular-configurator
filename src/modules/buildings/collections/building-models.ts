@@ -251,6 +251,100 @@ export const BuildingModels: CollectionConfig = {
                   ],
                 },
                 {
+                  name: 'exteriorSlots',
+                  type: 'array',
+                  labels: { singular: 'Exterior Spot', plural: 'Exterior Spots' },
+                  admin: {
+                    description:
+                      'Places outside the building where the visitor picks between a deck, ' +
+                      'stairs, a ramp and so on. A building with none of these is shown exactly ' +
+                      'as it is, with no panel. Set up visually in the Scene Editor.',
+                  },
+                  fields: [
+                    {
+                      type: 'row',
+                      fields: [
+                        { name: 'key', type: 'text', required: true },
+                        { name: 'name', type: 'text', required: true },
+                      ],
+                    },
+                    vec3Field('position'),
+                    {
+                      type: 'row',
+                      fields: [
+                        { name: 'yawDeg', type: 'number', defaultValue: 0 },
+                        {
+                          name: 'defaultVariantKey',
+                          type: 'text',
+                          admin: {
+                            description: 'What the visitor arrives on. Blank means the first one.',
+                          },
+                        },
+                      ],
+                    },
+                    {
+                      name: 'variants',
+                      type: 'array',
+                      labels: { singular: 'Choice', plural: 'Choices' },
+                      admin: {
+                        description:
+                          'What may be picked here. A choice can reveal objects already in the ' +
+                          'building model, or place models of its own, or both at once.',
+                      },
+                      fields: [
+                        {
+                          type: 'row',
+                          fields: [
+                            { name: 'key', type: 'text', required: true },
+                            {
+                              name: 'option',
+                              type: 'relationship',
+                              relationTo: 'exterior-options',
+                              required: true,
+                            },
+                          ],
+                        },
+                        {
+                          // Node paths like "2/0/5", into the building's own model.
+                          name: 'nodes',
+                          type: 'json',
+                          admin: {
+                            readOnly: true,
+                            description:
+                              'Objects of the building model this choice shows. Claimed visually.',
+                          },
+                        },
+                        {
+                          name: 'parts',
+                          type: 'array',
+                          labels: { singular: 'Part', plural: 'Parts' },
+                          admin: {
+                            description:
+                              'Models placed for this choice. Offsets are from the spot above, ' +
+                              'so moving the spot carries every choice with it.',
+                          },
+                          fields: [
+                            {
+                              name: 'model',
+                              type: 'relationship',
+                              relationTo: 'models',
+                              required: true,
+                            },
+                            vec3Field('position'),
+                            {
+                              type: 'row',
+                              fields: [
+                                { name: 'yawDeg', type: 'number', defaultValue: 0 },
+                                { name: 'scale', type: 'number', defaultValue: 1 },
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
                   // Node paths like "2/0/5".
                   name: 'hiddenNodePaths',
                   type: 'json',

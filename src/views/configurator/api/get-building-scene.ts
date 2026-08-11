@@ -4,9 +4,12 @@ import config from '@payload-config'
 
 import {
   mapBuildingScene,
+  mapExteriorOption,
   resolveBuildingSize,
   type BuildingScene,
+  type ExteriorCatalogue,
 } from '@/entities/building'
+import type { BuildingModel } from '@/payload-types'
 
 import { regionClauses, whereAll, type RegionScope } from './regions'
 
@@ -22,6 +25,41 @@ export type BuildingResolution =
   | { status: 'ok'; scene: BuildingScene }
   | { status: 'over-capacity'; lineName: string; requestedUnits: number }
   | { status: 'not-found' }
+
+type Payload = Awaited<ReturnType<typeof getPayload>>
+
+/**
+ * The catalogue entries this building's exterior spots point at.
+ *
+ * Fetched on their own rather than by deepening the query above: depth 1
+ * resolves an option but stops before its thumbnail, and depth 2 would populate
+ * every texture and every line's regions on a query that already returns up to
+ * a hundred buildings. This one asks for a handful of rows by id.
+ */
+async function exteriorCatalogue(payload: Payload, doc: BuildingModel): Promise<ExteriorCatalogue> {
+  const ids = new Set<number>()
+  for (const slot of doc.sceneConfig?.exteriorSlots ?? []) {
+    for (const variant of slot.variants ?? []) {
+      const id = typeof variant.option === 'number' ? variant.option : variant.option?.id
+      if (typeof id === 'number') ids.add(id)
+    }
+  }
+
+  if (ids.size === 0) return new Map()
+
+  const options = await payload.find({
+    collection: 'exterior-options',
+    depth: 1,
+    limit: ids.size,
+    where: { id: { in: [...ids] } },
+  })
+
+  return new Map(options.docs.map((option) => [option.id, mapExteriorOption(option)]))
+}
+
+async function sceneFor(payload: Payload, doc: BuildingModel): Promise<BuildingScene> {
+  return mapBuildingScene(doc, await exteriorCatalogue(payload, doc))
+}
 
 export async function getBuildingScene(query: Query): Promise<BuildingResolution> {
   const payload = await getPayload({ config })
@@ -56,7 +94,7 @@ export async function getBuildingScene(query: Query): Promise<BuildingResolution
   if (models.docs.length === 0) return { status: 'not-found' }
 
   if (!query.units) {
-    return { status: 'ok', scene: mapBuildingScene(models.docs[0]) }
+    return { status: 'ok', scene: await sceneFor(payload, models.docs[0]) }
   }
 
   const first = mapBuildingScene(models.docs[0])
@@ -81,6 +119,6 @@ export async function getBuildingScene(query: Query): Promise<BuildingResolution
   const fitting = models.docs.find((doc) => doc.id === result.modelId)
 
   return fitting
-    ? { status: 'ok', scene: mapBuildingScene(fitting) }
+    ? { status: 'ok', scene: await sceneFor(payload, fitting) }
     : { status: 'not-found' }
 }

@@ -7,11 +7,14 @@ import {
   WALL_SIDES,
 } from '@/modules/shared/room-shell'
 import { ROOM_TYPE_OPTIONS } from '@/modules/shared/room-types'
-import type { BuildingLine, BuildingModel, Model } from '@/payload-types'
+import type { BuildingLine, BuildingModel, ExteriorOption, Model } from '@/payload-types'
 
 import type {
   BuildingFloor,
   BuildingScene,
+  ExteriorPart,
+  ExteriorSlot,
+  ExteriorVariant,
   OpeningFit,
   OpeningKind,
   OpeningModelStyle,
@@ -93,6 +96,112 @@ function mapRoofModel(
     yawDeg: numberOr(value?.yawDeg, 0),
     scale: scale > 0 ? scale : 1,
   }
+}
+
+/**
+ * A catalogue option as the cards need it, without the geometry.
+ *
+ * Kept apart from the building because the two are fetched apart. The building
+ * query runs at depth 1, which resolves the option itself but stops before its
+ * thumbnail — so the options are read again, by id, rather than deepening a
+ * query that would then also drag every texture and every line's regions along
+ * with it.
+ */
+export type ExteriorOptionInfo = {
+  id: number
+  title: string
+  description: string | null
+  price: number | null
+  thumbnailUrl: string | null
+}
+
+export type ExteriorCatalogue = Map<number, ExteriorOptionInfo>
+
+export function mapExteriorOption(doc: ExteriorOption): ExteriorOptionInfo {
+  return {
+    id: doc.id,
+    title: doc.title,
+    description: doc.description ?? null,
+    price: typeof doc.price === 'number' ? doc.price : null,
+    thumbnailUrl: optionalModelUrl(doc.thumbnail),
+  }
+}
+
+type SlotDoc = NonNullable<NonNullable<BuildingModel['sceneConfig']>['exteriorSlots']>[number]
+type VariantDoc = NonNullable<SlotDoc['variants']>[number]
+
+function exteriorParts(value: VariantDoc['parts']): ExteriorPart[] {
+  return (value ?? []).flatMap((part) => {
+    const url = optionalModelUrl(part.model)
+    if (!url) return []
+
+    const scale = numberOr(part.scale, 1)
+    return [
+      {
+        url,
+        position: toTuple(part.position),
+        yawDeg: numberOr(part.yawDeg, 0),
+        scale: scale > 0 ? scale : 1,
+      },
+    ]
+  })
+}
+
+/**
+ * A variant needs a name and a picture to be offered at all, and both come from
+ * the catalogue. One whose option has been deleted is dropped rather than shown
+ * as a blank card — and a spot left with nothing to choose between is dropped
+ * with it, since a picker with one entry is not a choice.
+ */
+function exteriorVariants(
+  value: SlotDoc['variants'],
+  catalogue: ExteriorCatalogue,
+): ExteriorVariant[] {
+  return (value ?? []).flatMap((variant, index) => {
+    const option = variant.option
+    const id = typeof option === 'number' ? option : option?.id
+    const info =
+      (typeof id === 'number' ? catalogue.get(id) : undefined) ??
+      (option && typeof option === 'object' ? mapExteriorOption(option) : null)
+    if (!info) return []
+
+    return [
+      {
+        key: variant.key || `choice-${index + 1}`,
+        title: info.title,
+        description: info.description,
+        price: info.price,
+        thumbnailUrl: info.thumbnailUrl,
+        nodes: zoneNodePaths(variant.nodes),
+        parts: exteriorParts(variant.parts),
+      },
+    ]
+  })
+}
+
+function mapExteriorSlots(
+  value: SlotDoc[] | null | undefined,
+  catalogue: ExteriorCatalogue,
+): ExteriorSlot[] {
+  return (value ?? []).flatMap((slot, index) => {
+    const variants = exteriorVariants(slot.variants, catalogue)
+    if (variants.length === 0) return []
+
+    // The rest of the app reads the default without checking it, so a key that
+    // names nothing — renamed variant, deleted one — is resolved here once.
+    const named = variants.find((variant) => variant.key === slot.defaultVariantKey)
+
+    return [
+      {
+        key: slot.key || `spot-${index + 1}`,
+        name: slot.name || `Entrance ${index + 1}`,
+        position: toTuple(slot.position),
+        yawDeg: numberOr(slot.yawDeg, 0),
+        defaultVariantKey: (named ?? variants[0]).key,
+        variants,
+      },
+    ]
+  })
 }
 
 export type RoomDoc = NonNullable<BuildingModel['rooms']>[number]
@@ -312,7 +421,10 @@ function assertDoc<T>(value: number | T | null | undefined, label: string): T {
   return value
 }
 
-export function mapBuildingScene(doc: BuildingModel): BuildingScene {
+export function mapBuildingScene(
+  doc: BuildingModel,
+  catalogue: ExteriorCatalogue = new Map(),
+): BuildingScene {
   const line = assertDoc<BuildingLine>(doc.line, 'line')
   const model = assertDoc<Model>(doc.model, 'model')
 
@@ -366,5 +478,6 @@ export function mapBuildingScene(doc: BuildingModel): BuildingScene {
     roofModel: mapRoofModel(doc.sceneConfig?.roofModel),
     hiddenNodePaths,
     rooms,
+    exteriorSlots: mapExteriorSlots(doc.sceneConfig?.exteriorSlots, catalogue),
   }
 }

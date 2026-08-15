@@ -2,13 +2,14 @@ import { create } from 'zustand'
 
 import type { AreaUnit } from '@/shared/lib'
 
-export type ViewMode =
-  | 'dollhouse'
-  | 'top'
-  | 'side-front'
-  | 'side-right'
-  | 'side-back'
-  | 'side-left'
+/**
+ * The two poses a button can ask for.
+ *
+ * The four sides used to be here too. A quarter turn does what they did and
+ * keeps the zoom and the pan while it is at it, so naming four fixed bearings
+ * was four buttons spent on a subset of one.
+ */
+export type ViewMode = 'dollhouse' | 'top'
 
 export type BuildingBounds = {
   min: [number, number, number]
@@ -33,14 +34,14 @@ type ConfiguratorSessionState = {
   /** World-space extent excluding the exported site plate; null until the glb resolves. */
   buildingBounds: BuildingBounds | null
   /**
-   * The view button last pressed, which is all the bar ever claims.
+   * The view button last pressed, or null once the camera has left it.
    *
    * Separate from `viewMode` because that one is an instruction to the camera:
    * it is in the preset effect's dependencies and it also sets the polar floor,
    * so writing it to relabel the bar would fly the camera and, mid-drag, jerk
    * the model out from under the finger doing the dragging.
    */
-  pickedView: ViewMode
+  pickedView: ViewMode | null
   /**
    * The visitor's own unit, or null to follow the admin's default.
    *
@@ -49,7 +50,14 @@ type ConfiguratorSessionState = {
    * following the admin if they change theirs.
    */
   areaUnitOverride: AreaUnit | null
-  showCeiling: boolean
+  /**
+   * Whether the roof and the ceilings under it are drawn.
+   *
+   * Observed, not chosen: the rig reads the tilt every frame and reports it
+   * through `setRoofShown`. Tip far enough over to be looking at the floor and
+   * the roof that would be covering it goes; come back down and it returns.
+   */
+  roofShown: boolean
   /** Storey the visitor is looking at, or null for the whole building. */
   selectedFloorKey: string | null
   /** Room framed from above without going in, or null. A step, not a place. */
@@ -71,8 +79,9 @@ type ConfiguratorSessionState = {
   setBuildingBounds: (bounds: BuildingBounds) => void
   setAreaUnit: (unit: AreaUnit | null) => void
   noteManualView: () => void
-  toggleCeiling: () => void
+  setRoofShown: (shown: boolean) => void
   selectFloor: (key: string | null) => void
+  recenter: () => void
   previewRoom: (key: string) => void
   clearPreview: () => void
   setActiveZone: (key: string | null) => void
@@ -94,9 +103,13 @@ type ConfiguratorSessionState = {
 const VISITOR_STATE = {
   focusedRoomKey: null as string | null,
   interactionLock: false,
-  viewMode: 'dollhouse' as ViewMode,
-  pickedView: 'dollhouse' as ViewMode,
-  showCeiling: false,
+  // Straight down, the way a plan is read. The first question anyone asks of a
+  // building they have just configured is what is in it and where, and the
+  // three-quarter view answers that worst — the near walls hide half of it.
+  viewMode: 'top' as ViewMode,
+  pickedView: 'top' as ViewMode | null,
+  // Follows the opening tilt: looking down at the plan, there is no roof.
+  roofShown: false,
   selectedFloorKey: null as string | null,
   previewRoomKey: null as string | null,
   activeZoneKey: null as string | null,
@@ -140,7 +153,7 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   setActiveZone: (key) => set({ activeZoneKey: key }),
   setInteractionLock: (locked) => set({ interactionLock: locked }),
   // Picking a view is a statement about the building, so it drops a room
-  // preview: framing one room from the front is not what "Front" was asked for.
+  // preview: the whole of it from outside is not what one room from above was.
   setViewMode: (mode) =>
     set((s) => ({
       viewMode: mode,
@@ -157,14 +170,32 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   // stops naming one. No request bump and no `viewMode` write: this is called
   // from the first move of a drag, and either would fly the camera out from
   // under the finger doing the dragging.
-  noteManualView: () => set({ pickedView: 'dollhouse' }),
-  toggleCeiling: () => set((s) => ({ showCeiling: !s.showCeiling })),
+  noteManualView: () => set({ pickedView: null }),
+  // Reported by the rig off the live tilt, so it is written on the frame the
+  // camera crosses the angle and on no other. Nothing here decides anything —
+  // the deciding is `roofShownAt`, which the rig owns.
+  setRoofShown: (roofShown) => set({ roofShown }),
   // Reframes: a storey is a different subject, and the pose that framed the
   // whole building leaves it small and off centre.
   selectFloor: (key) =>
     set((s) => ({
       selectedFloorKey: key,
       previewRoomKey: null,
+      moveToTarget: null,
+      viewRequestId: s.viewRequestId + 1,
+    })),
+  // Back out over the whole of it, centred, the way a map recentres on you.
+  //
+  // Not merely "Top view" again: that one looks down at whatever the camera is
+  // currently bounded to, and a picked storey survives it. This puts the whole
+  // building back as the subject first, which is the half that matters once a
+  // visitor has closed in on one corner of the plan and lost the rest of it.
+  recenter: () =>
+    set((s) => ({
+      viewMode: 'top',
+      pickedView: 'top',
+      previewRoomKey: null,
+      selectedFloorKey: null,
       moveToTarget: null,
       viewRequestId: s.viewRequestId + 1,
     })),
@@ -200,14 +231,19 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   // focal offset and dollies back, throwing away the visitor's zoom and pan on
   // every press. It leaves `viewMode` alone for the same reason.
   //
-  // The bar does stop naming a side, though: a quarter turn is a button press,
-  // but not that side's button, and after it the camera is demonstrably ninety
-  // degrees off whatever the bar was claiming.
+  // The bar stops naming the overview, which a quarter turn does leave: it is a
+  // pose from one particular bearing, and after a turn the camera is
+  // demonstrably ninety degrees off it.
+  //
+  // The top view it keeps. That one is not a bearing at all — it is the eye
+  // straight over the subject looking down, and it is exactly as true of the
+  // plan turned a quarter as of the plan as it was. The button stays lit
+  // because the view really is still the one it names.
   rotateView: (direction) =>
     set((s) => ({
       rotateDirection: direction,
       rotateRequestId: s.rotateRequestId + 1,
-      pickedView: 'dollhouse',
+      pickedView: s.pickedView === 'top' ? 'top' : null,
     })),
   // A different building is a different subject: its rooms, storeys and framing
   // share nothing with the last one's.

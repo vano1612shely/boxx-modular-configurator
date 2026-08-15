@@ -54,6 +54,22 @@ export type OverviewClippingController = {
 
 const CONTROLLER_KEY = '__overviewClippingController'
 
+export type OverviewClippingOptions = {
+  /**
+   * Whether a keep volume will ever be asked for.
+   *
+   * Mounting the planes recompiles every material on the model, and doing it
+   * lazily meant paying for that on the frame the visitor picked a storey — a
+   * stall in the middle of an interaction, for a scene that is about to be
+   * redrawn anyway. Declaring it here spends the same compile inside the one
+   * the patch below is already causing, while the loader is still up.
+   *
+   * Left false for a building with nothing to cut: six clipping planes are six
+   * more tests per fragment, on every fragment, for a cut that never comes.
+   */
+  cuttable?: boolean
+}
+
 const FRAGMENT_SNIPPET = /* glsl */ `
   for (int i = 0; i < ${MAX_HIDE_BOXES}; i++) {
     if (i >= uHideCount) break;
@@ -63,7 +79,10 @@ const FRAGMENT_SNIPPET = /* glsl */ `
 
 // Must stay idempotent per root: a second pass would rebind materials to fresh
 // uniforms while the caller still holds the first controller.
-export function applyOverviewClipping(root: Object3D): OverviewClippingController {
+export function applyOverviewClipping(
+  root: Object3D,
+  { cuttable = false }: OverviewClippingOptions = {},
+): OverviewClippingController {
   const existing = root.userData[CONTROLLER_KEY] as OverviewClippingController | undefined
   if (existing) return existing
 
@@ -87,7 +106,20 @@ export function applyOverviewClipping(root: Object3D): OverviewClippingControlle
     new Plane(new Vector3(0, 0, 1), 0),
     new Plane(new Vector3(0, 0, -1), 0),
   ]
-  let keepMounted = false
+  const writeKeepBox = ({ min, max }: ZoneBox) => {
+    keepPlanes[0].constant = -(min[0] - KEEP_EDGE)
+    keepPlanes[1].constant = max[0] + KEEP_EDGE
+    keepPlanes[2].constant = -(min[1] - KEEP_EDGE)
+    keepPlanes[3].constant = max[1] + KEEP_EDGE
+    keepPlanes[4].constant = -(min[2] - KEEP_EDGE)
+    keepPlanes[5].constant = max[2] + KEEP_EDGE
+  }
+
+  // Open before anything mounts them: they are constructed on the origin, which
+  // as a keep volume is the eighth of the world with every coordinate positive.
+  writeKeepBox(UNBOUNDED)
+
+  let keepMounted = cuttable
 
   const mountKeepPlanes = (material: Material) => {
     material.clippingPlanes = keepPlanes
@@ -161,16 +193,12 @@ uniform vec3 uCapColor;`,
     setKeepBox: (box) => {
       // Mounting the planes recompiles every material, so a scene that never
       // asks for a keep volume must never pay for one. Once mounted they stay,
-      // opened out to everything — switching storeys is then free.
+      // opened out to everything — switching storeys is then free. A caller
+      // that declared itself `cuttable` has already mounted them up front, and
+      // never reaches the recompile below at all.
       if (box === null && !keepMounted) return
 
-      const { min, max } = box ?? UNBOUNDED
-      keepPlanes[0].constant = -(min[0] - KEEP_EDGE)
-      keepPlanes[1].constant = max[0] + KEEP_EDGE
-      keepPlanes[2].constant = -(min[1] - KEEP_EDGE)
-      keepPlanes[3].constant = max[1] + KEEP_EDGE
-      keepPlanes[4].constant = -(min[2] - KEEP_EDGE)
-      keepPlanes[5].constant = max[2] + KEEP_EDGE
+      writeKeepBox(box ?? UNBOUNDED)
 
       if (keepMounted) return
       keepMounted = true

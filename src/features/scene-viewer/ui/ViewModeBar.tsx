@@ -6,9 +6,8 @@ import {
   ChevronUp,
   Footprints,
   Home,
-  Layers,
   LayoutGrid,
-  Eye,
+  LocateFixed,
   RotateCw,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -19,13 +18,6 @@ import { useConfiguratorSession, type ViewMode } from '@/entities/configurator-s
 import { cn } from '@/shared/lib'
 import { FloatingBar, Pill, SceneOverlay } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
-
-const SIDE_VIEWS: Array<{ mode: ViewMode; label: string }> = [
-  { mode: 'side-front', label: 'Front' },
-  { mode: 'side-right', label: 'Right' },
-  { mode: 'side-back', label: 'Back' },
-  { mode: 'side-left', label: 'Left' },
-]
 
 const WHOLE_BUILDING = 'Whole building'
 
@@ -45,27 +37,20 @@ type Props = {
   floors: BuildingFloor[]
 }
 
-/** Which of the two stacked pickers is open; only one may be. */
-type OpenMenu = 'side' | 'floor' | null
-
 export function ViewModeBar({ floors }: Props) {
   const setViewMode = useConfiguratorSession((s) => s.setViewMode)
   const requestMoveTo = useConfiguratorSession((s) => s.requestMoveTo)
   const rotateView = useConfiguratorSession((s) => s.rotateView)
+  const recenter = useConfiguratorSession((s) => s.recenter)
   const pickedView = useConfiguratorSession((s) => s.pickedView)
   const isRoomFocused = useConfiguratorSession((s) => s.focusedRoomKey !== null)
-  const showCeiling = useConfiguratorSession((s) => s.showCeiling)
-  const toggleCeiling = useConfiguratorSession((s) => s.toggleCeiling)
   const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)
   const selectFloor = useConfiguratorSession((s) => s.selectFloor)
   const selectedInstanceId = useConfiguration((s) => s.selectedInstanceId)
   const placed = useConfiguration((s) => s.placed)
-  const [open, setOpen] = useState<OpenMenu>(null)
+  /** Whether the storey picker is up, the one thing in the bar that stacks. */
+  const [pickingFloor, setPickingFloor] = useState(false)
 
-  // Only ever the button that was pressed, and any manual move of the model
-  // clears it — so the bar can never insist on a side the camera has left.
-  const activeSide = SIDE_VIEWS.find((view) => view.mode === pickedView) ?? null
-  const isSideView = activeSide !== null
   const overviewLabel = isRoomFocused ? 'Dollhouse' : 'Overview'
   const selected = placed.find((p) => p.instanceId === selectedInstanceId) ?? null
 
@@ -77,12 +62,12 @@ export function ViewModeBar({ floors }: Props) {
   const hasFloors = floors.length >= 2 && !isRoomFocused
 
   const pick = (mode: ViewMode) => {
-    setOpen(null)
+    setPickingFloor(false)
     setViewMode(mode)
   }
 
   const pickFloor = (key: string | null) => {
-    setOpen(null)
+    setPickingFloor(false)
     selectFloor(key)
   }
 
@@ -106,26 +91,7 @@ export function ViewModeBar({ floors }: Props) {
           'bottom-[calc(5rem+env(safe-area-inset-bottom))] desktop:bottom-4 desktop:left-[calc(50%-11rem)] lg:left-[calc(50%-13rem)]',
       )}
     >
-      <Show when={open === 'side'}>
-        <FloatingBar
-          shape="panel"
-          className="absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 flex-col items-stretch"
-        >
-          <For each={SIDE_VIEWS} getKey={(v) => v.mode}>
-            {(view) => (
-              <Pill
-                variant="ghost"
-                selected={pickedView === view.mode}
-                onClick={() => pick(view.mode)}
-              >
-                {view.label}
-              </Pill>
-            )}
-          </For>
-        </FloatingBar>
-      </Show>
-
-      <Show when={open === 'floor'}>
+      <Show when={pickingFloor}>
         <FloatingBar
           shape="panel"
           className="absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 flex-col items-stretch"
@@ -152,8 +118,8 @@ export function ViewModeBar({ floors }: Props) {
       </Show>
 
       {/* Only the control that is currently saying something spells itself out.
-          Six labelled pills made a bar wide enough to sit across the building
-          it is meant to be steering. */}
+          A labelled pill apiece made a bar wide enough to sit across the
+          building it is meant to be steering. */}
       <FloatingBar>
         <Pill
           {...spellOut(overviewLabel, pickedView === 'dollhouse')}
@@ -169,23 +135,6 @@ export function ViewModeBar({ floors }: Props) {
           leadingIcon={<LayoutGrid size={16} />}
           onClick={() => pick('top')}
         />
-        <Pill
-          {...spellOut(activeSide?.label ?? 'Side views', isSideView)}
-          variant="ghost"
-          selected={isSideView}
-          aria-expanded={open === 'side'}
-          leadingIcon={
-            <>
-              <Eye size={16} />
-              <ChevronUp
-                size={14}
-                aria-hidden
-                className={cn('order-last transition-transform', open === 'side' && 'rotate-180')}
-              />
-            </>
-          }
-          onClick={() => setOpen((current) => (current === 'side' ? null : 'side'))}
-        />
         {/* A quarter of a turn, taking four presses to go round. It only
             rewrites the bearing, so it works from the top view as well — where
             dragging at a three-degree tilt is awkward — and it leaves the zoom
@@ -196,27 +145,36 @@ export function ViewModeBar({ floors }: Props) {
           leadingIcon={<RotateCw size={16} />}
           onClick={() => rotateView(1)}
         />
+        {/* Once the visitor has closed in on one corner of the plan there is
+            nothing on screen saying where the rest of the building went. This
+            is the way back: the whole of it again, from overhead, centred —
+            and, unlike "Top view", it puts a picked storey back as well. */}
+        <Show when={!isRoomFocused}>
+          <Pill
+            {...spellOut('Recenter', false)}
+            variant="ghost"
+            leadingIcon={<LocateFixed size={16} />}
+            onClick={recenter}
+          />
+        </Show>
         <Show when={hasFloors}>
           <FloatingBar.Divider />
           <Pill
             {...spellOut(currentFloor?.name ?? WHOLE_BUILDING, currentFloor !== null)}
             variant="ghost"
             selected={currentFloor !== null}
-            aria-expanded={open === 'floor'}
+            aria-expanded={pickingFloor}
             leadingIcon={
               <>
                 <Building2 size={16} />
                 <ChevronUp
                   size={14}
                   aria-hidden
-                  className={cn(
-                    'order-last transition-transform',
-                    open === 'floor' && 'rotate-180',
-                  )}
+                  className={cn('order-last transition-transform', pickingFloor && 'rotate-180')}
                 />
               </>
             }
-            onClick={() => setOpen((current) => (current === 'floor' ? null : 'floor'))}
+            onClick={() => setPickingFloor((up) => !up)}
           />
         </Show>
         {/* Only inside a room. From the building view it walked the camera to
@@ -231,18 +189,6 @@ export function ViewModeBar({ floors }: Props) {
             disabled={!selected}
             leadingIcon={<Footprints size={16} />}
             onClick={moveToSelected}
-          />
-        </Show>
-        {/* A storey is already cut below its own ceiling, so the toggle has
-            nothing left to say while one is picked. */}
-        <Show when={!isRoomFocused && currentFloor === null}>
-          <FloatingBar.Divider />
-          <Pill
-            {...spellOut(showCeiling ? 'Hide ceiling & roof' : 'Show ceiling & roof', false)}
-            variant="ghost"
-            selected={showCeiling}
-            leadingIcon={<Layers size={16} />}
-            onClick={toggleCeiling}
           />
         </Show>
       </FloatingBar>

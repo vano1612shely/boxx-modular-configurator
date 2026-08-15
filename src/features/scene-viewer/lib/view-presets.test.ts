@@ -18,7 +18,7 @@ const BUILDING: ViewScope = {
   fov: 50,
 }
 
-/** A long single room — the shape that leaves the side views furthest out. */
+/** A long single room — the shape whose two presets disagree most about range. */
 const LONG_ROOM: ViewScope = {
   min: [0, 0, 0],
   max: [4, 2.6, 12],
@@ -40,44 +40,41 @@ describe('viewModePreset', () => {
     }
   })
 
-  it('aims the four sides at the same point from four bearings', () => {
-    const sides = ['side-front', 'side-right', 'side-back', 'side-left'] as const
-    const bearings = new Set<number>()
-
-    for (const mode of sides) {
-      const preset = viewModePreset(mode, BUILDING)
-      expect(preset.target).toEqual(viewModePreset('side-front', BUILDING).target)
-      bearings.add(
-        Math.round(
-          Math.atan2(preset.position[0] - preset.target[0], preset.position[2] - preset.target[2]) *
-            1e6,
-        ),
-      )
-    }
-
-    expect(bearings.size).toBe(4)
+  // The four sides were dropped: the quarter turn reaches every bearing they
+  // named, and unlike them it keeps the zoom and the pan on the way.
+  it('offers the overview and the plan, and nothing else', () => {
+    expect([...VIEW_MODES]).toEqual(['dollhouse', 'top'])
   })
 
   it('hands the dollhouse mode straight through', () => {
     expect(viewModePreset('dollhouse', BUILDING)).toBe(BUILDING.dollhouse)
   })
+
+  it('looks straight down from the fitted height, over the middle', () => {
+    const { position, target } = viewModePreset('top', BUILDING)
+    const fitted = fitDistance(RADIUS(BUILDING), BUILDING.fov)
+
+    expect(target).toEqual([0, 0, 0])
+    expect(position[1]).toBeCloseTo(fitted, 6)
+    expect(Math.hypot(position[0] - target[0], position[2] - target[2])).toBeLessThan(
+      position[1] * 0.1,
+    )
+  })
 })
 
 describe('farthestPresetRadius', () => {
-  it('is a side view, which stands off further than the framing', () => {
-    const fitted = fitDistance(RADIUS(BUILDING), BUILDING.fov)
-    const farthest = farthestPresetRadius(BUILDING)
-
-    expect(farthest).toBeGreaterThan(fitted)
-    // The long axis: 12 m across, so the right and left views back off most.
-    expect(farthest).toBeCloseTo(orbitRadius(viewModePreset('side-right', BUILDING)), 6)
-  })
-
-  // The whole of a 1.35x ceiling used to be swallowed by this on a long room,
-  // leaving the wheel dead outwards the moment a side view landed.
-  it('exceeds the framing radius by most of the ceiling on a long room', () => {
-    const fitted = fitDistance(RADIUS(LONG_ROOM), LONG_ROOM.fov)
-    expect(farthestPresetRadius(LONG_ROOM) / fitted).toBeGreaterThan(1.3)
+  // Neither pose is reliably the further out — the top view is fitted to the
+  // subject's height from overhead, the overview to how far back a standing eye
+  // has to be — so the ceiling is derived from whichever wins on the day.
+  it('takes whichever of the two stands off further', () => {
+    expect(farthestPresetRadius(BUILDING)).toBeCloseTo(
+      orbitRadius(viewModePreset('dollhouse', BUILDING)),
+      6,
+    )
+    expect(farthestPresetRadius(LONG_ROOM)).toBeCloseTo(
+      orbitRadius(viewModePreset('top', LONG_ROOM)),
+      6,
+    )
   })
 
   it('is never smaller than any single preset', () => {

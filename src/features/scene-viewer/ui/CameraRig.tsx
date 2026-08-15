@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Box3, MathUtils, Spherical, Vector3 } from 'three'
 
 import type { BuildingFloor, BuildingScene, Room } from '@/entities/building'
-import { floorExtent, frameBuilding, frameExtent, orbitable } from '@/entities/building'
+import { floorExtent, frameExtent, frameEyeLevel, orbitable } from '@/entities/building'
 import { useConfiguratorSession, type BuildingBounds } from '@/entities/configurator-session'
 
 import { applyPreset } from '../lib/apply-preset'
@@ -18,6 +18,7 @@ import { holdAboveGround } from '../lib/hold-above-ground'
 import { offsetLimit, panSpeedFactor } from '../lib/pan-resistance'
 import { quarterTurn } from '../lib/quarter-turn'
 import { pinPose } from '../lib/pin-pose'
+import { roofShownAt } from '../lib/roof-reveal'
 import { azimuthRotateSpeed, polarRotateSpeed } from '../lib/rotate-speeds'
 import { roomScope, viewModePreset, type ViewScope } from '../lib/view-presets'
 import { dollySpeedFor } from '../lib/wheel-dolly'
@@ -58,13 +59,15 @@ function scopeFor(
 
   const { min, max } = buildingBounds
 
+  // Not the authored pose, which used to be kept whenever it already framed the
+  // building: the overview is now a statement about where the visitor is
+  // standing, and an aerial three-quarter shot is not a place anybody stands.
+  // The authored pose still opens the Canvas, before there is anything measured
+  // to frame.
   return {
     min,
     max,
-    dollhouse: frameBuilding(min, max, fov, {
-      position: building.camera.position,
-      target: building.camera.target,
-    }),
+    dollhouse: frameEyeLevel(min, max, fov, building.camera.maxPolarDeg),
     fov,
   }
 }
@@ -159,23 +162,35 @@ export function CameraRig({
   const authoredMaxPolar = MathUtils.degToRad(camera.maxPolarDeg)
 
   /**
-   * Re-applies the tip limit to the pose that already exists, every frame.
+   * Everything that has to be read off the live pose, every frame.
    *
-   * Driven from here rather than through the `maxPolarAngle` prop because React
-   * re-renders when something it knows about changes, and a dolly is not that —
-   * the radius moves under the visitor's hand with no render in sight, and it is
-   * the radius that decides how low a given tilt puts the eye.
+   * Driven from here rather than through props because React re-renders when
+   * something it knows about changes, and neither of these is that — the tilt
+   * and the radius both move under the visitor's hand with no render in sight,
+   * and it is the radius that decides how low a given tilt puts the eye.
    */
   useFrame(() => {
     const controls = controlsRef.current
-    const ground = groundRef.current
     if (!controls) return
-    if (ground === null) {
-      controls.maxPolarAngle = authoredMaxPolar
-      return
-    }
 
-    holdAboveGround(controls, ground, authoredMaxPolar)
+    const ground = groundRef.current
+    if (ground === null) controls.maxPolarAngle = authoredMaxPolar
+    else holdAboveGround(controls, ground, authoredMaxPolar)
+
+    // The roof follows the tilt, and follows it here for the same reason the
+    // limit above does: the angle moves under the visitor's hand and under the
+    // damping of a flight, neither of which React hears about. `polarAngle` is
+    // the live one, not the one being flown to, so the roof goes as the camera
+    // crosses the angle rather than the moment a button is pressed.
+    //
+    // Inside a room neither the roof nor the building around it is drawn, so
+    // the angle in there decides nothing — and left to write, it would flip the
+    // roof, and with it the shadow map, on the way in and again on the way out.
+    const session = useConfiguratorSession.getState()
+    if (session.focusedRoomKey !== null) return
+
+    const shown = roofShownAt(MathUtils.radToDeg(controls.polarAngle), session.roofShown)
+    if (shown !== session.roofShown) session.setRoofShown(shown)
   })
 
   useEffect(() => {
@@ -394,8 +409,14 @@ export function CameraRig({
     // The opening pose is a placement, not a move: camera-controls starts with
     // its target on the world origin, so animating the first one drifts the
     // model into place under the loader.
+    //
+    // Which pose that is only settles once the model has been measured. Before
+    // then there is nothing to frame and the authored pose stands in, and
+    // counting *that* as the opening one left the real first view — the top
+    // view, now the default — arriving as a flight up and over, starting on the
+    // frame the loader lifted.
     const transition = hasFlownRef.current
-    hasFlownRef.current = true
+    if (scope) hasFlownRef.current = true
 
     applyPreset(controls, preset, transition)
   }, [camera, scope, viewMode, viewRequestId])

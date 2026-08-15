@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import type { RoomOpening, Room } from '../model/types'
 import {
+  EYE_LEVEL,
   extentWithoutSite,
-  frameBuilding,
+  frameEyeLevel,
   frameRoom,
   orbitable,
   orbitRadius,
@@ -255,83 +256,85 @@ describe('orbitable', () => {
   })
 })
 
-describe('frameBuilding', () => {
+describe('frameEyeLevel', () => {
   const MIN: [number, number, number] = [-7.5, 0.8, -8.6]
   const MAX: [number, number, number] = [0, 3.9, 9]
   const FOV = 50
+  /** What the collection stores by default, and what the rig hands over. */
+  const MAX_POLAR = 85
 
-  it('keeps a preset that already frames the building', () => {
-    const stored = { position: [20, 12, 24] as const, target: [-3.7, 2.3, 0.2] as const }
-    const framed = frameBuilding(MIN, MAX, FOV, {
-      position: [...stored.position],
-      target: [...stored.target],
-    })
+  const polarOf = (p: ReturnType<typeof frameEyeLevel>) =>
+    (Math.acos(
+      (p.position[1] - p.target[1]) /
+        Math.hypot(
+          p.position[0] - p.target[0],
+          p.position[1] - p.target[1],
+          p.position[2] - p.target[2],
+        ),
+    ) *
+      180) /
+    Math.PI
 
-    expect(framed.position).toEqual([...stored.position])
-    expect(framed.target).toEqual([...stored.target])
+  // The whole of the request: six feet off the ground the building stands on.
+  it('puts the eye at standing height above the base', () => {
+    const { position } = frameEyeLevel(MIN, MAX, FOV, MAX_POLAR)
+    expect(position[1]).toBeCloseTo(MIN[1] + EYE_LEVEL, 6)
   })
 
-  it('replaces a preset that orbits a point a metre in front of itself', () => {
-    const framed = frameBuilding(MIN, MAX, FOV, {
-      position: [-2.08, 1.55, -6.95],
-      target: [-3.42, 1.17, -6.49],
-    })
-
-    const orbit = Math.hypot(
-      framed.position[0] - framed.target[0],
-      framed.position[1] - framed.target[1],
-      framed.position[2] - framed.target[2],
-    )
-    const radius = Math.hypot(MAX[0] - MIN[0], MAX[1] - MIN[1], MAX[2] - MIN[2]) / 2
-
-    expect(orbit).toBeGreaterThan(radius)
-    expect(framed.target[0]).toBeCloseTo((MIN[0] + MAX[0]) / 2, 6)
-    expect(framed.target[2]).toBeCloseTo((MIN[2] + MAX[2]) / 2, 6)
+  it('aims at the middle of the ground it stands on', () => {
+    const { target } = frameEyeLevel(MIN, MAX, FOV, MAX_POLAR)
+    expect(target).toEqual([(MIN[0] + MAX[0]) / 2, MIN[1], (MIN[2] + MAX[2]) / 2])
   })
 
-  it('keeps the authored overview of the real document', () => {
-    const stored = {
-      position: [23.69, 19.32, 17.66] as [number, number, number],
-      target: [-5.51, 1.97, 0.94] as [number, number, number],
+  // A tilt past the controls' own ceiling is not a pose they will hold: the
+  // first `rotateTo` clamps it, and the camera jerks off the view it landed on.
+  it('never tips past the ceiling the controls enforce', () => {
+    for (const maxPolar of [85, 70, 45]) {
+      expect(polarOf(frameEyeLevel(MIN, MAX, FOV, maxPolar))).toBeLessThanOrEqual(maxPolar + 1e-9)
     }
-
-    const framed = frameBuilding([-9.1, -0.06, -8.94], [3.25, 3.91, 8.92], FOV, {
-      position: [...stored.position] as [number, number, number],
-      target: [...stored.target] as [number, number, number],
-    })
-
-    expect(framed.target).toEqual(stored.target)
-    expect(framed.position).toEqual(stored.position)
   })
 
-  it('replaces a preset aiming somewhere off the site entirely', () => {
-    const framed = frameBuilding(MIN, MAX, FOV, {
-      position: [60, 30, 60],
-      target: [80, 0, 80],
-    })
+  it('stands outside the footprint, not in the middle of it', () => {
+    const { position, target } = frameEyeLevel(MIN, MAX, FOV, MAX_POLAR)
+    const reach = Math.hypot(position[0] - target[0], position[2] - target[2])
 
-    expect(framed.target[0]).toBeCloseTo((MIN[0] + MAX[0]) / 2, 6)
+    expect(reach).toBeGreaterThan(Math.hypot(MAX[0] - MIN[0], MAX[2] - MIN[2]) / 2)
+    expect(position[0]).toBeGreaterThan(MAX[0])
+    expect(position[2]).toBeGreaterThan(MAX[2])
   })
 
-  it('gives the two scopes orbit radii in proportion to their subjects', () => {
-    const building = frameBuilding(MIN, MAX, FOV, { position: [0, 0, 0], target: [0, 0, 0] })
-    const buildingRadius = Math.hypot(MAX[0] - MIN[0], MAX[1] - MIN[1], MAX[2] - MIN[2]) / 2
-    const buildingOrbit = Math.hypot(
-      building.position[0] - building.target[0],
-      building.position[1] - building.target[1],
-      building.position[2] - building.target[2],
-    )
+  // The one case where the height has to give: a footprint so wide that
+  // standing clear of it is further back than the tilt ceiling allows an eye at
+  // six feet to stand. Being inside the building is the worse answer.
+  it('rises only as far as staying outside a huge footprint demands', () => {
+    const wide = frameEyeLevel([0, 0, 0], [80, 10, 60], FOV, MAX_POLAR)
+    const reach = Math.hypot(wide.position[0] - wide.target[0], wide.position[2] - wide.target[2])
 
-    const zone = room([[0, 0], [3.4, 0], [3.4, 3.45], [0, 3.45]], { wallHeight: 2.32 })
-    const framed = frameRoom(zone, FOV)
-    const roomRadius = Math.hypot(3.4, 2.32, 3.45) / 2
-    const roomOrbit = Math.hypot(
-      framed.position[0] - framed.target[0],
-      framed.position[1] - framed.target[1],
-      framed.position[2] - framed.target[2],
-    )
+    expect(wide.position[1]).toBeGreaterThan(EYE_LEVEL)
+    expect(reach).toBeGreaterThan(Math.hypot(80, 60) / 2)
+  })
 
-    expect(buildingOrbit / buildingRadius).toBeCloseTo(roomOrbit / roomRadius, 2)
+  it('rises with the ground the building stands on', () => {
+    const raised = frameEyeLevel(
+      [MIN[0], MIN[1] + 4, MIN[2]],
+      [MAX[0], MAX[1] + 4, MAX[2]],
+      FOV,
+      MAX_POLAR,
+    )
+    const ground = frameEyeLevel(MIN, MAX, FOV, MAX_POLAR)
+
+    expect(raised.position[1] - ground.position[1]).toBeCloseTo(4, 6)
+    expect(raised.target[1] - ground.target[1]).toBeCloseTo(4, 6)
+  })
+
+  it('backs off further for a bigger building, until the tilt ceiling binds', () => {
+    const span = (p: ReturnType<typeof frameEyeLevel>) =>
+      Math.hypot(p.position[0] - p.target[0], p.position[2] - p.target[2])
+
+    const small = frameEyeLevel([0, 0, 0], [4, 3, 4], FOV, MAX_POLAR)
+    const medium = frameEyeLevel([0, 0, 0], [10, 3, 8], FOV, MAX_POLAR)
+
+    expect(span(medium)).toBeGreaterThan(span(small))
   })
 })
 

@@ -43,6 +43,7 @@ describe('move-to requests', () => {
       () => session().selectFloor('floor-2'),
       () => session().focusRoom('room-1'),
       () => session().exitRoomFocus(),
+      () => session().recenter(),
     ]) {
       session().requestMoveTo([1, 2, 3], [0, 0, 0])
       act()
@@ -51,9 +52,16 @@ describe('move-to requests', () => {
   })
 })
 
+describe('the opening view', () => {
+  // The client's rule: a building opens as a plan is read, straight down.
+  it('looks down at the plan before anybody has pressed anything', () => {
+    expect(session()).toMatchObject({ viewMode: 'top', pickedView: 'top' })
+  })
+})
+
 describe('room focus', () => {
   it('goes in on the dollhouse and comes out looking down', () => {
-    session().setViewMode('side-left')
+    session().setViewMode('dollhouse')
     session().focusRoom('room-1')
     expect(session().viewMode).toBe('dollhouse')
 
@@ -63,41 +71,92 @@ describe('room focus', () => {
 })
 
 describe('the view the bar names', () => {
-  // The client's rule: a side is lit only when that exact button was pressed.
+  // The client's rule: a view is lit only when that exact button was pressed.
   it('follows the button that was pressed', () => {
-    session().setViewMode('side-right')
-    expect(session().pickedView).toBe('side-right')
+    session().setViewMode('dollhouse')
+    expect(session().pickedView).toBe('dollhouse')
   })
 
   // The whole complaint: after dragging the model the bar went on insisting on
-  // a side the camera had long since left.
-  it('goes back to the overview the moment the model is moved by hand', () => {
-    session().setViewMode('side-right')
+  // a view the camera had long since left.
+  it('names nothing the moment the model is moved by hand', () => {
+    session().setViewMode('dollhouse')
     session().noteManualView()
-    expect(session().pickedView).toBe('dollhouse')
+    expect(session().pickedView).toBeNull()
   })
 
   // The one thing that must NOT happen: relabelling is not a reason to fly.
   // viewMode is in the rig's dependencies and also sets the polar floor, so
   // writing either mid-drag would jerk the model out from under the finger.
   it('costs the camera nothing', () => {
-    session().setViewMode('side-right')
+    session().setViewMode('dollhouse')
     expect(requests(() => session().noteManualView())).toBe(0)
-    expect(session().viewMode).toBe('side-right')
+    expect(session().viewMode).toBe('dollhouse')
   })
 
-  it('is cleared by a quarter turn, which is not that side’s button', () => {
-    session().setViewMode('side-right')
+  it('is cleared by a quarter turn, which is not that view’s button', () => {
+    session().setViewMode('dollhouse')
     session().rotateView(1)
-    expect(session().pickedView).toBe('dollhouse')
-    expect(session().viewMode).toBe('side-right')
+    expect(session().pickedView).toBeNull()
+    expect(session().viewMode).toBe('dollhouse')
+  })
+
+  // …except from the top, which is not a bearing: the eye is straight over the
+  // subject either way, so the plan turned a quarter is still the plan.
+  it('survives a quarter turn taken from the top view', () => {
+    session().setViewMode('top')
+    session().rotateView(1)
+    session().rotateView(1)
+    expect(session().pickedView).toBe('top')
+  })
+
+  // Including inside a room, where the turn is the same turn.
+  it('survives it inside a room too', () => {
+    session().focusRoom('room-1')
+    session().setViewMode('top')
+    session().rotateView(-1)
+    expect(session().pickedView).toBe('top')
   })
 
   it('is restored by pressing the same pill again', () => {
-    session().setViewMode('side-right')
+    session().setViewMode('dollhouse')
     session().noteManualView()
-    expect(requests(() => session().setViewMode('side-right'))).toBe(1)
-    expect(session().pickedView).toBe('side-right')
+    expect(requests(() => session().setViewMode('dollhouse'))).toBe(1)
+    expect(session().pickedView).toBe('dollhouse')
+  })
+})
+
+describe('recenter', () => {
+  // The complaint it answers: closed in on one room of the plan, with nothing
+  // on screen saying where the rest of the building went.
+  it('puts the whole building back overhead, and flies there', () => {
+    session().selectFloor('floor-2')
+    session().previewRoom('room-2')
+
+    expect(requests(() => session().recenter())).toBe(1)
+    expect(session()).toMatchObject({
+      viewMode: 'top',
+      pickedView: 'top',
+      selectedFloorKey: null,
+      previewRoomKey: null,
+    })
+  })
+
+  // Pressing it on a view that is already centred still has to move: the pose
+  // is only the default's if nobody has zoomed or panned since, and the store
+  // cannot tell — the camera does not report back.
+  it('asks for the flight even when nothing about the subject changed', () => {
+    expect(requests(() => session().recenter())).toBe(1)
+  })
+})
+
+describe('the roof', () => {
+  // Nobody presses this any more; the rig writes it off the live tilt. What
+  // matters is that it lands without a camera flight — it is reported every
+  // frame, and a bump would refly the preset on the frame it crossed.
+  it('is reported without asking the camera to move', () => {
+    expect(requests(() => session().setRoofShown(true))).toBe(0)
+    expect(session().roofShown).toBe(true)
   })
 })
 
@@ -119,9 +178,9 @@ describe('rotateView', () => {
   // The bar keeps naming the preset last picked; a turned camera is not that
   // preset, but it is not a different one either.
   it('leaves the view mode alone', () => {
-    session().setViewMode('side-back')
+    session().setViewMode('dollhouse')
     session().rotateView(1)
-    expect(session().viewMode).toBe('side-back')
+    expect(session().viewMode).toBe('dollhouse')
   })
 })
 
@@ -150,8 +209,9 @@ describe('room preview', () => {
     for (const act of [
       () => session().focusRoom('room-1'),
       () => session().exitRoomFocus(),
-      () => session().setViewMode('side-left'),
+      () => session().setViewMode('dollhouse'),
       () => session().selectFloor('floor-2'),
+      () => session().recenter(),
     ]) {
       session().previewRoom('room-2')
       act()
@@ -163,8 +223,8 @@ describe('room preview', () => {
 describe('reset', () => {
   it('drops every choice the visitor made', () => {
     session().focusRoom('room-1')
-    session().setViewMode('side-left')
-    session().toggleCeiling()
+    session().setViewMode('dollhouse')
+    session().setRoofShown(true)
     session().selectFloor('floor-2')
     session().setInteractionLock(true)
     session().requestMoveTo([1, 2, 3], [0, 0, 0])
@@ -173,9 +233,9 @@ describe('reset', () => {
 
     expect(session()).toMatchObject({
       focusedRoomKey: null,
-      viewMode: 'dollhouse',
-      pickedView: 'dollhouse',
-      showCeiling: false,
+      viewMode: 'top',
+      pickedView: 'top',
+      roofShown: false,
       selectedFloorKey: null,
       interactionLock: false,
       moveToTarget: null,

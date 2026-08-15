@@ -1308,7 +1308,15 @@ export interface IntegrationSetting {
  */
 export interface ConfiguratorSetting {
   id: number;
+  /**
+   * The brand mark. Shown above the quiz questions, unless that is turned off under Quiz. Left empty, nothing stands in its place.
+   */
+  logo?: (number | null) | Image;
   meta?: {
+    /**
+     * The tab icon. A square PNG or SVG. Left empty, the app’s own icon is used.
+     */
+    favicon?: (number | null) | Image;
     /**
      * The browser tab, the search result heading, and the bold line on a shared link.
      */
@@ -1321,15 +1329,11 @@ export interface ConfiguratorSetting {
      * The picture a shared link unfurls with. 1200 × 630 is what most places crop to; left empty, the link unfurls without one.
      */
     ogImage?: (number | null) | Image;
-    /**
-     * The tab icon. A square PNG or SVG. Left empty, the app’s own icon is used.
-     */
-    favicon?: (number | null) | Image;
   };
   /**
-   * Shown above the questions. Left empty, nothing stands in its place.
+   * The logo itself is set under Page, since the rest of the site uses it too. Off hides it here and nowhere else.
    */
-  logo?: (number | null) | Image;
+  showLogo?: boolean | null;
   step1?: {
     /**
      * The small line above the question.
@@ -1430,15 +1434,16 @@ export interface IntegrationSettingsSelect<T extends boolean = true> {
  * via the `definition` "configurator-settings_select".
  */
 export interface ConfiguratorSettingsSelect<T extends boolean = true> {
+  logo?: T;
   meta?:
     | T
     | {
+        favicon?: T;
         title?: T;
         description?: T;
         ogImage?: T;
-        favicon?: T;
       };
-  logo?: T;
+  showLogo?: T;
   step1?:
     | T
     | {

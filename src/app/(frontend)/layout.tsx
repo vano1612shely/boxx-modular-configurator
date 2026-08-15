@@ -19,6 +19,9 @@ const generalSans = localFont({
 export const metadata: Metadata = {
   title: '3D Building Configurator',
   description: 'Configure a modular building and furnish it with furniture packages.',
+  // One SVG for every size, and it carries its own dark-scheme rule — a tab
+  // strip is the one place the page cannot tell the browser what colour to use.
+  icons: [{ rel: 'icon', type: 'image/svg+xml', url: '/favicon.svg' }],
 }
 
 // Without viewportFit 'cover' iOS leaves dead bands beside the camera housing in

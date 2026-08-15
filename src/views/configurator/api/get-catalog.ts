@@ -69,8 +69,15 @@ export async function getQuizCopy(): Promise<QuizCopy> {
 
   const D = QUIZ_COPY_DEFAULTS
 
+  // `!== false` rather than a plain truth test: the checkbox was added after
+  // the settings row existed, and a row written before it holds null there.
+  // Null means "nobody has said otherwise", and the logo showed before anybody
+  // could — so it goes on showing until the box is actually cleared.
+  const showLogo = settings.showLogo !== false
+
   return {
-    logoUrl: typeof settings.logo === 'object' ? assetUrl(settings.logo) : null,
+    logoUrl:
+      showLogo && typeof settings.logo === 'object' ? assetUrl(settings.logo) : null,
     step1: {
       eyebrow: textOr(step1.eyebrow, D.step1.eyebrow),
       title: textOr(step1.title, D.step1.title),

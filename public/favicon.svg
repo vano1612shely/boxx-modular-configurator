@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3.16 6.087 40.16 40.16">
+  <title>BOXX Modular</title>
+  <style>
+    .ink { fill: #131211 }
+    @media (prefers-color-scheme: dark) { .ink { fill: #f9f7f4 } }
+  </style>
+  <path class="ink" d="M16.8667 43.2467L2.46666 26.1667L16.8667 9.08667L31.2667 26.1667L16.8667 43.2467Z"/>
+  <path fill="#98002E" d="M2.12 41.0067V11.4333H13.64L15.44 9.31333H-1.93715e-06V43.14H15.4667L13.7467 41.02H2.12V41.0067Z"/>
+  <path fill="#98002E" d="M18.3067 9.31333L20.1067 11.4333H31.7067V41.0067H20.08L18.24 43.1267H33.84V9.3H18.3333L18.3067 9.31333Z"/>
+</svg>

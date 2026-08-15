@@ -41,13 +41,35 @@ export const ConfiguratorSettings: GlobalConfig = {
         {
           label: 'Page',
           description:
-            'What a link to the configurator shows in a browser tab, a search result and a chat window.',
+            'The marks the configurator carries, and what a link to it shows in a browser tab, a search result and a chat window.',
           fields: [
             {
+              name: 'logo',
+              type: 'upload',
+              relationTo: 'images',
+              admin: {
+                description:
+                  'The brand mark. Shown above the quiz questions, unless that is turned off under Quiz. Left empty, nothing stands in its place.',
+              },
+            },
+            {
+              // Named for where it is stored, not for what it holds: the group
+              // is unlabelled, so an admin sees one flat list under this tab and
+              // never learns the word "meta". The favicon leads it because it
+              // belongs beside the logo above — a mark, not a sentence.
               name: 'meta',
               type: 'group',
               label: false,
               fields: [
+                {
+                  name: 'favicon',
+                  type: 'upload',
+                  relationTo: 'images',
+                  admin: {
+                    description:
+                      'The tab icon. A square PNG or SVG. Left empty, the app’s own icon is used.',
+                  },
+                },
                 text(
                   'title',
                   PAGE_META_DEFAULTS.title,
@@ -71,15 +93,6 @@ export const ConfiguratorSettings: GlobalConfig = {
                       'The picture a shared link unfurls with. 1200 × 630 is what most places crop to; left empty, the link unfurls without one.',
                   },
                 },
-                {
-                  name: 'favicon',
-                  type: 'upload',
-                  relationTo: 'images',
-                  admin: {
-                    description:
-                      'The tab icon. A square PNG or SVG. Left empty, the app’s own icon is used.',
-                  },
-                },
               ],
             },
           ],
@@ -90,11 +103,13 @@ export const ConfiguratorSettings: GlobalConfig = {
             'The words on the questions asked before a building is shown, and on the two screens those questions can end at.',
           fields: [
             {
-              name: 'logo',
-              type: 'upload',
-              relationTo: 'images',
+              name: 'showLogo',
+              type: 'checkbox',
+              label: 'Show the logo above the questions',
+              defaultValue: true,
               admin: {
-                description: 'Shown above the questions. Left empty, nothing stands in its place.',
+                description:
+                  'The logo itself is set under Page, since the rest of the site uses it too. Off hides it here and nowhere else.',
               },
             },
             {

@@ -13,6 +13,18 @@ const dirname = path.dirname(filename)
 export default buildConfig({
   admin: {
     user: 'users',
+    components: {
+      // Paths, not imports: Payload resolves these through the generated import
+      // map, so anything added here needs `pnpm generate:importmap` to follow.
+      graphics: {
+        Logo: '/modules/shared/admin/BoxxLogo#BoxxLogo',
+        Icon: '/modules/shared/admin/BoxxIcon#BoxxIcon',
+      },
+    },
+    meta: {
+      titleSuffix: ' · BOXX Modular',
+      icons: [{ rel: 'icon', type: 'image/svg+xml', url: '/favicon.svg' }],
+    },
     importMap: {
       baseDir: path.resolve(dirname),
     },

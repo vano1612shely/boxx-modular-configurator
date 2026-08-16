@@ -4,7 +4,7 @@ import { Html } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import { MathUtils, Mesh } from 'three'
 
-import type { BuildingScene, ExteriorPart, ExteriorSlot, ExteriorVariant } from '@/entities/building'
+import type { BuildingScene, ExteriorSlot, ExteriorVariant } from '@/entities/building'
 import { entranceView, selectedVariant } from '@/entities/building'
 import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
@@ -16,8 +16,8 @@ import { useModel } from '@/shared/three/use-model'
 /** Head height over the spot, so the marker reads as belonging to it. */
 const LABEL_LIFT = 1.1
 
-function PartModel({ part }: { part: ExteriorPart }) {
-  const scene = useModel(part.url)
+function VariantModel({ variant }: { variant: ExteriorVariant & { modelUrl: string } }) {
+  const scene = useModel(variant.modelUrl)
 
   const object = useMemo(() => {
     const clone = scene.clone(true)
@@ -30,12 +30,14 @@ function PartModel({ part }: { part: ExteriorPart }) {
     return clone
   }, [scene])
 
+  const { position, yawDeg, scale } = variant.placement
+
   return (
     <primitive
       object={object}
-      position={part.position}
-      rotation-y={MathUtils.degToRad(part.yawDeg)}
-      scale={part.scale}
+      position={position}
+      rotation-y={MathUtils.degToRad(yawDeg)}
+      scale={scale}
     />
   )
 }
@@ -73,13 +75,13 @@ function ExteriorSpot({ slot, variant, centre }: SpotProps) {
   return (
     <>
       <group position={slot.position} rotation-y={MathUtils.degToRad(slot.yawDeg)}>
-        <For each={variant.parts} getKey={(_, index) => `${variant.key}-${index}`}>
-          {(part) => (
-            <Suspense fallback={null}>
-              <PartModel part={part} />
-            </Suspense>
-          )}
-        </For>
+        {/* A choice made entirely of objects already in the building model has
+            nothing of its own to draw — those are revealed by node path. */}
+        {variant.modelUrl !== null && (
+          <Suspense fallback={null}>
+            <VariantModel variant={{ ...variant, modelUrl: variant.modelUrl }} />
+          </Suspense>
+        )}
       </group>
 
       {pickable && (

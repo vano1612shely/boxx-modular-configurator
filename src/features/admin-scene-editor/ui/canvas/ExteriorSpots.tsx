@@ -88,7 +88,7 @@ const CORNERS: Triple[] = [
 
 function MovePuck({ register, begin }: { register: RegisterHandle; begin: (ray: Ray) => void }) {
   return (
-    <HandlePoint position={[0, 0.05, 0]} hitRadius={0.26} register={register} begin={begin}>
+    <HandlePoint position={[0, 0.05, 0]} hitRadius={0.34} register={register} begin={begin}>
       <mesh>
         <cylinderGeometry args={[0.16, 0.16, 0.045, 24]} />
         <meshBasicMaterial color={MOVE_COLOR} depthTest={false} transparent />
@@ -111,7 +111,10 @@ function HeightArrows({
   y?: number
 }) {
   return (
-    <HandlePoint position={[0, y, 0]} hitRadius={0.24} register={register} begin={begin}>
+    // Wide enough to hold the cones. At 0.24 the sphere reached the shaft and
+    // stopped short of the tips at 0.39, so the arrowheads — the part of an
+    // arrow anyone aims at — did nothing.
+    <HandlePoint position={[0, y, 0]} hitRadius={0.44} register={register} begin={begin}>
       <mesh position={[0, 0.28, 0]}>
         <coneGeometry args={[0.11, 0.22, 16]} />
         <meshBasicMaterial color={HEIGHT_COLOR} depthTest={false} transparent />
@@ -275,7 +278,7 @@ function PartCage({
           way the model is pointing. */}
       <HandlePoint
         position={[0, -half[1] + 0.05, RING]}
-        hitRadius={0.24}
+        hitRadius={0.36}
         register={register}
         begin={onStartYaw}
       >

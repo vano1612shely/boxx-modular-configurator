@@ -116,9 +116,11 @@ export function RoofModelGizmo({
             </mesh>
           </HandlePoint>
 
+          {/* Wide enough to hold the cones: the tips are at 0.39, and a sphere
+              that stopped at the shaft left the arrowheads inert. */}
           <HandlePoint
             position={[head[0], head[1] + 0.55, head[2]]}
-            hitRadius={0.24}
+            hitRadius={0.44}
             register={register}
             begin={(ray) => onStartHeight(ray, [head[0], head[1] + 0.55, head[2]])}
           >

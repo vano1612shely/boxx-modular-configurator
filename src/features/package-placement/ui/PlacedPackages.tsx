@@ -31,6 +31,7 @@ import {
 import type { BuildingScene, Room } from '@/entities/building'
 import {
   clampPoseToRegion,
+  poseInsideRegion,
   progressiveEdgeSnapRegion,
   reachableFloor,
   type Region,
@@ -499,6 +500,15 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
         : nextDeg
 
     const clamped = clampPoseToRegion(placement.x, placement.z, detented, footprint, turnFloor)
+
+    // Clamping is a best effort, not a promise. It walks the piece towards the
+    // room for ten passes and hands back wherever it got to — for a six-metre
+    // package turned across a two-and-a-half-metre room, that is still through
+    // the wall. Asking whether it actually landed inside is what this was
+    // missing: the only other question was whether it hit other furniture, and
+    // in an otherwise empty room the answer was no, so a turn that plainly did
+    // not fit was allowed and the table ended up outside the building.
+    if (!poseInsideRegion(clamped.x, clamped.z, detented, footprint, turnFloor)) return null
 
     return collidesWithAny({ ...clamped, rotationYDeg: detented, footprint }, obstacles)
       ? null

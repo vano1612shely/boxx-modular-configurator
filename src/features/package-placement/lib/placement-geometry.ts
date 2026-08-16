@@ -74,6 +74,34 @@ const CONTACT_BLOCKERS = 16
  *  has to survive the rounding. A tenth of a millimetre. */
 const CLEARANCE = 1e-4
 
+/** One axis of a blocker, as the piece meets it. */
+type Span = { centre: number; half: number }
+
+/**
+ * How far the piece could slide along one axis before something stopped it.
+ *
+ * Only what is actually in the way counts: a blocker the piece passes clear of
+ * on the other axis is not in this corridor at all.
+ */
+function slideRange(
+  centre: number,
+  half: number,
+  lo: number,
+  hi: number,
+  blockers: Span[],
+): { lo: number; hi: number } {
+  let low = lo + half
+  let high = hi - half
+
+  for (const blocker of blockers) {
+    const clear = blocker.half + half
+    if (blocker.centre < centre) low = Math.max(low, blocker.centre + clear)
+    else high = Math.min(high, blocker.centre - clear)
+  }
+
+  return { lo: low, hi: high }
+}
+
 /** Where a piece of this size stands flush against something, along one axis. */
 function contactCoords(
   lo: number,
@@ -188,10 +216,67 @@ export function findFreeSpotInRegion(
     if (!poseInsideRegion(candidate.x, candidate.z, rotationYDeg, footprint, region)) continue
     if (collidesWithAny({ ...candidate, rotationYDeg, footprint }, others)) continue
 
-    return { x: candidate.x, z: candidate.z }
+    return middleOfTheGap(candidate, footprint, rotationYDeg, region, others, bounds)
   }
 
   return null
+}
+
+/**
+ * The same free space, taken in the middle of it rather than at the edge.
+ *
+ * What the search finds is a pose that works, and the ones that work are found
+ * flush against things — so left alone a package arrives pressed up against
+ * whatever was nearest. Sliding it to the middle of the run it has costs
+ * nothing and is where anyone would have put it: the first package into an
+ * empty room stands in the middle of the room, and the next stands in the
+ * middle of what is left.
+ *
+ * Each axis in turn, because centring on one changes what is in the way on the
+ * other. Checked at the end rather than trusted: the corridors are measured
+ * against the region's own box, which is not the region itself once a room has
+ * been cut into zones.
+ */
+function middleOfTheGap(
+  found: { x: number; z: number },
+  footprint: PackageFootprint,
+  rotationYDeg: number,
+  region: Region,
+  others: PlacedWithFootprint[],
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+): { x: number; z: number } {
+  const { halfW, halfD } = rotatedHalfExtents(footprint, rotationYDeg)
+  const spans = others.map((other) => ({
+    ...other,
+    ...rotatedHalfExtents(other.footprint, other.rotationYDeg),
+  }))
+
+  const across = slideRange(
+    found.x,
+    halfW,
+    bounds.minX,
+    bounds.maxX,
+    spans
+      .filter((other) => Math.abs(found.z - other.z) < halfD + other.halfD)
+      .map((other) => ({ centre: other.x, half: other.halfW })),
+  )
+  const x = across.lo <= across.hi ? (across.lo + across.hi) / 2 : found.x
+
+  const along = slideRange(
+    found.z,
+    halfD,
+    bounds.minZ,
+    bounds.maxZ,
+    spans
+      .filter((other) => Math.abs(x - other.x) < halfW + other.halfW)
+      .map((other) => ({ centre: other.z, half: other.halfD })),
+  )
+  const z = along.lo <= along.hi ? (along.lo + along.hi) / 2 : found.z
+
+  if (!poseInsideRegion(x, z, rotationYDeg, footprint, region)) return found
+  if (collidesWithAny({ x, z, rotationYDeg, footprint }, others)) return found
+
+  return { x, z }
 }
 
 /** The single-polygon case, which is every room nobody has divided. */

@@ -68,6 +68,26 @@ describe('a package that only fits one way round, in a room with one already in 
   })
 
   /**
+   * Where it lands, not just that it does.
+   *
+   * The middle of the room while the room is empty, and the middle of what is
+   * left once it is not.
+   */
+  it('stands in the middle of the free floor, not against what it found', () => {
+    const empty = findFreeSpotInRegion(CENTRE, BASIC, 0, ROOM, [])
+    expect(empty?.x).toBeCloseTo(8.5, 3)
+    expect(empty?.z).toBeCloseTo(0, 3)
+
+    // A basic office pushed up to the far end leaves 5.25 → 9.2325 free, and a
+    // premium turned sideways is 3.074 across: the middle of that run is 7.24.
+    const basic = { x: 10.4, z: 0, rotationYDeg: 0, footprint: BASIC }
+    const beside = findFreeSpotInRegion(CENTRE, PREMIUM, 90, ROOM, [basic])
+
+    expect(beside?.x).toBeCloseTo((5.25 + 9.2325) / 2, 2)
+    expect(beside?.z).toBeCloseTo(0, 3)
+  })
+
+  /**
    * The one refusal that is arithmetic rather than a miss.
    *
    * A package lands in the middle of the floor, and a basic office there leaves

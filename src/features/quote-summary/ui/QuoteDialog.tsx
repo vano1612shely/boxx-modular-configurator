@@ -8,10 +8,7 @@ import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import { Callout, Card, Eyebrow, Field, OVERLAY_Z, Pill, SceneOverlay } from '@/shared/ui/boxx'
 import { For, Match, Show, Switch } from '@/shared/ui/control-flow'
 
-import {
-  useQuoteSummaryModel,
-  type IntegrationOptions,
-} from '../model/use-quote-summary-model'
+import { useQuoteSummaryModel, type IntegrationOptions } from '../model/use-quote-summary-model'
 
 type Props = {
   building: BuildingScene
@@ -30,13 +27,15 @@ export function QuoteDialog({ building, packages, integration }: Props) {
   const [open, setOpen] = useState(false)
   const [contact, setContact] = useState({ name: '', email: '', phone: '', company: '' })
 
-  const field =
-    (key: keyof typeof contact) => (event: React.ChangeEvent<HTMLInputElement>) =>
-      setContact((prev) => ({ ...prev, [key]: event.target.value }))
+  const field = (key: keyof typeof contact) => (event: React.ChangeEvent<HTMLInputElement>) =>
+    setContact((prev) => ({ ...prev, [key]: event.target.value }))
 
   return (
     <>
-      <SceneOverlay corner="top-right" z="quote">
+      {/* Down by the padding the header bar puts around its own pills, so this
+          one sits on their line rather than eight pixels above it. Both are the
+          same pill in the same size; only one of them is in a bar. */}
+      <SceneOverlay corner="top-right" z="quote" className="pt-2">
         <Pill
           variant="primary"
           labelFrom="desktop"
@@ -67,12 +66,7 @@ export function QuoteDialog({ building, packages, integration }: Props) {
                 <Eyebrow>Your configuration</Eyebrow>
                 <h2 className="text-xl leading-normal font-medium">Request a quote</h2>
               </div>
-              <Pill
-                variant="secondary"
-                size="sm"
-                aria-label="Close"
-                onClick={() => setOpen(false)}
-              >
+              <Pill variant="secondary" size="sm" aria-label="Close" onClick={() => setOpen(false)}>
                 Close
                 <X size={14} className="shrink-0" />
               </Pill>
@@ -97,10 +91,7 @@ export function QuoteDialog({ building, packages, integration }: Props) {
                       {(room) => (
                         <div className="mt-3">
                           <Eyebrow as="h3">{room.name}</Eyebrow>
-                          <For
-                            each={room.packages}
-                            getKey={(p, i) => `${p.packageId}-${i}`}
-                          >
+                          <For each={room.packages} getKey={(p, i) => `${p.packageId}-${i}`}>
                             {(pkg) => (
                               <div className="mt-1 flex justify-between gap-4 text-sm">
                                 <span>{pkg.title}</span>

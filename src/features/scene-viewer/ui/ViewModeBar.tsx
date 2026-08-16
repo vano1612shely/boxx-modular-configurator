@@ -86,9 +86,13 @@ export function ViewModeBar({ floors }: Props) {
     <SceneOverlay
       corner="bottom-center"
       className={cn(
-        'w-max transition-all duration-300',
-        isRoomFocused &&
-          'bottom-[calc(5rem+env(safe-area-inset-bottom))] desktop:bottom-4 desktop:left-[calc(50%-11rem)] lg:left-[calc(50%-13rem)]',
+        'w-max transition-[bottom] duration-300',
+        // Centred on the scene the side panel leaves, not on the frame — and it
+        // asks the panel how wide it is rather than carrying a copy of the
+        // figure, which went stale the moment the panel learned to shrink.
+        'desktop:left-[calc(50%_-_var(--scene-panel,0px)/2)]',
+        // Clear of the furniture sheet, which only a phone has.
+        isRoomFocused && 'bottom-[calc(5rem+env(safe-area-inset-bottom))] desktop:bottom-4',
       )}
     >
       <Show when={pickingFloor}>
@@ -96,11 +100,7 @@ export function ViewModeBar({ floors }: Props) {
           shape="panel"
           className="absolute bottom-full left-1/2 mb-2 w-max -translate-x-1/2 flex-col items-stretch"
         >
-          <Pill
-            variant="ghost"
-            selected={currentFloor === null}
-            onClick={() => pickFloor(null)}
-          >
+          <Pill variant="ghost" selected={currentFloor === null} onClick={() => pickFloor(null)}>
             {WHOLE_BUILDING}
           </Pill>
           <For each={floors} getKey={(floor) => floor.key}>

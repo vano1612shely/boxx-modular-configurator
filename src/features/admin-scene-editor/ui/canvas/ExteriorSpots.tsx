@@ -104,12 +104,14 @@ function MovePuck({ register, begin }: { register: RegisterHandle; begin: (ray: 
 function HeightArrows({
   register,
   begin,
+  y = LIFT,
 }: {
   register: RegisterHandle
   begin: (ray: Ray) => void
+  y?: number
 }) {
   return (
-    <HandlePoint position={[0, LIFT, 0]} hitRadius={0.24} register={register} begin={begin}>
+    <HandlePoint position={[0, y, 0]} hitRadius={0.24} register={register} begin={begin}>
       <mesh position={[0, 0.28, 0]}>
         <coneGeometry args={[0.11, 0.22, 16]} />
         <meshBasicMaterial color={HEIGHT_COLOR} depthTest={false} transparent />
@@ -142,11 +144,14 @@ const FACE_HANDLES: Array<{ axis: Axis; sign: 1 | -1; rotation: Triple }> = [
  * The cage around a model: clear panes, drawn edges, and every part of it doing
  * something.
  *
- * The box itself is the grab handle. A floating puck beside a model the size of
- * a deck was a small target next to a large one, and it read as a second object
- * rather than as the model's own. Its sides slide the model across the ground
- * and its top and bottom lift it, which is the one gesture a flat pointer can
- * spell without a separate arrow to aim at.
+ * The box itself is the grab handle for sliding it across the ground. A floating
+ * puck beside a model the size of a deck was a small target next to a large one,
+ * and it read as a second object rather than as the model's own.
+ *
+ * Height keeps its own arrows. Grabbing the top face for it read well and did
+ * not work: the drag measures against a plane turned to face the camera, and a
+ * top face is grabbed from above, where that plane is edge-on to the ray and
+ * yields no height at all. The arrows are met side-on, where it does.
  *
  * Corners resize the whole thing; the pad at the middle of each face stretches
  * that axis alone. Sized from the model rather than authored, which is the whole
@@ -200,11 +205,7 @@ function PartCage({
               if (!mesh) return
               // The lowest rank there is: every grip drawn on this face, and
               // every grip behind it, is reached through it.
-              return register(
-                mesh,
-                face.axis === 'y' ? onStartHeight : onStartMove,
-                SURFACE_PRIORITY,
-              )
+              return register(mesh, onStartMove, SURFACE_PRIORITY)
             }}
           >
             <planeGeometry
@@ -260,6 +261,10 @@ function PartCage({
           </HandlePoint>
         )}
       </For>
+
+      {/* Clear of the top face, so they are met from the side and never have to
+          be picked out of the geometry they lift. */}
+      <HeightArrows register={register} begin={onStartHeight} y={half[1] + 0.7} />
 
       <mesh position={[0, -half[1] + 0.02, 0]} rotation-x={-Math.PI / 2} raycast={() => {}}>
         <ringGeometry args={[RING - 0.03, RING, 64]} />

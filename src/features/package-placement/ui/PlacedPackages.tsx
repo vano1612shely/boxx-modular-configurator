@@ -49,11 +49,8 @@ import { For, Show } from '@/shared/ui/control-flow'
 import { setSceneCursor } from '@/shared/ui/scene-cursor'
 
 import { collidesWithAny } from '../lib/placement-geometry'
-import {
-  toolbarPositioner,
-  TOOLBAR_REACH,
-  TOOLBAR_REACH_OPEN,
-} from '../lib/toolbar-position'
+import { FLOOR_INSETS, toolbarPositioner } from '../lib/toolbar-position'
+import { measureInsets, readChrome, type Insets } from '../lib/scene-insets'
 import { footprintOf, setMeasuredFootprint } from '../lib/measured-footprints'
 
 const ROTATION_TICKS = [-180, -90, 0, 90, 180] as const
@@ -313,6 +310,10 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const groupRef = useRef<Group>(null)
   const rotationRef = useRef<Group>(null)
   const [rotateOpen, setRotateOpen] = useState(false)
+  /** Whether the bar hangs under the piece rather than sitting over it. */
+  const [barBelow, setBarBelow] = useState(false)
+  const domElement = useThree((state) => state.gl.domElement)
+  const viewport = useThree((state) => state.size)
 
   const floorY = roomFloorTopY(room)
 
@@ -432,9 +433,32 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
   const footprint = footprintOf(pkg.id, pkg.footprint)
 
+  // Where the panels drawn over the scene leave room, read when the bar appears
+  // and when the frame changes shape — never per frame, since each read is a
+  // forced layout and the panels do not move in between.
+  //
+  // Held in a box the positioner reads live, rather than in state: nothing in
+  // the markup depends on it, so there is nothing to re-render for, and
+  // rebuilding the positioner would throw away the deadband it carries.
+  const insets = useMemo<Insets>(() => ({ ...FLOOR_INSETS }), [])
+  useEffect(() => {
+    if (!isSelected) return
+    const { size, panels } = readChrome(domElement)
+    Object.assign(insets, measureInsets(size, panels, FLOOR_INSETS))
+  }, [isSelected, domElement, viewport, insets])
+
+  // Memoised on the measurements rather than on the footprint object, which is
+  // rebuilt every render: the positioner carries the side it last reported and
+  // the deadband it flips on, and a fresh one each render has neither.
   const positionToolbar = useMemo(
-    () => toolbarPositioner(footprint, height, rotateOpen ? TOOLBAR_REACH_OPEN : TOOLBAR_REACH),
-    [footprint, height, rotateOpen],
+    () =>
+      toolbarPositioner(
+        { width: footprint.width, depth: footprint.depth },
+        height,
+        insets,
+        setBarBelow,
+      ),
+    [footprint.width, footprint.depth, height, insets],
   )
 
   // Asked once per pose rather than once per render: the turn button re-reads
@@ -511,7 +535,10 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
 
       <Show when={isSelected && !isDragging}>
         <Html
-          position={[0, height + 0.25, 0]}
+          // The top of the piece, with no cushion of its own: the clearance is
+          // measured on screen now, and a world-space lift on top of it just
+          // added a quarter of a metre of parallax to the answer.
+          position={[0, height, 0]}
           zIndexRange={[20, 0]}
           calculatePosition={positionToolbar}
           // drei's own wrapper sits *at* the anchor and takes the size of what
@@ -522,12 +549,20 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
           // The bar takes its events back on the line below.
           style={{ pointerEvents: 'none' }}
         >
-          {/* Anchored by its bottom edge, not its middle, so the point handed
-              back above is the one edge that has to clear the piece. drei puts
-              `center` on a wrapper it owns, so the shift has to be done here. */}
-          <div
+          {/* Anchored by the edge that faces the piece, not by its middle, so
+              the point handed back above is the one edge that has to clear it.
+              drei puts `center` on a wrapper it owns, so the shift is done here.
 
-            className="pointer-events-auto flex -translate-x-1/2 -translate-y-full flex-col items-center gap-2"
+              Which edge that is flips with the side, and so does the stacking
+              order: the slider always opens away from the piece. Growing it
+              towards the piece instead is what used to make the bar move — it
+              needed room on the side already in short supply, and moved to the
+              other side of the piece to find it. */}
+          <div
+            className={cn(
+              'pointer-events-auto flex -translate-x-1/2 items-center gap-2',
+              barBelow ? 'flex-col-reverse' : '-translate-y-full flex-col',
+            )}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => {
               event.stopPropagation()
@@ -585,9 +620,12 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
                 aria-label="Set the angle by hand"
                 title="Set the angle by hand"
                 leadingIcon={
+                  // Points at where the slider will appear, which is the far
+                  // side of the bar from the piece — so under the piece the
+                  // shut chevron points down, not up.
                   <ChevronUp
                     size={16}
-                    className={cn('transition-transform', rotateOpen && 'rotate-180')}
+                    className={cn('transition-transform', rotateOpen !== barBelow && 'rotate-180')}
                   />
                 }
                 onClick={() => setRotateOpen((v) => !v)}

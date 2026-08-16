@@ -133,8 +133,6 @@ export function extentWithoutSite(parts: ReadonlyArray<PartExtent>): Extent | nu
   return standing.length ? unite(standing) : full
 }
 
-const MIN_ORBIT_FRACTION = 0.35
-
 export function orbitRadius(preset: CameraPreset): number {
   return Math.hypot(
     preset.position[0] - preset.target[0],
@@ -146,10 +144,6 @@ export function orbitRadius(preset: CameraPreset): number {
 /** camera-controls spins on the spot when target and position coincide. */
 export function orbitable(preset: CameraPreset): boolean {
   return orbitRadius(preset) >= 1
-}
-
-function withinBounds(point: Vec3Tuple, min: Vec3Tuple, max: Vec3Tuple, slack: number): boolean {
-  return point.every((value, axis) => value >= min[axis] - slack && value <= max[axis] + slack)
 }
 
 /** A three-quarter view that fits the box, owing nothing to an authored pose. */
@@ -174,18 +168,54 @@ export function frameExtent(min: Vec3Tuple, max: Vec3Tuple, fovDeg: number): Cam
   }
 }
 
-export function frameBuilding(
+/** Standing height, in metres — six feet, as the client measured it. */
+export const EYE_LEVEL = 1.83
+
+/** Fraction of the footprint's own reach the eye is kept clear of it by. */
+const OUTSIDE_MARGIN = 1.15
+
+/**
+ * The building as somebody standing in front of it sees it.
+ *
+ * Two things fix the pose and they can disagree, so the order matters. The eye
+ * belongs at standing height — that is the whole request — and the aim point
+ * then has to be low enough for the tilt between them to be one the controls
+ * will hold: they cap the orbit short of level, and from any real standing-off
+ * distance an eye this low is *almost* level with anything it looks at. Aiming
+ * at the middle of the building instead would need a tilt past that cap, and
+ * what gives when the cap bites is the height — the camera would rise off the
+ * ground to meet its own aim point, which is the aerial view this replaces.
+ *
+ * So: aim at the ground the building stands on, and stand no further back than
+ * the cap allows an eye at that height to stand. Only a building too big to
+ * clear from there pushes the eye up, and it does so by exactly as much as
+ * staying outside its own footprint costs.
+ */
+export function frameEyeLevel(
   min: Vec3Tuple,
   max: Vec3Tuple,
   fovDeg: number,
-  stored: CameraPreset,
+  maxPolarDeg: number,
 ): CameraPreset {
-  const radius = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2
-  if (radius < 1e-3) return stored
+  const size: Vec3Tuple = [max[0] - min[0], max[1] - min[1], max[2] - min[2]]
+  const target: Vec3Tuple = [(min[0] + max[0]) / 2, min[1], (min[2] + max[2]) / 2]
 
-  const orbit = orbitRadius(stored)
-  const aimed = withinBounds(stored.target, min, max, radius * 0.5)
-  if (aimed && orbit >= radius * MIN_ORBIT_FRACTION) return stored
+  const maxPolar = (Math.min(Math.max(maxPolarDeg, 1), 89) * Math.PI) / 180
+  const fitted = fitDistance(Math.hypot(size[0], size[1], size[2]) / 2, fovDeg)
+  const reach = EYE_LEVEL / Math.cos(maxPolar)
+  const outside = (Math.hypot(size[0], size[2]) / 2) * OUTSIDE_MARGIN
+  const distance = Math.max(Math.min(fitted, reach), outside)
 
-  return frameExtent(min, max, fovDeg)
+  const phi = Math.min(Math.acos(Math.min(1, EYE_LEVEL / distance)), maxPolar)
+  const ground = distance * Math.sin(phi)
+  const yaw = Math.PI * 0.25
+
+  return {
+    position: [
+      target[0] + Math.cos(yaw) * ground,
+      target[1] + distance * Math.cos(phi),
+      target[2] + Math.sin(yaw) * ground,
+    ],
+    target,
+  }
 }

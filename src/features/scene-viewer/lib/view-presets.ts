@@ -37,14 +37,7 @@ export function roomScope(room: Room, fov: number): ViewScope {
   }
 }
 
-export const VIEW_MODES = [
-  'dollhouse',
-  'top',
-  'side-front',
-  'side-right',
-  'side-back',
-  'side-left',
-] as const satisfies readonly ViewMode[]
+export const VIEW_MODES = ['dollhouse', 'top'] as const satisfies readonly ViewMode[]
 
 export function viewModePreset(mode: ViewMode, scope: ViewScope): CameraPreset {
   const [minX, minY, minZ] = scope.min
@@ -53,7 +46,6 @@ export function viewModePreset(mode: ViewMode, scope: ViewScope): CameraPreset {
   const cz = (minZ + maxZ) / 2
   const spread = Math.max(maxX - minX, maxZ - minZ)
   const height = maxY - minY
-  const target: [number, number, number] = [cx, minY + height * 0.45, cz]
   const fitted = fitDistance(Math.hypot(maxX - minX, height, maxZ - minZ) / 2, scope.fov)
 
   switch (mode) {
@@ -63,14 +55,6 @@ export function viewModePreset(mode: ViewMode, scope: ViewScope): CameraPreset {
         position: [cx, minY + fitted, cz + spread * 0.08],
         target: [cx, minY, cz],
       }
-    case 'side-front':
-      return { position: [cx, minY + height * 1.1, maxZ + fitted], target }
-    case 'side-back':
-      return { position: [cx, minY + height * 1.1, minZ - fitted], target }
-    case 'side-right':
-      return { position: [maxX + fitted, minY + height * 1.1, cz], target }
-    case 'side-left':
-      return { position: [minX - fitted, minY + height * 1.1, cz], target }
     case 'dollhouse':
     default:
       return scope.dollhouse
@@ -80,11 +64,10 @@ export function viewModePreset(mode: ViewMode, scope: ViewScope): CameraPreset {
 /**
  * The largest orbit radius any view button can produce for this scope.
  *
- * The side views stand off by the fitted distance *plus* half the depth, so
- * they arrive further out than the framing radius the zoom ceiling used to be
- * derived from — on a long room, by the whole of its headroom. Measuring the
- * poses themselves is what keeps a preset from landing on the ceiling with the
- * wheel already dead in one direction.
+ * The two poses are fitted to different things — one to the subject's height
+ * from overhead, the other to a standing eye's distance from it — so neither is
+ * reliably the further out. Measuring both is what keeps a preset from landing
+ * on the zoom ceiling with the wheel already dead in one direction.
  */
 export function farthestPresetRadius(scope: ViewScope): number {
   let farthest = 0

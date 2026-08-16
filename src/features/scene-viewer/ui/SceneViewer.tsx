@@ -5,7 +5,7 @@ import '@/shared/three/quiet-deprecations'
 
 import { ContactShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { useConfiguration } from '@/entities/configuration'
 import {
@@ -30,6 +30,7 @@ import { CameraRig } from './CameraRig'
 import { RoomFloors } from './RoomFloors'
 import { RoomHotspots } from './RoomHotspots'
 import { SceneLoader } from './SceneLoader'
+import { SceneWarmup } from './SceneWarmup'
 import { ShadowUpdates } from './ShadowUpdates'
 import { ViewModeBar } from './ViewModeBar'
 import { ZoneBar } from './ZoneBar'
@@ -46,8 +47,14 @@ export function SceneViewer({ building, children }: Props) {
   const [coarse] = useState(isCoarsePointer)
   const vm = useSceneViewerModel(building)
   const bounds = useConfiguratorSession((s) => s.buildingBounds)
-  const showCeiling = useConfiguratorSession((s) => s.showCeiling)
+  const roofShown = useConfiguratorSession((s) => s.roofShown)
   const transition = useRoomTransition(vm.focusedRoom)
+  /** The model whose shaders and textures are on the GPU, or null for none. */
+  const [warmed, setWarmed] = useState<string | null>(null)
+  const model = building.modelUrl
+  // Stable, deliberately: the warm-up's own deadline is a timer keyed on this,
+  // and a fresh identity every render would keep resetting it.
+  const onWarm = useCallback(() => setWarmed(model), [model])
 
   // Framing the storey rather than the building keeps the shadow map's
   // resolution on what is actually on screen.
@@ -70,14 +77,22 @@ export function SceneViewer({ building, children }: Props) {
         .join(';'),
     [placed],
   )
-  const shadowTrigger = `${vm.focusedRoom?.key ?? ''}|${vm.selectedFloor?.key ?? ''}|${showCeiling}|${bounds ? 1 : 0}|${poses}`
+  const shadowTrigger = `${vm.focusedRoom?.key ?? ''}|${vm.selectedFloor?.key ?? ''}|${roofShown}|${bounds ? 1 : 0}|${poses}`
 
   // In an effect, not the render body: each preload walks suspend-react's whole
   // global cache comparing key arrays, and these assets never change.
+  //
+  // Held until the building itself is on the GPU. Nothing here is needed before
+  // a room is entered, and started any earlier it is a dozen requests racing
+  // the model for the six connections HTTP/1.1 gives the origin — which makes
+  // the one thing the visitor is waiting for arrive later.
+  const rooms = building.rooms
   useEffect(() => {
-    preloadRoomTextures(building.rooms.map((room) => room.surfaces))
-    preloadOpeningModels(building.rooms)
-  }, [building.rooms])
+    if (warmed !== model) return
+
+    preloadRoomTextures(rooms.map((room) => room.surfaces))
+    preloadOpeningModels(rooms)
+  }, [rooms, warmed, model])
 
   const opening = { position: building.camera.position, target: building.camera.target }
 
@@ -123,6 +138,7 @@ export function SceneViewer({ building, children }: Props) {
         }}
       >
         <color attach="background" args={[SCENE_BACKGROUND]} />
+        <SceneWarmup key={model} armed={bounds !== null} onWarm={onWarm} />
         <ShadowUpdates trigger={shadowTrigger} />
         <SceneLighting bounds={litBounds} focusedRoom={vm.focusedRoom} />
         <Show when={building.roofModel}>
@@ -130,7 +146,7 @@ export function SceneViewer({ building, children }: Props) {
             <Suspense fallback={null}>
               <RoofModel
                 roof={roof}
-                visible={showCeiling && !vm.isRoomFocused && vm.selectedFloor === null}
+                visible={roofShown && !vm.isRoomFocused && vm.selectedFloor === null}
               />
             </Suspense>
           )}
@@ -212,8 +228,12 @@ export function SceneViewer({ building, children }: Props) {
         )}
       />
 
-      {/* `bounds` is set once the building is in the scene, not merely downloaded. */}
-      <SceneLoader busy={!bounds} />
+      {/* `bounds` is set once the building is in the scene, not merely
+          downloaded — and the veil stays for the warm-up after it, which is
+          where the shaders and the textures actually reach the GPU. Lifting on
+          `bounds` alone handed the visitor a scene that stalled on the first
+          frame it drew, which is the frame the veil was fading on. */}
+      <SceneLoader busy={!bounds || warmed !== model} />
     </div>
   )
 }

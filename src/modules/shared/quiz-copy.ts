@@ -54,7 +54,13 @@ export function fillTokens(template: string, values: Record<string, string>): st
 }
 
 export type QuizCopy = {
-  /** Shown above the questions when one is uploaded; nothing stands in for it. */
+  /**
+   * The logo to stand above the questions, or null for none there.
+   *
+   * Null covers both "none uploaded" and "turned off for the quiz" — the form
+   * has the same nothing to draw either way, and which of the two it was is a
+   * question for the settings page, not for the thing rendering them.
+   */
   logoUrl: string | null
   step1: {
     eyebrow: string

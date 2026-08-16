@@ -138,7 +138,10 @@ export function PackagePanel({ building, packages }: Props) {
         </Card>
       </SceneOverlay>
 
+      {/* Not a SceneOverlay, so it says for itself that it covers the scene —
+          without which the furniture bar puts itself underneath it. */}
       <aside
+        data-scene-chrome=""
         style={{ zIndex: OVERLAY_Z.bar }}
         className="absolute top-0 right-0 hidden h-full w-[22rem] flex-col border-l border-border bg-background/95 backdrop-blur desktop:flex lg:w-[26rem]"
       >

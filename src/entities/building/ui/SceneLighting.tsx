@@ -12,7 +12,7 @@ import {
 } from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
-import { For } from '@/shared/ui/control-flow'
+import { For, Show } from '@/shared/ui/control-flow'
 
 import { roomFeatureSide, roomFocusTarget } from '../lib/room-framing'
 import { planOpeningPlacements, type OpeningPlacement } from '../lib/room-shell'
@@ -67,7 +67,15 @@ function ImageBasedLight() {
   return <primitive object={environment.texture} attach="environment" />
 }
 
-function Sun({ bounds, intensity }: { bounds: Bounds | null; intensity: number }) {
+function Sun({
+  bounds,
+  intensity,
+  casting,
+}: {
+  bounds: Bounds | null
+  intensity: number
+  casting: boolean
+}) {
   const light = useRef<DirectionalLight>(null)
 
   useEffect(() => {
@@ -108,7 +116,7 @@ function Sun({ bounds, intensity }: { bounds: Bounds | null; intensity: number }
       // every render, so R3F would keep undoing the fit above.
       color={SUNLIGHT}
       intensity={intensity}
-      castShadow
+      castShadow={casting}
       shadow-mapSize={SHADOW_MAP}
       // r185 scales softness by `radius`; PCFSoftShadowMap is deprecated.
       shadow-radius={8}
@@ -268,26 +276,50 @@ function RoomKey({ room, intensity }: { room: Room; intensity: number }) {
   )
 }
 
+/**
+ * One rig, dimmed and undimmed, rather than two swapped over.
+ *
+ * The outdoor lights are kept mounted through a room visit at zero intensity,
+ * which looks the same as not having them and costs one thing less: unmounting
+ * the sun disposes its 2048² shadow map, and coming back out of the room then
+ * has to allocate a new one and fill it from scratch — on the same frame as the
+ * room's geometry is being torn down and the camera is flying. That was the
+ * hitch on the way out, and it was paid every single time.
+ */
 export function SceneLighting({ bounds, focusedRoom, exposure = 1 }: Props) {
-  if (focusedRoom) {
-    return (
-      <>
-        <ImageBasedLight />
-        {/* Almost all hemisphere: it gives every vertical surface the same
-            value, so four walls painted one colour read as one colour. */}
-        <hemisphereLight intensity={0.85 * exposure} color={SKYLIGHT} groundColor={GROUND_BOUNCE} />
-        <RoomKey room={focusedRoom} intensity={0.14 * exposure} />
-        <WindowSuns room={focusedRoom} exposure={exposure} />
-      </>
-    )
-  }
+  const outside = focusedRoom === null
 
   return (
     <>
       <ImageBasedLight />
-      <hemisphereLight intensity={0.6 * exposure} color={SKYLIGHT} groundColor={GROUND_BOUNCE} />
-      <Sun bounds={bounds} intensity={1.7 * exposure} />
-      <directionalLight position={[-7, 6, -5]} color={SKYLIGHT} intensity={0.3 * exposure} />
+      {/* Almost all hemisphere indoors: it gives every vertical surface the
+          same value, so four walls painted one colour read as one colour. */}
+      <hemisphereLight
+        intensity={(outside ? 0.6 : 0.85) * exposure}
+        color={SKYLIGHT}
+        groundColor={GROUND_BOUNCE}
+      />
+      <Sun
+        bounds={bounds}
+        intensity={outside ? 1.7 * exposure : 0}
+        // Nothing outdoors is drawn from inside a room, so the pass would be
+        // over an empty scene — but the map it wrote stays allocated, which is
+        // the whole point of keeping the light.
+        casting={outside}
+      />
+      <directionalLight
+        position={[-7, 6, -5]}
+        color={SKYLIGHT}
+        intensity={outside ? 0.3 * exposure : 0}
+      />
+      <Show when={focusedRoom}>
+        {(room) => (
+          <>
+            <RoomKey room={room} intensity={0.14 * exposure} />
+            <WindowSuns room={room} exposure={exposure} />
+          </>
+        )}
+      </Show>
     </>
   )
 }

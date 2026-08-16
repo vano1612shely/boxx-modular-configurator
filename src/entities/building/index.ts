@@ -63,10 +63,11 @@ export {
 } from './lib/building-floors'
 export { buildingSummary, type SummaryFact } from './lib/building-summary'
 export {
+  EYE_LEVEL,
   extentWithoutSite,
   fitDistance,
-  frameBuilding,
   frameExtent,
+  frameEyeLevel,
   frameRoom,
   orbitable,
   orbitRadius,

@@ -12,6 +12,7 @@ import * as migration_20260811_084336_add_room_zones from './20260811_084336_add
 import * as migration_20260811_084654_drop_display_settings from './20260811_084654_drop_display_settings';
 import * as migration_20260811_084840_add_configurator_settings from './20260811_084840_add_configurator_settings';
 import * as migration_20260811_214553_add_exterior_options from './20260811_214553_add_exterior_options';
+import * as migration_20260815_232801_add_quiz_show_logo from './20260815_232801_add_quiz_show_logo';
 import * as migration_20260816_163500_stretch_exterior_parts from './20260816_163500_stretch_exterior_parts';
 
 export const migrations = [
@@ -84,5 +85,15 @@ export const migrations = [
     up: migration_20260811_214553_add_exterior_options.up,
     down: migration_20260811_214553_add_exterior_options.down,
     name: '20260811_214553_add_exterior_options'
+  },
+  {
+    up: migration_20260815_232801_add_quiz_show_logo.up,
+    down: migration_20260815_232801_add_quiz_show_logo.down,
+    name: '20260815_232801_add_quiz_show_logo'
+  },
+  {
+    up: migration_20260816_163500_stretch_exterior_parts.up,
+    down: migration_20260816_163500_stretch_exterior_parts.down,
+    name: '20260816_163500_stretch_exterior_parts'
   },
 ];

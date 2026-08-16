@@ -27,16 +27,48 @@ type Props = {
 /** Hoisted: a fresh literal would be a new value on every frame. */
 const NOTHING_HIDDEN: ZoneBox[] = []
 
+/**
+ * Largest world dimension, in metres, under which a part stops casting shadow.
+ *
+ * More than half the model's triangles are fittings — diffusers, sockets,
+ * chrome — and every one of them was drawn into the shadow map. At 2048² over a
+ * building-sized frustum a texel is a couple of centimetres, so a socket casts
+ * three or four of them, and `shadow-radius: 8` then blurs those away to
+ * nothing. The map is redrawn on every change that arms it — a storey picked, a
+ * room left, the roof appearing — so this comes off the price of each of those,
+ * not just off the first frame.
+ *
+ * Receiving is left alone: a small part in shadow still has to look like it.
+ */
+const SHADOW_CASTER_SIZE = 0.4
+
+/** Largest world-space dimension of a measured box. */
+function longestSide(box: Box3): number {
+  return Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z)
+}
+
 export function BuildingModel({ building }: Props) {
   const { scene } = useGLTF(building.modelUrl, false, true)
+  // Two, not one: with a single storey there is nothing the picker can cut to,
+  // and the clipping planes would be six tests a fragment for no cut.
+  const cuttable = building.floors.length >= 2
 
   const { preparedScene, controller, resolveNode } = useMemo(() => {
     scene.updateMatrixWorld(true)
+    const measured = new Box3()
 
     scene.traverse((object) => {
       const mesh = object as Mesh
       if (!mesh.isMesh) return
-      mesh.castShadow = true
+
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+      const box = mesh.geometry.boundingBox
+
+      // A part with nothing measurable keeps its shadow: the rule is there to
+      // drop what demonstrably cannot show one, not what it cannot read.
+      mesh.castShadow =
+        !box ||
+        longestSide(measured.copy(box).applyMatrix4(mesh.matrixWorld)) >= SHADOW_CASTER_SIZE
       mesh.receiveShadow = true
 
       // A single transmissive material — a plastic diffuser, a few thousand
@@ -56,10 +88,10 @@ export function BuildingModel({ building }: Props) {
 
     return {
       preparedScene: scene,
-      controller: applyOverviewClipping(scene),
+      controller: applyOverviewClipping(scene, { cuttable }),
       resolveNode: createNodeResolver(scene),
     }
-  }, [scene])
+  }, [scene, cuttable])
 
   const hiddenNodePaths = building.hiddenNodePaths
   useEffect(() => {
@@ -209,7 +241,7 @@ export function BuildingModel({ building }: Props) {
   // pointer's way entirely rather than being raycast on every move for nothing.
   const interactive = claimedBy.size > 0
 
-  const showCeiling = useConfiguratorSession((s) => s.showCeiling)
+  const roofShown = useConfiguratorSession((s) => s.roofShown)
   const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)
 
   const floor = useMemo(
@@ -232,8 +264,9 @@ export function BuildingModel({ building }: Props) {
     // the shadow map, and only clipping planes do.
     controller.setKeepBox(floor?.box ?? null)
     // The roof goes with any storey, even one whose volume was drawn around it:
-    // looking at a storey means looking into it.
-    controller.setHideBoxes(floor || !showCeiling ? building.roofBlocks : NOTHING_HIDDEN)
+    // looking at a storey means looking into it. Otherwise it follows the tilt,
+    // which the rig reads off the live pose.
+    controller.setHideBoxes(floor || !roofShown ? building.roofBlocks : NOTHING_HIDDEN)
   })
 
   return (

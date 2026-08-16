@@ -124,6 +124,11 @@ export function SceneOverlay({
 
   return (
     <Component
+      // Marks it as something drawn over the scene, so anything positioned
+      // *inside* the scene can measure where the free canvas actually is. The
+      // furniture bar is the one that needs it; it is set here rather than at
+      // each call site so a panel added later is accounted for by default.
+      data-scene-chrome=""
       className={overlay({ corner, className })}
       style={{ zIndex: OVERLAY_Z[z], ...style }}
       {...rest}

@@ -147,7 +147,8 @@ export type ExteriorPart = {
   position: Vec3Tuple
   /** Degrees about Y, on top of the spot's own facing. */
   yawDeg: number
-  scale: number
+  /** Per axis, so a deck can be stretched along a wall without growing taller. */
+  scale: Vec3Tuple
 }
 
 /**

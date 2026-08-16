@@ -368,8 +368,12 @@ export interface BuildingModel {
                         y?: number | null;
                         z?: number | null;
                       };
+                      scale?: {
+                        x?: number | null;
+                        y?: number | null;
+                        z?: number | null;
+                      };
                       yawDeg?: number | null;
-                      scale?: number | null;
                       id?: string | null;
                     }[]
                   | null;
@@ -681,8 +685,12 @@ export interface ExteriorOption {
           y?: number | null;
           z?: number | null;
         };
+        scale?: {
+          x?: number | null;
+          y?: number | null;
+          z?: number | null;
+        };
         yawDeg?: number | null;
-        scale?: number | null;
         id?: string | null;
       }[]
     | null;
@@ -1096,8 +1104,14 @@ export interface BuildingModelsSelect<T extends boolean = true> {
                                 y?: T;
                                 z?: T;
                               };
+                          scale?:
+                            | T
+                            | {
+                                x?: T;
+                                y?: T;
+                                z?: T;
+                              };
                           yawDeg?: T;
-                          scale?: T;
                           id?: T;
                         };
                     id?: T;
@@ -1223,8 +1237,14 @@ export interface ExteriorOptionsSelect<T extends boolean = true> {
               y?: T;
               z?: T;
             };
+        scale?:
+          | T
+          | {
+              x?: T;
+              y?: T;
+              z?: T;
+            };
         yawDeg?: T;
-        scale?: T;
         id?: T;
       };
   compatibleLines?: T;

@@ -135,13 +135,16 @@ function exteriorParts(value: VariantDoc['parts']): ExteriorPart[] {
     const url = optionalModelUrl(part.model)
     if (!url) return []
 
-    const scale = numberOr(part.scale, 1)
+    // A zero on any axis flattens the model out of existence, and a negative
+    // one turns it inside out. Neither is ever what was meant.
+    const scale = toTuple(part.scale, [1, 1, 1]).map((axis) => (axis > 0 ? axis : 1))
+
     return [
       {
         url,
         position: toTuple(part.position),
         yawDeg: numberOr(part.yawDeg, 0),
-        scale: scale > 0 ? scale : 1,
+        scale: [scale[0], scale[1], scale[2]],
       },
     ]
   })

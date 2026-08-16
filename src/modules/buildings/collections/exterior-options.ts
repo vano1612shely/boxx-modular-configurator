@@ -60,13 +60,8 @@ export const ExteriorOptions: CollectionConfig = {
       fields: [
         { name: 'model', type: 'relationship', relationTo: 'models', required: true },
         vec3Field('position'),
-        {
-          type: 'row',
-          fields: [
-            { name: 'yawDeg', type: 'number', defaultValue: 0 },
-            { name: 'scale', type: 'number', defaultValue: 1 },
-          ],
-        },
+        vec3Field('scale', { defaultValue: 1 }),
+        { name: 'yawDeg', type: 'number', defaultValue: 0 },
       ],
     },
     {

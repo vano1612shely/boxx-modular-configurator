@@ -127,11 +127,16 @@ type DragState =
       kind: 'slot-scale'
       index: number
       part: number
+      /** Null stretches every axis together, which is what a corner does. */
+      axis: 'x' | 'y' | 'z' | null
       /** Ground plane the reach is measured on, and the centre it is measured from. */
       y: number
       cx: number
       cz: number
-      startScale: number
+      /** World direction of the axis being stretched, for a single-axis drag. */
+      dirX: number
+      dirZ: number
+      startScale: { x: number; y: number; z: number }
       startReach: number
     }
   | {
@@ -1060,6 +1065,29 @@ function EditorScene({
     }
   }
 
+  /**
+   * How far the pointer is from the model's centre, along whatever is being
+   * stretched: the axis itself for a face pad, any direction on the ground for
+   * a corner. Null when the ray misses the plane it is measured on.
+   */
+  const scaleReach = (
+    ray: Ray,
+    drag: { axis: 'x' | 'y' | 'z' | null; y: number; cx: number; cz: number; dirX: number; dirZ: number },
+  ): number | null => {
+    if (drag.axis === 'y') {
+      const y = rayAtVertical(ray, drag.cx, drag.cz)
+      return y === null ? null : Math.abs(y - drag.y)
+    }
+
+    const hit = rayAtY(ray, drag.y)
+    if (!hit) return null
+
+    const dx = hit.x - drag.cx
+    const dz = hit.z - drag.cz
+    if (drag.axis === null) return Math.hypot(dx, dz)
+    return Math.abs(dx * drag.dirX + dz * drag.dirZ)
+  }
+
   const applyDragRef = useRef<(ray: Ray) => void>(() => {})
   const applyDrag = (ray: Ray) => {
     if (!drag) return
@@ -1143,23 +1171,25 @@ function EditorScene({
     }
 
     if (drag.kind === 'slot-scale') {
-      const hit = rayAtY(ray, drag.y)
-      if (!hit) return
-
-      const reach = Math.hypot(hit.x - drag.cx, hit.z - drag.cz)
       const held = partAt(drag.index, drag.part)
-      if (!held || reach < 1e-4) return
+      if (!held) return
 
-      // Measured out from the model's own centre on the ground, so pulling a
-      // corner away grows it and pushing in shrinks it, whichever corner was
-      // taken and wherever the camera is standing.
-      const scale = (drag.startScale * reach) / drag.startReach
-      vm.onSetPartScale(
-        drag.index,
-        held.variantIndex,
-        drag.part,
-        Math.round(Math.min(50, Math.max(0.02, scale)) * 1000) / 1000,
-      )
+      const reach = scaleReach(ray, drag)
+      if (reach === null || reach < 1e-4) return
+
+      // Measured out from the model's own centre, so pulling a grip away grows
+      // it and pushing in shrinks it, whichever grip was taken and wherever the
+      // camera is standing. A corner takes every axis with it; a face pad takes
+      // only its own, which is how a deck gets longer without getting taller.
+      const factor = reach / drag.startReach
+      const clamp = (value: number) =>
+        Math.round(Math.min(50, Math.max(0.02, value)) * 1000) / 1000
+
+      vm.onSetPartScale(drag.index, held.variantIndex, drag.part, {
+        x: clamp(drag.startScale.x * (drag.axis === null || drag.axis === 'x' ? factor : 1)),
+        y: clamp(drag.startScale.y * (drag.axis === null || drag.axis === 'y' ? factor : 1)),
+        z: clamp(drag.startScale.z * (drag.axis === null || drag.axis === 'z' ? factor : 1)),
+      })
       return
     }
 
@@ -1977,29 +2007,32 @@ function EditorScene({
             grabDY: (y ?? grip[1]) - base,
           })
         }}
-        onStartScale={(index, part, ray) => {
+        onStartScale={(index, part, ray, axis) => {
           const held = partAt(index, part)
           if (!held) return
 
           const frame = slotFrame(index)
           const centre = slotToWorld(frame, { x: held.x, y: held.y, z: held.z })
-          const hit = rayAtY(ray, centre.y)
-          const reach = hit ? Math.hypot(hit.x - centre.x, hit.z - centre.z) : 0
+          // The model's own axes, turned by the spot's facing and its own.
+          const yaw = ((frame.yawDeg + held.yawDeg) * Math.PI) / 180
+          const dirX = axis === 'x' ? Math.cos(yaw) : Math.sin(yaw)
+          const dirZ = axis === 'x' ? -Math.sin(yaw) : Math.cos(yaw)
+
+          const stored = (vm.exteriorSlots[index]?.variants ?? [])[held.variantIndex]?.parts?.[part]
+            ?.scale
+          const startScale = {
+            x: stored?.x || 1,
+            y: stored?.y || 1,
+            z: stored?.z || 1,
+          }
+
+          const seed = { axis, y: centre.y, cx: centre.x, cz: centre.z, dirX, dirZ }
+          const reach = scaleReach(ray, seed)
           // A grip taken exactly over the centre has no reach to scale by, and
           // dividing by it would send the model to infinity on the first move.
-          if (reach < 1e-3) return
+          if (reach === null || reach < 1e-3) return
 
-          setDrag({
-            kind: 'slot-scale',
-            index,
-            part,
-            y: centre.y,
-            cx: centre.x,
-            cz: centre.z,
-            startScale: (vm.exteriorSlots[index]?.variants ?? [])[held.variantIndex]?.parts?.[part]
-              ?.scale || 1,
-            startReach: reach,
-          })
+          setDrag({ kind: 'slot-scale', index, part, ...seed, startScale, startReach: reach })
         }}
         onStartYaw={(index, part, ray, centre) => {
           const hit = rayAtY(ray, centre[1])

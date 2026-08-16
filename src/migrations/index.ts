@@ -12,6 +12,7 @@ import * as migration_20260811_084336_add_room_zones from './20260811_084336_add
 import * as migration_20260811_084654_drop_display_settings from './20260811_084654_drop_display_settings';
 import * as migration_20260811_084840_add_configurator_settings from './20260811_084840_add_configurator_settings';
 import * as migration_20260811_214553_add_exterior_options from './20260811_214553_add_exterior_options';
+import * as migration_20260816_163500_stretch_exterior_parts from './20260816_163500_stretch_exterior_parts';
 
 export const migrations = [
   {

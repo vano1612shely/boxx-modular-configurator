@@ -17,6 +17,7 @@ const MOVE_COLOR = '#ffffff'
 const HEIGHT_COLOR = '#facc15'
 const TURN_COLOR = '#38bdf8'
 const CAGE_COLOR = '#a78bfa'
+const STRETCH_COLOR = '#f0abfc'
 
 /** Metres out from a model, where its turn grip rides. */
 const RING = 1.1
@@ -68,7 +69,7 @@ function PartModel({
       object={object}
       position={[part.position?.x ?? 0, part.position?.y ?? 0, part.position?.z ?? 0]}
       rotation-y={MathUtils.degToRad(part.yawDeg ?? 0)}
-      scale={part.scale && part.scale > 0 ? part.scale : 1}
+      scale={[part.scale?.x || 1, part.scale?.y || 1, part.scale?.z || 1]}
     />
   )
 }
@@ -125,13 +126,31 @@ function HeightArrows({
   )
 }
 
+/** Each face of the cage: which way it points, and how to stand a plane on it. */
+type Axis = 'x' | 'y' | 'z'
+
+const FACE_HANDLES: Array<{ axis: Axis; sign: 1 | -1; rotation: Triple }> = [
+  { axis: 'x', sign: 1, rotation: [0, Math.PI / 2, 0] },
+  { axis: 'x', sign: -1, rotation: [0, -Math.PI / 2, 0] },
+  { axis: 'y', sign: 1, rotation: [-Math.PI / 2, 0, 0] },
+  { axis: 'y', sign: -1, rotation: [Math.PI / 2, 0, 0] },
+  { axis: 'z', sign: 1, rotation: [0, 0, 0] },
+  { axis: 'z', sign: -1, rotation: [0, Math.PI, 0] },
+]
+
 /**
- * The cage around a model: clear panes, drawn edges, a grip at every corner,
- * and the move, lift and turn handles at its middle.
+ * The cage around a model: clear panes, drawn edges, and every part of it doing
+ * something.
  *
- * Sized from the model itself rather than authored, which is the whole point —
- * two imports rarely arrive at the same size or with the same origin, and until
- * there was a box round one there was no way to see how big it had come out.
+ * The box itself is the grab handle. A floating puck beside a model the size of
+ * a deck was a small target next to a large one, and it read as a second object
+ * rather than as the model's own. Its sides slide the model across the ground
+ * and its top and bottom lift it, which is the one gesture a flat pointer can
+ * spell without a separate arrow to aim at.
+ *
+ * Corners resize the whole thing; the pad at the middle of each face stretches
+ * that axis alone. Sized from the model rather than authored, which is the whole
+ * point — two imports rarely arrive at the same size or with the same origin.
  */
 function PartCage({
   box,
@@ -143,34 +162,62 @@ function PartCage({
   onStartYaw,
 }: {
   box: Box3
-  scale: number
+  scale: Triple
   register: RegisterHandle
-  onStartScale: (ray: Ray) => void
+  onStartScale: (ray: Ray, axis: Axis | null) => void
   onStartMove: (ray: Ray) => void
   onStartHeight: (ray: Ray) => void
   onStartYaw: (ray: Ray) => void
 }) {
-  const size = box.getSize(new Vector3()).multiplyScalar(scale)
-  const centre = box.getCenter(new Vector3()).multiplyScalar(scale)
+  const raw = box.getSize(new Vector3())
+  const mid = box.getCenter(new Vector3())
+  const size = new Vector3(raw.x * scale[0], raw.y * scale[1], raw.z * scale[2])
+  const centre = new Vector3(mid.x * scale[0], mid.y * scale[1], mid.z * scale[2])
   const half: Triple = [size.x / 2, size.y / 2, size.z / 2]
   const geometry = useMemo(() => new BoxGeometry(size.x, size.y, size.z), [size.x, size.y, size.z])
 
+  const reach = (axis: Axis) => (axis === 'x' ? half[0] : axis === 'y' ? half[1] : half[2])
+
   return (
     <group position={[centre.x, centre.y, centre.z]}>
-      <mesh raycast={() => {}}>
-        <boxGeometry args={[size.x, size.y, size.z]} />
-        <meshBasicMaterial
-          color={CAGE_COLOR}
-          transparent
-          opacity={0.06}
-          depthWrite={false}
-          side={DoubleSide}
-        />
-      </mesh>
       <lineSegments raycast={() => {}}>
         <edgesGeometry args={[geometry]} />
         <lineBasicMaterial color={CAGE_COLOR} transparent opacity={0.9} depthTest={false} />
       </lineSegments>
+
+      {/* One plane per face rather than one box, so the top and bottom can lift
+          while the sides slide. Double-sided: the far ones are seen from inside. */}
+      <For each={FACE_HANDLES} getKey={(face) => `${face.axis}${face.sign}`}>
+        {(face) => (
+          <mesh
+            position={[
+              face.axis === 'x' ? face.sign * half[0] : 0,
+              face.axis === 'y' ? face.sign * half[1] : 0,
+              face.axis === 'z' ? face.sign * half[2] : 0,
+            ]}
+            rotation={face.rotation}
+            onPointerDown={() => undefined}
+            ref={(mesh) => {
+              if (!mesh) return
+              return register(mesh, face.axis === 'y' ? onStartHeight : onStartMove)
+            }}
+          >
+            <planeGeometry
+              args={[
+                face.axis === 'x' ? size.z : size.x,
+                face.axis === 'y' ? size.z : size.y,
+              ]}
+            />
+            <meshBasicMaterial
+              color={CAGE_COLOR}
+              transparent
+              opacity={0.06}
+              depthWrite={false}
+              side={DoubleSide}
+            />
+          </mesh>
+        )}
+      </For>
 
       <For each={CORNERS} getKey={(corner) => corner.join(',')}>
         {(corner) => (
@@ -178,7 +225,7 @@ function PartCage({
             position={[corner[0] * half[0], corner[1] * half[1], corner[2] * half[2]]}
             hitRadius={0.2}
             register={register}
-            begin={onStartScale}
+            begin={(ray) => onStartScale(ray, null)}
           >
             <mesh>
               <boxGeometry args={[0.11, 0.11, 0.11]} />
@@ -188,13 +235,31 @@ function PartCage({
         )}
       </For>
 
+      {/* A pad at the middle of each face, for stretching that axis on its own. */}
+      <For each={FACE_HANDLES} getKey={(face) => `pad-${face.axis}${face.sign}`}>
+        {(face) => (
+          <HandlePoint
+            position={[
+              face.axis === 'x' ? face.sign * reach('x') : 0,
+              face.axis === 'y' ? face.sign * reach('y') : 0,
+              face.axis === 'z' ? face.sign * reach('z') : 0,
+            ]}
+            hitRadius={0.18}
+            register={register}
+            begin={(ray) => onStartScale(ray, face.axis)}
+          >
+            <mesh rotation={face.rotation}>
+              <boxGeometry args={[0.16, 0.16, 0.035]} />
+              <meshBasicMaterial color={STRETCH_COLOR} depthTest={false} transparent />
+            </mesh>
+          </HandlePoint>
+        )}
+      </For>
+
       <mesh position={[0, -half[1] + 0.02, 0]} rotation-x={-Math.PI / 2} raycast={() => {}}>
         <ringGeometry args={[RING - 0.03, RING, 64]} />
         <meshBasicMaterial color={TURN_COLOR} transparent opacity={0.5} depthWrite={false} />
       </mesh>
-
-      <MovePuck register={register} begin={onStartMove} />
-      <HeightArrows register={register} begin={onStartHeight} />
 
       {/* On the +Z arm, so the grip is also the readout: where it sits is the
           way the model is pointing. */}
@@ -241,7 +306,7 @@ type Props = {
   onStartMove: (index: number, part: number | null, ray: Ray, planeY: number) => void
   onStartHeight: (index: number, part: number | null, ray: Ray, grip: Triple) => void
   onStartYaw: (index: number, part: number | null, ray: Ray, centre: Triple) => void
-  onStartScale: (index: number, part: number, ray: Ray) => void
+  onStartScale: (index: number, part: number, ray: Ray, axis: 'x' | 'y' | 'z' | null) => void
 }
 
 /**
@@ -353,9 +418,9 @@ export function ExteriorSpots({
                   >
                     <PartCage
                       box={box}
-                      scale={held?.scale || 1}
+                      scale={[held?.scale?.x || 1, held?.scale?.y || 1, held?.scale?.z || 1]}
                       register={register}
-                      onStartScale={(ray) => onStartScale(index, part!, ray)}
+                      onStartScale={(ray, axis) => onStartScale(index, part!, ray, axis)}
                       onStartMove={(ray) => onStartMove(index, part, ray, heldOrigin[1])}
                       onStartHeight={(ray) =>
                         onStartHeight(index, part, ray, [

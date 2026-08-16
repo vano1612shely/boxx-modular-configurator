@@ -972,7 +972,12 @@ export function useSceneEditorModel() {
         ...variant,
         parts: [
           ...(variant.parts ?? []),
-          { model, position: { x: 0, y: 0, z: 0 }, yawDeg: 0, scale: 1 },
+          {
+            model,
+            position: { x: 0, y: 0, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+            yawDeg: 0,
+          },
         ] as VariantDraft['parts'],
       })),
     onSetPartModel: (
@@ -1032,7 +1037,12 @@ export function useSceneEditorModel() {
           i === partIndex ? { ...part, yawDeg } : part,
         ),
       })),
-    onSetPartScale: (slotIndex: number, variantIndex: number, partIndex: number, scale: number) =>
+    onSetPartScale: (
+      slotIndex: number,
+      variantIndex: number,
+      partIndex: number,
+      scale: { x: number; y: number; z: number },
+    ) =>
       patchVariant(slotIndex, variantIndex, (variant) => ({
         ...variant,
         parts: (variant.parts ?? []).map((part, i) =>

@@ -41,7 +41,13 @@ export function useExteriorCatalogue() {
               z: part.position?.z ?? 0,
             },
             yawDeg: part.yawDeg ?? 0,
-            scale: part.scale ?? 1,
+            // One per axis, and never zero — a zero flattens the copy the
+            // admin is about to place out of existence.
+            scale: {
+              x: part.scale?.x || 1,
+              y: part.scale?.y || 1,
+              z: part.scale?.z || 1,
+            },
           })),
         })),
       )

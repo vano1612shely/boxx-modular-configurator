@@ -4,8 +4,9 @@ import { Check, ChevronDown, DoorOpen } from 'lucide-react'
 import { useState } from 'react'
 
 import type { BuildingScene, ExteriorVariant } from '@/entities/building'
+import { useConfiguratorSession } from '@/entities/configurator-session'
 import { cn } from '@/shared/lib'
-import { Card, Chip, Eyebrow, OVERLAY_Z, SceneOverlay } from '@/shared/ui/boxx'
+import { Card, Chip, SceneOverlay, SidePanel } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
 
 import { useExteriorModel, type ExteriorSpotVm, type ExteriorVm } from '../model/use-exterior-model'
@@ -24,6 +25,8 @@ const SHEET_CLOSED = 'max-h-[calc(4.75rem+env(safe-area-inset-bottom))]'
  */
 export function ExteriorPanel({ building }: { building: BuildingScene }) {
   const vm = useExteriorModel({ building })
+  const collapsed = useConfiguratorSession((s) => s.panelCollapsed)
+  const setCollapsed = useConfiguratorSession((s) => s.setPanelCollapsed)
   const [expanded, setExpanded] = useState(false)
   const [seenOpen, setSeenOpen] = useState<string | null>(null)
 
@@ -103,24 +106,28 @@ export function ExteriorPanel({ building }: { building: BuildingScene }) {
         </Card>
       </SceneOverlay>
 
-      <aside
-        style={{ zIndex: OVERLAY_Z.bar }}
-        className="absolute top-0 right-0 hidden h-full w-[22rem] flex-col border-l border-border bg-background/95 backdrop-blur desktop:flex lg:w-[26rem]"
+      <SidePanel
+        icon={<DoorOpen size={18} />}
+        title="Entrances"
+        subtitle="Decks, stairs and ramps"
+        meta={`${vm.spots.length} ${vm.spots.length === 1 ? 'spot' : 'spots'}`}
+        // Only worth a chip when there is more than one: the numbered rail
+        // below already says how many entrances there are.
+        badge={vm.spots.length > 1 ? vm.spots.length : null}
+        collapsed={collapsed}
+        onToggle={() => setCollapsed(!collapsed)}
+        // Numbered rather than pictured: every entrance would draw the same
+        // door, and which one this is is the only thing the rail has to say.
+        rail={vm.spots.map((spot, index) => ({
+          key: spot.slot.key,
+          icon: <span className="text-sm font-medium">{index + 1}</span>,
+          label: `${spot.slot.name} · ${spot.chosen.title}`,
+          active: spot.open,
+          onSelect: () => vm.onOpenSlot(spot.slot.key),
+        }))}
       >
-        <header className="flex items-baseline justify-between gap-2 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="truncate text-lg leading-normal font-medium">Entrances</h2>
-            <Eyebrow className="truncate">Decks, stairs and ramps</Eyebrow>
-          </div>
-          <Eyebrow className="shrink-0">
-            {vm.spots.length} {vm.spots.length === 1 ? 'spot' : 'spots'}
-          </Eyebrow>
-        </header>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          <PanelBody vm={vm} />
-        </div>
-      </aside>
+        <PanelBody vm={vm} />
+      </SidePanel>
     </>
   )
 }

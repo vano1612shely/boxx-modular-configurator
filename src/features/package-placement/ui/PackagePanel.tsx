@@ -4,9 +4,10 @@ import { ChevronDown, Info, Plus, Sofa, Trash2 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
+import { useConfiguratorSession } from '@/entities/configurator-session'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
 import { cn } from '@/shared/lib'
-import { Callout, Card, Chip, Eyebrow, MediaTile, OVERLAY_Z, SceneOverlay } from '@/shared/ui/boxx'
+import { Callout, Card, Chip, Eyebrow, MediaTile, SceneOverlay, SidePanel } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
 
 import { ModelThumbnailFactory, useModelThumbnail } from '../lib/model-thumbnails'
@@ -28,6 +29,9 @@ type Props = {
 
 export function PackagePanel({ building, packages }: Props) {
   const vm = usePackagePlacementModel({ building, packages })
+  const collapsed = useConfiguratorSession((s) => s.panelCollapsed)
+  const setCollapsed = useConfiguratorSession((s) => s.setPanelCollapsed)
+  const setActiveZone = useConfiguratorSession((s) => s.setActiveZone)
   const [addError, setAddError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [coachedRoom, setCoachedRoom] = useState<string | null>(null)
@@ -68,99 +72,108 @@ export function PackagePanel({ building, packages }: Props) {
       <ModelThumbnailFactory urls={vm.offers.map((offer) => offer.pkg.modelUrl)} />
 
       <Show when={vm.isPanelOpen}>
-      <Show when={expanded}>
-        <SceneOverlay corner="bottom-sheet" z="panel" className="top-0 desktop:hidden">
-          <button
-            type="button"
-            aria-label="Close the furniture list"
-            onClick={() => setExpanded(false)}
-            className="absolute inset-0 bg-ink/20 backdrop-blur-[2px]"
-          />
-        </SceneOverlay>
-      </Show>
-
-      <SceneOverlay corner="bottom-sheet" z="panel" className="desktop:hidden">
-        <Card
-          tone="page"
-          elevation="float"
-          hairline
-          className={cn(
-            'flex flex-col overflow-hidden rounded-b-none pb-[env(safe-area-inset-bottom)]',
-            'transition-[max-height] duration-300 ease-out',
-            expanded ? SHEET_OPEN : SHEET_CLOSED,
-          )}
-        >
-          {/* Reads as a sheet you can pull rather than a status strip. */}
-          <div
-            aria-hidden
-            className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-muted-foreground/35"
-          />
-
-          <button
-            type="button"
-            onClick={() => setExpanded((open) => !open)}
-            aria-expanded={expanded}
-            className={cn('flex h-14 w-full shrink-0 items-center gap-3 text-left', SHEET_INSET)}
-          >
-            <Sofa size={18} className="shrink-0" />
-            <span className="flex-1 truncate text-base font-medium">
-              {/* An empty room gets told what to do with the sheet, not what it
-                  contains — which is nothing, and says nothing. */}
-              {vm.placedInFocusedRoom.length === 0 ? 'Add furniture' : 'Furniture'}
-              <span className="font-normal text-muted-foreground">
-                {' · '}
-                {vm.activeZone?.name ?? vm.focusedRoom?.name}
-              </span>
-            </span>
-            <Show when={vm.placedInFocusedRoom.length > 0}>
-              <Chip tone="ink" size="sm">
-                {vm.placedInFocusedRoom.length}
-              </Chip>
-            </Show>
-            <ChevronDown
-              size={18}
-              className={cn(
-                'shrink-0 text-muted-foreground transition-transform duration-300',
-                expanded ? 'rotate-0' : 'rotate-180',
-              )}
+        <Show when={expanded}>
+          <SceneOverlay corner="bottom-sheet" z="panel" className="top-0 desktop:hidden">
+            <button
+              type="button"
+              aria-label="Close the furniture list"
+              onClick={() => setExpanded(false)}
+              className="absolute inset-0 bg-ink/20 backdrop-blur-[2px]"
             />
-          </button>
+          </SceneOverlay>
+        </Show>
 
-          <div
+        <SceneOverlay corner="bottom-sheet" z="panel" className="desktop:hidden">
+          <Card
+            tone="page"
+            elevation="float"
+            hairline
             className={cn(
-              'min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4',
-              SHEET_INSET,
-              !expanded && 'hidden',
+              'flex flex-col overflow-hidden rounded-b-none pb-[env(safe-area-inset-bottom)]',
+              'transition-[max-height] duration-300 ease-out',
+              expanded ? SHEET_OPEN : SHEET_CLOSED,
             )}
           >
-            <PanelBody vm={vm} addError={addError} onAdd={handleAdd} />
-          </div>
-        </Card>
-      </SceneOverlay>
+            {/* Reads as a sheet you can pull rather than a status strip. */}
+            <div
+              aria-hidden
+              className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-muted-foreground/35"
+            />
 
-      {/* Not a SceneOverlay, so it says for itself that it covers the scene —
-          without which the furniture bar puts itself underneath it. */}
-      <aside
-        data-scene-chrome=""
-        style={{ zIndex: OVERLAY_Z.bar }}
-        className="absolute top-0 right-0 hidden h-full w-[22rem] flex-col border-l border-border bg-background/95 backdrop-blur desktop:flex lg:w-[26rem]"
-      >
-        <header className="flex items-baseline justify-between gap-2 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="truncate text-lg leading-normal font-medium">Furniture</h2>
-            <Eyebrow className="truncate">
-              {vm.activeZone?.name ?? vm.focusedRoom?.name}
-            </Eyebrow>
-          </div>
-          <Eyebrow className="shrink-0">
-            {vm.offers.length} {vm.offers.length === 1 ? 'item' : 'items'}
-          </Eyebrow>
-        </header>
+            <button
+              type="button"
+              onClick={() => setExpanded((open) => !open)}
+              aria-expanded={expanded}
+              className={cn('flex h-14 w-full shrink-0 items-center gap-3 text-left', SHEET_INSET)}
+            >
+              <Sofa size={18} className="shrink-0" />
+              <span className="flex-1 truncate text-base font-medium">
+                {/* An empty room gets told what to do with the sheet, not what it
+                  contains — which is nothing, and says nothing. */}
+                {vm.placedInFocusedRoom.length === 0 ? 'Add furniture' : 'Furniture'}
+                <span className="font-normal text-muted-foreground">
+                  {' · '}
+                  {vm.activeZone?.name ?? vm.focusedRoom?.name}
+                </span>
+              </span>
+              <Show when={vm.placedInFocusedRoom.length > 0}>
+                <Chip tone="ink" size="sm">
+                  {vm.placedInFocusedRoom.length}
+                </Chip>
+              </Show>
+              <ChevronDown
+                size={18}
+                className={cn(
+                  'shrink-0 text-muted-foreground transition-transform duration-300',
+                  expanded ? 'rotate-0' : 'rotate-180',
+                )}
+              />
+            </button>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div
+              className={cn(
+                'min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4',
+                SHEET_INSET,
+                !expanded && 'hidden',
+              )}
+            >
+              <PanelBody vm={vm} addError={addError} onAdd={handleAdd} />
+            </div>
+          </Card>
+        </SceneOverlay>
+
+        <SidePanel
+          icon={<Sofa size={18} />}
+          title="Furniture"
+          subtitle={vm.activeZone?.name ?? vm.focusedRoom?.name}
+          meta={`${vm.offers.length} ${vm.offers.length === 1 ? 'item' : 'items'}`}
+          // What is standing in the room, not what is on offer for it: shut, the
+          // useful thing to know is how far the room has been furnished.
+          badge={vm.placedInFocusedRoom.length || null}
+          collapsed={collapsed}
+          onToggle={() => setCollapsed(!collapsed)}
+          // The halves of a divided room, in their own floor tints — the same
+          // choice the bar in the scene offers, kept reachable while the panel is
+          // shut. An undivided room has no halves and so no rail beyond its mark.
+          rail={(vm.focusedRoom?.zones ?? []).map((zone) => ({
+            key: zone.key,
+            icon: (
+              <span
+                aria-hidden
+                className="size-3 rounded-full ring-2 ring-background"
+                style={{ background: zone.color }}
+              />
+            ),
+            label: zone.name,
+            active: vm.activeZone?.key === zone.key,
+            onSelect: () => {
+              setActiveZone(zone.key)
+              setCollapsed(false)
+            },
+          }))}
+        >
           <PanelBody vm={vm} addError={addError} onAdd={handleAdd} />
-        </div>
-      </aside>
+        </SidePanel>
       </Show>
     </>
   )
@@ -220,7 +233,11 @@ function ZoneAccordion({ section, children }: { section: FloorSection; children:
             tying this list to a place in the room. */}
         <Show when={section.color}>
           {(color) => (
-            <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: color }} />
+            <span
+              aria-hidden
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ background: color }}
+            />
           )}
         </Show>
         <span className="flex-1 truncate text-sm font-medium">{section.name}</span>
@@ -231,7 +248,10 @@ function ZoneAccordion({ section, children }: { section: FloorSection; children:
         </Show>
         <ChevronDown
           size={16}
-          className={cn('shrink-0 text-muted-foreground transition-transform', !open && '-rotate-90')}
+          className={cn(
+            'shrink-0 text-muted-foreground transition-transform',
+            !open && '-rotate-90',
+          )}
         />
       </button>
       <div className={cn(!open && 'hidden')}>{children}</div>

@@ -79,6 +79,16 @@ type ConfiguratorSessionState = {
   openSlotKey: string | null
   /** One pose to fly to, consumed by the camera on the next request and then cleared. */
   moveToTarget: MoveToRequest | null
+  /**
+   * Whether the panel down the right of the scene is shrunk to its rail.
+   *
+   * One flag for both panels, and not part of the visitor's configuration: the
+   * furniture panel and the entrances panel are the same panel as far as anyone
+   * looking at the screen is concerned — only one of them is ever on it — so
+   * shrinking it to see the building must not un-shrink itself on the way into
+   * a room, or on the way out to a different building.
+   */
+  panelCollapsed: boolean
   focusRoom: (key: string) => void
   openExteriorSlot: (key: string | null) => void
   exitRoomFocus: () => void
@@ -93,6 +103,7 @@ type ConfiguratorSessionState = {
   previewRoom: (key: string) => void
   clearPreview: () => void
   setActiveZone: (key: string | null) => void
+  setPanelCollapsed: (collapsed: boolean) => void
   requestMoveTo: (position: [number, number, number], target: [number, number, number]) => void
   clearMoveTo: () => void
   rotateView: (direction: 1 | -1) => void
@@ -132,8 +143,11 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   rotateDirection: 1,
   buildingBounds: null,
   // Outside VISITOR_STATE on purpose: picking a different building size should
-  // not put a visitor who asked for metres back into feet.
+  // not put a visitor who asked for metres back into feet, nor re-open a panel
+  // they have deliberately shrunk out of the way.
   areaUnitOverride: null,
+  panelCollapsed: false,
+  setPanelCollapsed: (panelCollapsed) => set({ panelCollapsed }),
   // Entering lands on the whole room, never on one of its halves: what is in
   // the room is the first thing to see, and picking a half is a step after.
   focusRoom: (key) =>
@@ -163,7 +177,13 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   // One spot is open at a time and one always is, so this sets rather than
   // toggles: clicking the deck you are already looking at should leave its
   // choices on screen, not fold them away.
-  openExteriorSlot: (key) => set({ openSlotKey: key }),
+  //
+  // Asking for a spot by name is asking to see what it offers, and the panel
+  // holding that may be shrunk to its rail — the request has to be able to open
+  // it, or clicking an entrance in the scene flies the camera to a deck and
+  // then shows the visitor nothing to pick from.
+  openExteriorSlot: (key) =>
+    set(key === null ? { openSlotKey: null } : { openSlotKey: key, panelCollapsed: false }),
   setInteractionLock: (locked) => set({ interactionLock: locked }),
   // Picking a view is a statement about the building, so it drops a room
   // preview: the whole of it from outside is not what one room from above was.

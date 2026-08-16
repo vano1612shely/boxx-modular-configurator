@@ -29,3 +29,4 @@ export {
   type PillSize,
 } from './Pill'
 export { Progress, type ProgressProps } from './Progress'
+export { SidePanel, type SidePanelProps, type SidePanelRailItem } from './SidePanel'

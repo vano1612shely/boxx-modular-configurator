@@ -60,21 +60,59 @@ function regionBounds(region: Region) {
 }
 
 /**
+ * How many already-placed pieces contribute standing positions of their own.
+ *
+ * Every one of them adds two coordinates per axis, and the two axes are crossed
+ * — so this is squared, and a room filling up with chairs would grind. The
+ * nearest are the ones a gap is actually being looked for between; past those
+ * the sweep is the answer, and by then the pieces are small enough that it is
+ * a fine one.
+ */
+const CONTACT_BLOCKERS = 16
+
+/** Clear of what it stands against — the overlap test is strict, so this only
+ *  has to survive the rounding. A tenth of a millimetre. */
+const CLEARANCE = 1e-4
+
+/** Where a piece of this size stands flush against something, along one axis. */
+function contactCoords(
+  lo: number,
+  hi: number,
+  half: number,
+  blockers: Array<{ centre: number; half: number }>,
+  preferred: number,
+): number[] {
+  const coords = [preferred, lo + half + CLEARANCE, hi - half - CLEARANCE]
+
+  for (const blocker of blockers) {
+    coords.push(blocker.centre - blocker.half - half - CLEARANCE)
+    coords.push(blocker.centre + blocker.half + half + CLEARANCE)
+  }
+
+  return coords
+}
+
+/**
  * Somewhere in the region this package can stand without hitting anything.
  *
- * The preferred point first, then the rest of the floor, nearest first.
+ * The preferred point first, then everywhere it could stand flush against a
+ * wall or against something already there, then a sweep of the whole floor —
+ * all of it nearest-first, so furniture still lands as close to the middle as
+ * it can.
  *
- * It used to try eight compass directions out from the preferred point in
- * rings — nine and forty candidates in all, along two lines and two diagonals.
- * In a small room that is most of the floor; in an eighty-square-metre one it
- * is a star drawn through the middle of an empty room, and once those few spots
- * were taken the room reported itself full while three quarters of it stood
- * bare. The chairs added in a visible cross, which is exactly the shape of the
- * search.
+ * It used to be the sweep alone, on a grid half a footprint across. That reads
+ * as thorough and is at its coarsest exactly where it needs to be finest: a
+ * premium office is deeper than a 2.8 m room, so it stands sideways or not at
+ * all, and sideways it clears the walls by 15 cm a side. Its grid step was
+ * 1.24 m. The sweep stepped over the band of positions that work, every time,
+ * and the room reported itself full with half its floor bare. An empty room hid
+ * it, because the preferred point is tried first and an empty room accepts it.
  *
- * Now the whole region is swept on a grid half a footprint across, so a gap
- * anywhere is found — and the sort keeps the old behaviour where it mattered:
- * furniture still lands as close to the middle as it can.
+ * The contact positions are what makes this answer properly rather than more
+ * finely: anything that fits somewhere can be pushed back until it touches two
+ * things, and that pose is in the list by construction. The sweep stays for
+ * regions the pushing does not describe — a zone cut off a room at an angle,
+ * where the walls are not the box the contacts are taken from.
  */
 export function findFreeSpotInRegion(
   preferred: { x: number; z: number },
@@ -85,13 +123,49 @@ export function findFreeSpotInRegion(
 ): { x: number; z: number } | null {
   if (!footprintFitsRegion(footprint, region)) return null
 
-  // Half the narrow side: fine enough to find a gap a piece actually fits in,
-  // coarse enough that a large room is still a few hundred candidates and not
-  // a few hundred thousand.
-  const step = Math.max(0.3, Math.min(footprint.width, footprint.depth) / 2)
   const bounds = regionBounds(region)
+  const { halfW, halfD } = rotatedHalfExtents(footprint, rotationYDeg)
+
+  const near = [...others]
+    .sort(
+      (a, b) =>
+        (a.x - preferred.x) ** 2 +
+        (a.z - preferred.z) ** 2 -
+        ((b.x - preferred.x) ** 2 + (b.z - preferred.z) ** 2),
+    )
+    .slice(0, CONTACT_BLOCKERS)
+    .map((other) => ({ ...other, ...rotatedHalfExtents(other.footprint, other.rotationYDeg) }))
+
+  const xs = contactCoords(
+    bounds.minX,
+    bounds.maxX,
+    halfW,
+    near.map((other) => ({ centre: other.x, half: other.halfW })),
+    preferred.x,
+  )
+  const zs = contactCoords(
+    bounds.minZ,
+    bounds.maxZ,
+    halfD,
+    near.map((other) => ({ centre: other.z, half: other.halfD })),
+    preferred.z,
+  )
 
   const candidates: Array<{ x: number; z: number }> = []
+  for (const x of xs) for (const z of zs) candidates.push({ x, z })
+
+  // Half the narrow side while there is room to spare, and no coarser than the
+  // slack itself — a piece with 15 cm to give cannot be looked for in strides
+  // of a metre. Floored so a large room stays a few hundred candidates.
+  const slack = Math.min(
+    bounds.maxX - bounds.minX - 2 * halfW,
+    bounds.maxZ - bounds.minZ - 2 * halfD,
+  )
+  const step = Math.min(
+    0.5,
+    Math.max(0.1, Math.min(Math.min(footprint.width, footprint.depth) / 2, slack / 2)),
+  )
+
   for (let x = bounds.minX; x <= bounds.maxX; x += step) {
     for (let z = bounds.minZ; z <= bounds.maxZ; z += step) {
       candidates.push({ x, z })
@@ -106,7 +180,8 @@ export function findFreeSpotInRegion(
   )
 
   // The asked-for spot is the only one worth pulling into the region: it is
-  // where the piece is meant to go, and the sweep below covers everywhere else.
+  // where the piece is meant to go, and the rest of the list covers everywhere
+  // else.
   const first = clampPoseToRegion(preferred.x, preferred.z, rotationYDeg, footprint, region)
 
   for (const candidate of [first, ...candidates]) {

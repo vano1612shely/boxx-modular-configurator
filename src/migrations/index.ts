@@ -14,6 +14,7 @@ import * as migration_20260811_084840_add_configurator_settings from './20260811
 import * as migration_20260811_214553_add_exterior_options from './20260811_214553_add_exterior_options';
 import * as migration_20260815_232801_add_quiz_show_logo from './20260815_232801_add_quiz_show_logo';
 import * as migration_20260816_163500_stretch_exterior_parts from './20260816_163500_stretch_exterior_parts';
+import * as migration_20260816_225837_one_model_per_exterior_option from './20260816_225837_one_model_per_exterior_option';
 
 export const migrations = [
   {
@@ -84,16 +85,21 @@ export const migrations = [
   {
     up: migration_20260811_214553_add_exterior_options.up,
     down: migration_20260811_214553_add_exterior_options.down,
-    name: '20260811_214553_add_exterior_options'
+    name: '20260811_214553_add_exterior_options',
   },
   {
     up: migration_20260815_232801_add_quiz_show_logo.up,
     down: migration_20260815_232801_add_quiz_show_logo.down,
-    name: '20260815_232801_add_quiz_show_logo'
+    name: '20260815_232801_add_quiz_show_logo',
   },
   {
     up: migration_20260816_163500_stretch_exterior_parts.up,
     down: migration_20260816_163500_stretch_exterior_parts.down,
-    name: '20260816_163500_stretch_exterior_parts'
+    name: '20260816_163500_stretch_exterior_parts',
+  },
+  {
+    up: migration_20260816_225837_one_model_per_exterior_option.up,
+    down: migration_20260816_225837_one_model_per_exterior_option.down,
+    name: '20260816_225837_one_model_per_exterior_option'
   },
 ];

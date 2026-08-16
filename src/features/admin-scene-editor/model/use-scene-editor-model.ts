@@ -48,7 +48,10 @@ import {
   type EditorBox,
 } from '../lib/blocks'
 import type { PlaneBounds } from '../lib/floor-plane'
-import type { BuildingModel, ExteriorOption, Model } from '@/payload-types'
+import { useExteriorCatalogue, type ExteriorOptionRef } from './use-exterior-catalogue'
+import type { BuildingModel, Model } from '@/payload-types'
+
+export type { ExteriorOptionRef }
 
 export type EditorMode =
   'select' | 'draw-room' | 'block-roof' | 'place-opening' | 'floor-level' | 'cut-zone'
@@ -86,15 +89,6 @@ type SlotDraft = NonNullable<NonNullable<Draft['sceneConfig']>['exteriorSlots']>
 type VariantDraft = NonNullable<SlotDraft['variants']>[number]
 type PlacementDraft = NonNullable<VariantDraft['placement']>
 
-/** One catalogue entry as the picker hands it over. */
-export type ExteriorOptionRef = {
-  id: number
-  title: string
-  price: number | null
-  /** Populated at depth 1, so the viewport can draw it straight away. */
-  model: ExteriorOption['model']
-}
-
 /**
  * A key nothing in the list is using.
  *
@@ -110,6 +104,7 @@ function freeKey(rows: Array<{ key?: string | null }>, prefix: string): string {
 
 export function useSceneEditorModel() {
   const { id } = useDocumentInfo()
+  const catalogue = useExteriorCatalogue()
 
   const [doc, setDoc] = useState<BuildingModel | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -139,15 +134,13 @@ export function useSceneEditorModel() {
   /** Which choice the viewport shows for the selected spot; null follows its default. */
   const [previewVariantKey, setPreviewVariantKey] = useState<string | null>(null)
   /**
-   * What the handles are on: a part by index, the spot itself, or nothing said
-   * yet — which resolves to the first model.
+   * What the handles are on: the spot itself, or the previewed choice's model.
    *
-   * Three states rather than two, because "not chosen" and "the spot" want
-   * different answers. Imported models rarely share an origin, so the model is
-   * what an admin reaches for first and the default belongs there; the spot is
-   * what carries the whole arrangement once the models line up.
+   * The model is the default, because an imported model arrives wherever its
+   * exporter left it and lining it up is the first thing anyone does. The spot
+   * is what carries the whole arrangement once the models line up.
    */
-  const [partChoice, setPartChoice] = useState<number | 'spot' | null>(null)
+  const [movingSpot, setMovingSpot] = useState(false)
   const [roofHidden, setRoofHidden] = useState(true)
   /** Storey the viewport is cut down to, exactly as the visitor would see it. */
   const [previewFloorIndex, setPreviewFloorIndex] = useState<number | null>(null)
@@ -827,17 +820,14 @@ export function useSceneEditorModel() {
   })()
 
   /**
-   * The model wearing the cage, or null when the spot itself has the handles.
+   * Whether the cage is on the previewed choice's model.
    *
-   * Resolved rather than stored, so a choice with models in it always opens
-   * with one under the handles: an admin should not have to say "this one"
-   * before they can move the only thing on the spot. A stale index — the model
-   * was deleted, or the preview stepped to a choice with fewer — falls back to
-   * the first.
+   * Either the spot itself is being positioned, or the model of the choice on
+   * screen is — there is no third thing to choose between now that a choice
+   * owns exactly one model. Resolved rather than stored, so a spot with a
+   * choice on it always opens with something under the handles.
    */
-  // Either the spot itself is being positioned, or the model of the choice
-  // being previewed is. There is no longer a third thing to choose between.
-  const cagingVariant = partChoice !== 'spot' && previewVariantIndex !== null
+  const cagingVariant = !movingSpot && previewVariantIndex !== null
 
   const addSlot = () => {
     const index = exteriorSlots.length
@@ -872,9 +862,15 @@ export function useSceneEditorModel() {
   }
 
   const addVariant = (slotIndex: number, option: ExteriorOptionRef) => {
+    const key = freeKey(exteriorSlots[slotIndex]?.variants ?? [], 'choice')
+
+    // A choice stores only the option's id, so the viewport reads the model
+    // back out of the catalogue — which has to know about an entry created a
+    // moment ago in the dialog, not just the ones fetched at mount.
+    catalogue.remember(option)
+
     patchSlot(slotIndex, (slot) => {
       const variants = slot.variants ?? []
-      const key = freeKey(variants, 'choice')
 
       return {
         ...slot,
@@ -897,6 +893,12 @@ export function useSceneEditorModel() {
         defaultVariantKey: slot.defaultVariantKey || key,
       }
     })
+
+    // Straight onto the viewport with the handles on it. A ramp is added in
+    // order to stand it somewhere, and having to find it in the list and press
+    // preview first was a step that never had another answer.
+    setPreviewVariantKey(key)
+    setMovingSpot(false)
   }
 
   /** Takes whatever is selected in the outliner into this choice. */
@@ -939,11 +941,13 @@ export function useSceneEditorModel() {
     // The cage is on the previewed choice's model unless the spot itself is
     // being positioned — there is no longer a third thing to choose between.
     cagingVariant,
+    exteriorCatalogue: catalogue.options,
+    onReloadExteriorCatalogue: catalogue.reload,
     onAddSlot: addSlot,
     onSelectSlot: (index: number | null) => {
       setSelectedSlotIndex(index)
       setPreviewVariantKey(null)
-      setPartChoice(null)
+      setMovingSpot(false)
     },
     onRemoveSlot: (index: number) => {
       patchSlots((slots) => slots.filter((_, i) => i !== index))
@@ -974,7 +978,7 @@ export function useSceneEditorModel() {
         position: { x: (minX + maxX) / 2, y: minY, z: (minZ + maxZ) / 2 },
       }))
     },
-    onSelectPart: (value: number | 'spot') => setPartChoice(value),
+    onMoveTheSpot: (moving: boolean) => setMovingSpot(moving),
     onAddVariant: addVariant,
     onRemoveVariant: (slotIndex: number, variantIndex: number) =>
       patchSlot(slotIndex, (slot) => {
@@ -991,7 +995,7 @@ export function useSceneEditorModel() {
       patchSlot(slotIndex, (slot) => ({ ...slot, defaultVariantKey: variantKey })),
     onPreviewVariant: (key: string | null) => {
       setPreviewVariantKey(key)
-      setPartChoice(null)
+      setMovingSpot(false)
     },
     onClaimNodes: claimNodes,
     onUnclaimNode: (slotIndex: number, variantIndex: number, path: string) =>

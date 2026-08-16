@@ -48,11 +48,11 @@ export type Point3 = { x: number; y: number; z: number }
 export type SlotFrame = Point3 & { yawDeg: number }
 
 /**
- * A part's offset, in world terms.
+ * A choice's model offset, in world terms.
  *
- * Parts are stored relative to their spot so that moving the spot carries them
- * all, which means a drag — which happens in the world — has to come back
- * through here before it can be written down.
+ * A model is stored relative to its spot so that moving the spot carries it,
+ * which means a drag — which happens in the world — has to come back through
+ * here before it can be written down.
  */
 export function slotToWorld(frame: SlotFrame, local: Point3): Point3 {
   const yaw = (frame.yawDeg * Math.PI) / 180

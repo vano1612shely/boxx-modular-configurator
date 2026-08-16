@@ -40,7 +40,42 @@ export function collidesWithAny(
   return others.some((other) => overlaps(candidate, other))
 }
 
-/** Preferred spot, else a spiral of offsets around it; null when nothing fits. */
+/** The box the region lies in, to sweep across. */
+function regionBounds(region: Region) {
+  let minX = Infinity
+  let minZ = Infinity
+  let maxX = -Infinity
+  let maxZ = -Infinity
+
+  for (const polygon of region.polygons) {
+    for (const point of polygon) {
+      if (point.x < minX) minX = point.x
+      if (point.x > maxX) maxX = point.x
+      if (point.z < minZ) minZ = point.z
+      if (point.z > maxZ) maxZ = point.z
+    }
+  }
+
+  return { minX, minZ, maxX, maxZ }
+}
+
+/**
+ * Somewhere in the region this package can stand without hitting anything.
+ *
+ * The preferred point first, then the rest of the floor, nearest first.
+ *
+ * It used to try eight compass directions out from the preferred point in
+ * rings — nine and forty candidates in all, along two lines and two diagonals.
+ * In a small room that is most of the floor; in an eighty-square-metre one it
+ * is a star drawn through the middle of an empty room, and once those few spots
+ * were taken the room reported itself full while three quarters of it stood
+ * bare. The chairs added in a visible cross, which is exactly the shape of the
+ * search.
+ *
+ * Now the whole region is swept on a grid half a footprint across, so a gap
+ * anywhere is found — and the sort keeps the old behaviour where it mattered:
+ * furniture still lands as close to the middle as it can.
+ */
 export function findFreeSpotInRegion(
   preferred: { x: number; z: number },
   footprint: PackageFootprint,
@@ -50,32 +85,35 @@ export function findFreeSpotInRegion(
 ): { x: number; z: number } | null {
   if (!footprintFitsRegion(footprint, region)) return null
 
-  const step = 0.75
-  const candidates: Array<{ x: number; z: number }> = [preferred]
+  // Half the narrow side: fine enough to find a gap a piece actually fits in,
+  // coarse enough that a large room is still a few hundred candidates and not
+  // a few hundred thousand.
+  const step = Math.max(0.3, Math.min(footprint.width, footprint.depth) / 2)
+  const bounds = regionBounds(region)
 
-  for (let ring = 1; ring <= 6; ring++) {
-    const distance = ring * step
-    for (const [dx, dz] of [
-      [distance, 0],
-      [-distance, 0],
-      [0, distance],
-      [0, -distance],
-      [distance, distance],
-      [-distance, distance],
-      [distance, -distance],
-      [-distance, -distance],
-    ]) {
-      candidates.push({ x: preferred.x + dx, z: preferred.z + dz })
+  const candidates: Array<{ x: number; z: number }> = []
+  for (let x = bounds.minX; x <= bounds.maxX; x += step) {
+    for (let z = bounds.minZ; z <= bounds.maxZ; z += step) {
+      candidates.push({ x, z })
     }
   }
 
-  for (const candidate of candidates) {
-    const clamped = clampPoseToRegion(candidate.x, candidate.z, rotationYDeg, footprint, region)
+  candidates.sort(
+    (a, b) =>
+      (a.x - preferred.x) ** 2 +
+      (a.z - preferred.z) ** 2 -
+      ((b.x - preferred.x) ** 2 + (b.z - preferred.z) ** 2),
+  )
 
-    if (!poseInsideRegion(clamped.x, clamped.z, rotationYDeg, footprint, region)) continue
+  // The asked-for spot is the only one worth pulling into the region: it is
+  // where the piece is meant to go, and the sweep below covers everywhere else.
+  const first = clampPoseToRegion(preferred.x, preferred.z, rotationYDeg, footprint, region)
 
-    const spot = { ...clamped, rotationYDeg, footprint }
-    if (!collidesWithAny(spot, others)) return clamped
+  for (const candidate of [first, ...candidates]) {
+    if (!poseInsideRegion(candidate.x, candidate.z, rotationYDeg, footprint, region)) continue
+    if (collidesWithAny({ ...candidate, rotationYDeg, footprint }, others)) continue
+
+    return { x: candidate.x, z: candidate.z }
   }
 
   return null

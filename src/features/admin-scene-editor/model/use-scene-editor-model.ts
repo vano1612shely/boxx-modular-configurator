@@ -813,15 +813,20 @@ export function useSceneEditorModel() {
 
   const addSlot = () => {
     const index = exteriorSlots.length
-    // In front of the building rather than inside it: a spot dropped in the
-    // middle of the model is invisible, and the first thing an admin does is
-    // drag it out to a door anyway.
-    const centre = modelFootprint
-      ? {
-          x: (modelFootprint.minX + modelFootprint.maxX) / 2,
-          z: modelFootprint.maxZ + 1.5,
-        }
-      : { x: 0, z: 0 }
+    // Where the admin is looking. The footprint is measured off the glb, site
+    // plate and all, so placing it past the far edge of that put new spots a
+    // plate's width away from the building — off screen, with nothing to say
+    // which direction to go looking. The orbit target is on whatever is being
+    // framed, so a spot lands where the eye already is.
+    const view = snapshotCamera()
+    const centre = view
+      ? { x: view.target.x, z: view.target.z }
+      : modelFootprint
+        ? {
+            x: (modelFootprint.minX + modelFootprint.maxX) / 2,
+            z: (modelFootprint.minZ + modelFootprint.maxZ) / 2,
+          }
+        : { x: 0, z: 0 }
 
     patchSlots((slots) => [
       ...slots,

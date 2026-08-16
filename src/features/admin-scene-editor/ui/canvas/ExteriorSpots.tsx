@@ -1,8 +1,8 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
-import { Suspense, useMemo } from 'react'
-import { MathUtils, type Mesh, type Ray } from 'three'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Box3, BoxGeometry, DoubleSide, MathUtils, Vector3, type Mesh, type Ray } from 'three'
 
 import { assetUrl } from '@/shared/lib'
 import { For, Show } from '@/shared/ui/control-flow'
@@ -16,6 +16,7 @@ import { HandlePoint, type RegisterHandle } from './handles'
 const MOVE_COLOR = '#ffffff'
 const HEIGHT_COLOR = '#facc15'
 const TURN_COLOR = '#38bdf8'
+const CAGE_COLOR = '#a78bfa'
 
 /** Metres out from the spot, where the turn grip rides. */
 const RING = 1.1
@@ -26,7 +27,17 @@ type SlotRow = SceneEditorVm['exteriorSlots'][number]
 type VariantRow = NonNullable<SlotRow['variants']>[number]
 type PartRow = NonNullable<VariantRow['parts']>[number]
 
-function PartModel({ url, part }: { url: string; part: PartRow }) {
+function PartModel({
+  url,
+  part,
+  index,
+  onMeasured,
+}: {
+  url: string
+  part: PartRow
+  index: number
+  onMeasured?: (index: number, box: Box3) => void
+}) {
   const { scene } = useGLTF(url, false, true)
 
   const object = useMemo(() => {
@@ -40,6 +51,17 @@ function PartModel({ url, part }: { url: string; part: PartRow }) {
     return clone
   }, [scene])
 
+  // Measured unscaled and untranslated, so the caller can draw a box around it
+  // at whatever scale the part is currently set to.
+  const box = useMemo(() => {
+    const measured = new Box3().setFromObject(object)
+    return measured.isEmpty() ? null : measured
+  }, [object])
+
+  useEffect(() => {
+    if (box && onMeasured) onMeasured(index, box)
+  }, [box, index, onMeasured])
+
   return (
     <primitive
       object={object}
@@ -47,6 +69,85 @@ function PartModel({ url, part }: { url: string; part: PartRow }) {
       rotation-y={MathUtils.degToRad(part.yawDeg ?? 0)}
       scale={part.scale && part.scale > 0 ? part.scale : 1}
     />
+  )
+}
+
+/** The eight corners of a box, as offsets from its centre. */
+const CORNERS: Array<[number, number, number]> = [
+  [-1, -1, -1],
+  [1, -1, -1],
+  [-1, -1, 1],
+  [1, -1, 1],
+  [-1, 1, -1],
+  [1, 1, -1],
+  [-1, 1, 1],
+  [1, 1, 1],
+]
+
+/**
+ * The cage around the model being placed: clear panes, drawn edges, a grip at
+ * every corner.
+ *
+ * Sized from the model itself rather than authored, so it fits whatever came out
+ * of the exporter — which is the whole reason it is here, since two imports
+ * rarely arrive at the same size or with the same origin.
+ */
+function PartCage({
+  box,
+  scale,
+  register,
+  onStartScale,
+}: {
+  box: Box3
+  scale: number
+  register: RegisterHandle
+  onStartScale: (ray: Ray, corner: [number, number, number]) => void
+}) {
+  const size = box.getSize(new Vector3()).multiplyScalar(scale)
+  const centre = box.getCenter(new Vector3()).multiplyScalar(scale)
+  const half: [number, number, number] = [size.x / 2, size.y / 2, size.z / 2]
+
+  return (
+    <group position={[centre.x, centre.y, centre.z]}>
+      <mesh raycast={() => {}}>
+        <boxGeometry args={[size.x, size.y, size.z]} />
+        <meshBasicMaterial
+          color={CAGE_COLOR}
+          transparent
+          opacity={0.06}
+          depthWrite={false}
+          side={DoubleSide}
+        />
+      </mesh>
+      <lineSegments raycast={() => {}}>
+        <edgesGeometry args={[new BoxGeometry(size.x, size.y, size.z)]} />
+        <lineBasicMaterial color={CAGE_COLOR} transparent opacity={0.9} depthTest={false} />
+      </lineSegments>
+
+      <For each={CORNERS} getKey={(corner) => corner.join(',')}>
+        {(corner) => {
+          const at: [number, number, number] = [
+            corner[0] * half[0],
+            corner[1] * half[1],
+            corner[2] * half[2],
+          ]
+
+          return (
+            <HandlePoint
+              position={at}
+              hitRadius={0.2}
+              register={register}
+              begin={(ray) => onStartScale(ray, corner)}
+            >
+              <mesh>
+                <boxGeometry args={[0.11, 0.11, 0.11]} />
+                <meshBasicMaterial color={CAGE_COLOR} depthTest={false} transparent />
+              </mesh>
+            </HandlePoint>
+          )
+        }}
+      </For>
+    </group>
   )
 }
 
@@ -84,6 +185,12 @@ type Props = {
     ray: Ray,
     centre: [number, number, number],
   ) => void
+  onStartScale: (
+    index: number,
+    part: number,
+    ray: Ray,
+    corner: [number, number, number],
+  ) => void
 }
 
 /**
@@ -94,7 +201,20 @@ type Props = {
  * a spot with no choices is invisible otherwise, and an admin who has just
  * added one needs to see where it landed before they can move it.
  */
-export function ExteriorSpots({ vm, register, onStartMove, onStartHeight, onStartYaw }: Props) {
+export function ExteriorSpots({
+  vm,
+  register,
+  onStartMove,
+  onStartHeight,
+  onStartYaw,
+  onStartScale,
+}: Props) {
+  // The selected model's own size, reported by whichever part is wearing the
+  // handles. Kept with the index it was measured for, so the cage never shows
+  // one model's size around another.
+  const [sized, setSized] = useState<{ part: number; box: Box3 } | null>(null)
+  const measure = useCallback((part: number, box: Box3) => setSized({ part, box }), [])
+
   return (
     <For each={vm.exteriorSlots} getKey={(slot, index) => slot.key || String(index)}>
       {(slot, index) => {
@@ -159,13 +279,18 @@ export function ExteriorSpots({ vm, register, onStartMove, onStartHeight, onStar
             <Show when={variant}>
               {(shownVariant) => (
                 <For each={shownVariant.parts ?? []} getKey={(_, i) => String(i)}>
-                  {(part) => {
-                    const url = typeof part.model === 'object' ? assetUrl(part.model) : null
+                  {(one, partIndex) => {
+                    const url = typeof one.model === 'object' ? assetUrl(one.model) : null
                     if (!url) return null
 
                     return (
                       <Suspense fallback={null}>
-                        <PartModel url={url} part={part} />
+                        <PartModel
+                          url={url}
+                          part={one}
+                          index={partIndex}
+                          onMeasured={partIndex === part ? measure : undefined}
+                        />
                       </Suspense>
                     )
                   }}
@@ -185,6 +310,17 @@ export function ExteriorSpots({ vm, register, onStartMove, onStartHeight, onStar
                 ]}
                 rotation-y={MathUtils.degToRad(handled?.yawDeg ?? 0)}
               >
+                <Show when={part !== null && sized?.part === part && sized.box}>
+                  {(box) => (
+                    <PartCage
+                      box={box}
+                      scale={(handled as PartRow)?.scale || 1}
+                      register={register}
+                      onStartScale={(ray, corner) => onStartScale(index, part!, ray, corner)}
+                    />
+                  )}
+                </Show>
+
                 <mesh position={[0, 0.02, 0]} rotation-x={-Math.PI / 2} raycast={() => {}}>
                   <ringGeometry args={[RING - 0.03, RING, 64]} />
                   <meshBasicMaterial

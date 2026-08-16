@@ -124,6 +124,17 @@ type DragState =
     }
   | { kind: 'slot-height'; index: number; part: number | null; cx: number; cz: number; grabDY: number }
   | {
+      kind: 'slot-scale'
+      index: number
+      part: number
+      /** Ground plane the reach is measured on, and the centre it is measured from. */
+      y: number
+      cx: number
+      cz: number
+      startScale: number
+      startReach: number
+    }
+  | {
       kind: 'slot-yaw'
       index: number
       part: number | null
@@ -1131,6 +1142,27 @@ function EditorScene({
       return
     }
 
+    if (drag.kind === 'slot-scale') {
+      const hit = rayAtY(ray, drag.y)
+      if (!hit) return
+
+      const reach = Math.hypot(hit.x - drag.cx, hit.z - drag.cz)
+      const held = partAt(drag.index, drag.part)
+      if (!held || reach < 1e-4) return
+
+      // Measured out from the model's own centre on the ground, so pulling a
+      // corner away grows it and pushing in shrinks it, whichever corner was
+      // taken and wherever the camera is standing.
+      const scale = (drag.startScale * reach) / drag.startReach
+      vm.onSetPartScale(
+        drag.index,
+        held.variantIndex,
+        drag.part,
+        Math.round(Math.min(50, Math.max(0.02, scale)) * 1000) / 1000,
+      )
+      return
+    }
+
     if (drag.kind === 'slot-yaw') {
       const hit = rayAtY(ray, drag.y)
       if (!hit) return
@@ -1943,6 +1975,30 @@ function EditorScene({
             cx: grip[0],
             cz: grip[2],
             grabDY: (y ?? grip[1]) - base,
+          })
+        }}
+        onStartScale={(index, part, ray) => {
+          const held = partAt(index, part)
+          if (!held) return
+
+          const frame = slotFrame(index)
+          const centre = slotToWorld(frame, { x: held.x, y: held.y, z: held.z })
+          const hit = rayAtY(ray, centre.y)
+          const reach = hit ? Math.hypot(hit.x - centre.x, hit.z - centre.z) : 0
+          // A grip taken exactly over the centre has no reach to scale by, and
+          // dividing by it would send the model to infinity on the first move.
+          if (reach < 1e-3) return
+
+          setDrag({
+            kind: 'slot-scale',
+            index,
+            part,
+            y: centre.y,
+            cx: centre.x,
+            cz: centre.z,
+            startScale: (vm.exteriorSlots[index]?.variants ?? [])[held.variantIndex]?.parts?.[part]
+              ?.scale || 1,
+            startReach: reach,
           })
         }}
         onStartYaw={(index, part, ray, centre) => {

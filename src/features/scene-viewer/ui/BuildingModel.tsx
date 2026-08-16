@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Box3, type Material, type Mesh, type Object3D } from 'three'
 
 import {
+  claimedNodes,
   extentWithoutSite,
   findFloor,
   hiddenExteriorNodes,
@@ -111,23 +112,50 @@ export function BuildingModel({ building }: Props) {
    * which is what switching between choices should feel like.
    */
   const exteriorHidden = useMemo(
-    () => hiddenExteriorNodes(building.exteriorSlots, exteriorSelection),
+    () => new Set(hiddenExteriorNodes(building.exteriorSlots, exteriorSelection)),
     [building.exteriorSlots, exteriorSelection],
   )
 
-  useEffect(() => {
-    const removed: Object3D[] = []
-    for (const path of [...hiddenNodePaths, ...exteriorHidden]) {
+  /**
+   * Every object whose visibility this component owns.
+   *
+   * The union rather than the current answer: what is hidden changes with the
+   * visitor's pick, and an object that stops being hidden has to be told so.
+   */
+  const switchable = useMemo(
+    () => [...new Set([...hiddenNodePaths, ...claimedNodes(building.exteriorSlots)])],
+    [hiddenNodePaths, building.exteriorSlots],
+  )
+
+  /**
+   * Re-asserted every frame, next to the root's own visibility, rather than
+   * applied once from an effect.
+   *
+   * An effect owns its work only until something destroys it — a re-suspend of
+   * the boundary this sits in throws its cleanup, which puts every hidden object
+   * back on screen, and the built-in ramp comes back from under a chosen one.
+   * State derived from a store is cheaper to re-derive than to defend, and this
+   * is a handful of booleans on a handful of objects.
+   */
+  useFrame(() => {
+    for (const path of switchable) {
       const object = resolveNode(path)
-      if (object) {
-        object.visible = false
-        removed.push(object)
+      if (!object) continue
+      const hidden = hiddenNodePaths.includes(path) || exteriorHidden.has(path)
+      if (object.visible === hidden) object.visible = !hidden
+    }
+  })
+
+  useEffect(() => {
+    const paths = switchable
+    const resolve = resolveNode
+    return () => {
+      for (const path of paths) {
+        const object = resolve(path)
+        if (object) object.visible = true
       }
     }
-    return () => {
-      for (const object of removed) object.visible = true
-    }
-  }, [hiddenNodePaths, exteriorHidden, resolveNode])
+  }, [switchable, resolveNode])
 
   /**
    * Which spot each object of the model belongs to, for the ones that offer a

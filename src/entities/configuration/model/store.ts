@@ -5,6 +5,17 @@ import { uniqueId } from '@/shared/lib'
 import type { DragPose, PlacedPackage } from './types'
 
 type ConfigurationState = {
+  /**
+   * The building everything below was chosen for, or null before one is open.
+   *
+   * Held here rather than worked out by whoever is on screen: a placement is a
+   * position inside one particular building, and the two models of a line share
+   * room keys. Furniture chosen for the eight-office model and left standing
+   * when the visitor came back as a one-office therefore did not vanish — it
+   * found a room of the same name in a building of another shape and hung in
+   * the air where the old room used to be.
+   */
+  buildingId: number | null
   placed: PlacedPackage[]
   /**
    * What is picked at each exterior spot, by spot key.
@@ -30,6 +41,8 @@ type ConfigurationState = {
   dragPose: DragPose | null
   /** False while the dragged package overlaps another one or leaves its room. */
   dragValid: boolean
+  /** Opens a building, emptying a configuration that belonged to another one. */
+  adoptBuilding: (buildingId: number) => void
   setExteriorVariant: (slotKey: string, variantKey: string) => void
   addPackage: (placement: Omit<PlacedPackage, 'instanceId'>) => string
   removePackage: (instanceId: string) => void
@@ -45,12 +58,32 @@ type ConfigurationState = {
 }
 
 export const useConfiguration = create<ConfigurationState>((set) => ({
+  buildingId: null,
   placed: [],
   exterior: {},
   selectedInstanceId: null,
   draggingInstanceId: null,
   dragPose: null,
   dragValid: true,
+
+  // Guarded on the id it already holds rather than on anything the caller
+  // remembers: the configurator screen is unmounted and mounted again on the way
+  // through the quiz, so a component that only watched its own prop change never
+  // saw the switch at all.
+  adoptBuilding: (buildingId) =>
+    set((state) =>
+      state.buildingId === buildingId
+        ? {}
+        : {
+            buildingId,
+            placed: [],
+            exterior: {},
+            selectedInstanceId: null,
+            draggingInstanceId: null,
+            dragPose: null,
+            dragValid: true,
+          },
+    ),
 
   setExteriorVariant: (slotKey, variantKey) =>
     set((state) => ({ exterior: { ...state.exterior, [slotKey]: variantKey } })),

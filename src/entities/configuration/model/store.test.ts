@@ -14,6 +14,52 @@ beforeEach(() => {
   config().clear()
 })
 
+describe('opening a building', () => {
+  /**
+   * The complaint: furnish the eight-office model, go back to the quiz, ask for
+   * one office. The two models share room keys, so the furniture did not vanish
+   * — it found a room of the same name in a building of another shape and hung
+   * in the air where the old room had been.
+   */
+  it('empties a configuration that was chosen for another building', () => {
+    config().adoptBuilding(8)
+    place()
+    config().setExteriorVariant('entrance-1', 'v2')
+
+    config().adoptBuilding(9)
+
+    expect(config().placed).toEqual([])
+    expect(config().exterior).toEqual({})
+    expect(config().buildingId).toBe(9)
+  })
+
+  // Resolving the same building again — a reload, a re-render, coming back from
+  // a room — must not throw away what the visitor has done.
+  it('keeps everything when the same building is opened again', () => {
+    config().adoptBuilding(8)
+    const instanceId = place()
+
+    config().adoptBuilding(8)
+
+    expect(config().placed.map((p) => p.instanceId)).toEqual([instanceId])
+  })
+
+  it('drops a selection and a drag along with the furniture', () => {
+    config().adoptBuilding(8)
+    const instanceId = place()
+    config().startDrag(instanceId)
+    config().setDragPose({ instanceId, x: 1, z: 1, rotationYDeg: 0 })
+
+    config().adoptBuilding(9)
+
+    expect(config()).toMatchObject({
+      selectedInstanceId: null,
+      draggingInstanceId: null,
+      dragPose: null,
+    })
+  })
+})
+
 describe('dragging a piece', () => {
   /**
    * The whole reason the live pose is not in `placed`.

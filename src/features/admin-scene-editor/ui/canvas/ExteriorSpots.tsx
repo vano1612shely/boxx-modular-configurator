@@ -10,7 +10,7 @@ import { For, Show } from '@/shared/ui/control-flow'
 import { slotToWorld } from '../../lib/slot-drag'
 import type { SceneEditorVm } from '../../model/use-scene-editor-model'
 import { tone } from '../editor-styles'
-import { HandlePoint, type RegisterHandle } from './handles'
+import { HandlePoint, SURFACE_PRIORITY, type RegisterHandle } from './handles'
 
 /** Same colours the roof and the volumes use, so the same gesture looks the same. */
 const MOVE_COLOR = '#ffffff'
@@ -196,10 +196,15 @@ function PartCage({
               face.axis === 'z' ? face.sign * half[2] : 0,
             ]}
             rotation={face.rotation}
-            onPointerDown={() => undefined}
             ref={(mesh) => {
               if (!mesh) return
-              return register(mesh, face.axis === 'y' ? onStartHeight : onStartMove)
+              // The lowest rank there is: every grip drawn on this face, and
+              // every grip behind it, is reached through it.
+              return register(
+                mesh,
+                face.axis === 'y' ? onStartHeight : onStartMove,
+                SURFACE_PRIORITY,
+              )
             }}
           >
             <planeGeometry

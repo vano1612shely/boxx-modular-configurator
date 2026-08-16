@@ -30,7 +30,21 @@ const HANDLE_REF_DIST = 11
 const HANDLE_REF_ZOOM = 72
 const HANDLE_SCRATCH = new Vector3()
 
-export type RegisterHandle = (mesh: Object3D, begin: (ray: Ray) => void) => () => void
+/**
+ * `priority` decides who wins when two handles are under the pointer, before
+ * distance is looked at. A grip beats the surface it is drawn on however far
+ * behind it sits — otherwise the near wall of a cage swallows every grip on the
+ * far side of it, and the grips' own oversized hit spheres swallow the surface
+ * they are supposed to be sitting on.
+ */
+export type RegisterHandle = (
+  mesh: Object3D,
+  begin: (ray: Ray) => void,
+  priority?: number,
+) => () => void
+
+/** A surface that only acts where nothing better is offered. */
+export const SURFACE_PRIORITY = -1
 
 /** A screen-constant-size group anchored at a world position. */
 export function ScreenScaled({

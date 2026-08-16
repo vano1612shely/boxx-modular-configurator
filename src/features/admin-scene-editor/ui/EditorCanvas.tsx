@@ -864,7 +864,9 @@ function EditorScene({
   const controlsRef = useRef<CameraControls>(null)
   const buildingRootRef = useRef<Object3D | null>(null)
   const resolveRef = useRef<(path: string) => Object3D | null>(() => null)
-  const handleMapRef = useRef(new Map<Object3D, (ray: Ray) => void>())
+  const handleMapRef = useRef(
+    new Map<Object3D, { begin: (ray: Ray) => void; priority: number }>(),
+  )
   const lastDragEndRef = useRef(0)
   const rightDownRef = useRef<{ x: number; y: number } | null>(null)
   const contextMenuRef = useRef<(event: MouseEvent) => void>(() => {})
@@ -874,8 +876,8 @@ function EditorScene({
   const raycaster = useMemo(() => new Raycaster(), [])
   const pointerNdc = useMemo(() => new Vector2(), [])
 
-  const registerHandle = useCallback<RegisterHandle>((mesh, begin) => {
-    handleMapRef.current.set(mesh, begin)
+  const registerHandle = useCallback<RegisterHandle>((mesh, begin, priority = 0) => {
+    handleMapRef.current.set(mesh, { begin, priority })
     return () => {
       handleMapRef.current.delete(mesh)
     }
@@ -979,11 +981,23 @@ function EditorScene({
 
     const handles = [...handleMapRef.current.keys()]
     if (handles.length) {
-      const hit = raycaster.intersectObjects(handles, false)[0]
-      if (hit) {
+      // Priority before distance: a grip beats the surface it is drawn on
+      // however far behind that surface it sits. Hits arrive nearest-first, so
+      // a strict comparison keeps the closest of any equal rank.
+      let taken: ((ray: Ray) => void) | null = null
+      let rank = -Infinity
+      for (const hit of raycaster.intersectObjects(handles, false)) {
+        const entry = handleMapRef.current.get(hit.object)
+        if (entry && entry.priority > rank) {
+          rank = entry.priority
+          taken = entry.begin
+        }
+      }
+
+      if (taken) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        handleMapRef.current.get(hit.object)?.(ray)
+        taken(ray)
         return
       }
     }

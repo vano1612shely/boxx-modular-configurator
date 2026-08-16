@@ -41,3 +41,42 @@ export function draggedYaw({ startYaw, startBearing, bearing, currentYaw }: Turn
   const turns = Math.round((currentYaw - raw) / 360)
   return normaliseDeg(raw + turns * 360)
 }
+
+export type Point3 = { x: number; y: number; z: number }
+
+/** Where a spot stands and which way it faces. */
+export type SlotFrame = Point3 & { yawDeg: number }
+
+/**
+ * A part's offset, in world terms.
+ *
+ * Parts are stored relative to their spot so that moving the spot carries them
+ * all, which means a drag — which happens in the world — has to come back
+ * through here before it can be written down.
+ */
+export function slotToWorld(frame: SlotFrame, local: Point3): Point3 {
+  const yaw = (frame.yawDeg * Math.PI) / 180
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+
+  return {
+    x: frame.x + local.x * cos + local.z * sin,
+    y: frame.y + local.y,
+    z: frame.z - local.x * sin + local.z * cos,
+  }
+}
+
+/** The inverse: a point in the world, as an offset from the spot. */
+export function worldToSlot(frame: SlotFrame, world: Point3): Point3 {
+  const yaw = (frame.yawDeg * Math.PI) / 180
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const dx = world.x - frame.x
+  const dz = world.z - frame.z
+
+  return {
+    x: dx * cos - dz * sin,
+    y: world.y - frame.y,
+    z: dx * sin + dz * cos,
+  }
+}

@@ -3,11 +3,11 @@
 import { For, Show } from '@/shared/ui/control-flow'
 
 import type { SceneEditorVm } from '../../model/use-scene-editor-model'
+import { AssetPicker, assetRefOf, useAssetLibrary } from '../controls/AssetPicker'
 import { useExteriorCatalogue } from '../controls/exterior-catalogue'
-import { NumberInput } from '../controls/NumberInput'
 import { button, s, tone } from '../editor-styles'
 
-const NUDGE = 0.1
+const MODEL_ACCEPT = '.glb,.gltf,model/gltf-binary,model/gltf+json'
 
 /** Paths more than one spot has claimed — an authoring mistake worth naming. */
 function contestedPaths(vm: SceneEditorVm): Set<string> {
@@ -28,16 +28,42 @@ function contestedPaths(vm: SceneEditorVm): Set<string> {
   return contested
 }
 
+const row: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '6px 8px',
+  borderRadius: 6,
+}
+
+const chip: React.CSSProperties = {
+  fontSize: 10,
+  letterSpacing: 0.4,
+  textTransform: 'uppercase',
+  color: tone.textFaint,
+}
+
+const iconButton = { ...button(), padding: '5px 8px', fontSize: 12 }
+
+/**
+ * Exterior spots, as few controls as the job allows.
+ *
+ * Everything positional is done by dragging in the viewport, so nothing here is
+ * a coordinate: the panel says what exists, what is being previewed, and what
+ * the handles are currently on. Picking a part hands it the handles — imported
+ * models rarely agree on where their origin is, and each one has to be placed
+ * on its own before the spot can carry them as a set.
+ */
 export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
   const catalogue = useExteriorCatalogue()
+  const { assets, refresh } = useAssetLibrary('models')
   const contested = contestedPaths(vm)
 
   return (
     <>
       <p style={s.hint}>
-        Places outside the building where the visitor picks between a deck, stairs and a ramp. A
-        choice can show objects that are already in the model, or place models of its own, or both.
-        Leave this empty and the building is shown exactly as it is, with no panel.
+        Places outside the building where the visitor picks between a deck, stairs and a ramp. Leave
+        this empty and the building is shown exactly as it is, with no panel.
       </p>
 
       <button type="button" style={{ ...button('primary'), marginTop: 8 }} onClick={vm.onAddSlot}>
@@ -46,12 +72,20 @@ export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
 
       <For each={vm.exteriorSlots} getKey={(slot, index) => slot.key || String(index)}>
         {(slot, index) => {
-          const selected = vm.selectedSlotIndex === index
+          const open = vm.selectedSlotIndex === index
           const variants = slot.variants ?? []
 
           return (
-            <div style={{ ...(selected ? s.cardSelected : s.card), marginTop: 8 }}>
+            <div style={{ ...(open ? s.cardSelected : s.card), marginTop: 8 }}>
               <div style={s.row}>
+                <button
+                  type="button"
+                  style={{ ...iconButton, minWidth: 26 }}
+                  title={open ? 'Collapse' : 'Open'}
+                  onClick={() => vm.onSelectSlot(open ? null : index)}
+                >
+                  {open ? '▾' : '▸'}
+                </button>
                 <input
                   style={{ ...s.input, flex: 1 }}
                   value={slot.name ?? ''}
@@ -59,14 +93,7 @@ export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
                 />
                 <button
                   type="button"
-                  style={button(selected ? 'primary' : undefined)}
-                  onClick={() => vm.onSelectSlot(selected ? null : index)}
-                >
-                  {selected ? 'Done' : 'Edit'}
-                </button>
-                <button
-                  type="button"
-                  style={button('danger')}
+                  style={{ ...iconButton, color: tone.danger }}
                   title="Delete this spot"
                   onClick={() => vm.onRemoveSlot(index)}
                 >
@@ -74,121 +101,51 @@ export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
                 </button>
               </div>
 
-              <Show when={!selected}>
-                <p style={{ ...s.hint, marginTop: 6 }}>
-                  {variants.length} {variants.length === 1 ? 'choice' : 'choices'}
-                  {variants.length < 2 ? ' — needs two before the visitor sees a picker' : ''}
+              <Show when={!open}>
+                <p style={{ ...s.hint, marginTop: 4 }}>
+                  {variants.length < 2
+                    ? `${variants.length} of 2 choices — the visitor needs two`
+                    : `${variants.length} choices`}
                 </p>
               </Show>
 
-              <Show when={selected}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 8 }}>
-                  <label style={s.field}>
-                    <span style={s.label}>X m</span>
-                    <NumberInput
-                      style={s.input}
-                      value={slot.position?.x ?? 0}
-                      onCommit={(value) =>
-                        vm.onMoveSlot(index, value, slot.position?.y ?? 0, slot.position?.z ?? 0)
-                      }
-                    />
-                  </label>
-                  <label style={s.field}>
-                    <span style={s.label}>Y m</span>
-                    <NumberInput
-                      style={s.input}
-                      value={slot.position?.y ?? 0}
-                      onCommit={(value) =>
-                        vm.onMoveSlot(index, slot.position?.x ?? 0, value, slot.position?.z ?? 0)
-                      }
-                    />
-                  </label>
-                  <label style={s.field}>
-                    <span style={s.label}>Z m</span>
-                    <NumberInput
-                      style={s.input}
-                      value={slot.position?.z ?? 0}
-                      onCommit={(value) =>
-                        vm.onMoveSlot(index, slot.position?.x ?? 0, slot.position?.y ?? 0, value)
-                      }
-                    />
-                  </label>
-                </div>
-
+              <Show when={open}>
                 <div style={{ ...s.row, marginTop: 6 }}>
-                  <label style={{ ...s.field, flex: 1 }}>
-                    <span style={s.label}>Facing °</span>
-                    <NumberInput
-                      style={s.input}
-                      step={5}
-                      value={slot.yawDeg ?? 0}
-                      onCommit={(value) => vm.onSetSlotYaw(index, value)}
-                    />
-                  </label>
                   <button
                     type="button"
-                    style={{ ...button(), alignSelf: 'flex-end' }}
-                    title="Quarter turn"
-                    onClick={() => vm.onSetSlotYaw(index, ((slot.yawDeg ?? 0) + 90) % 360)}
+                    style={{
+                      ...button(vm.selectedPartIndex === null ? 'primary' : undefined),
+                      flex: 1,
+                    }}
+                    title="Put the handles back on the spot itself"
+                    onClick={() => vm.onSelectPart(null)}
                   >
-                    ↻
+                    ⊹ Move the spot
                   </button>
                   <button
                     type="button"
-                    style={{ ...button(), alignSelf: 'flex-end' }}
-                    title={`Down ${NUDGE} m`}
-                    onClick={() =>
-                      vm.onMoveSlot(
-                        index,
-                        slot.position?.x ?? 0,
-                        (slot.position?.y ?? 0) - NUDGE,
-                        slot.position?.z ?? 0,
-                      )
-                    }
+                    style={iconButton}
+                    disabled={vm.selectedNodePaths.length === 0}
+                    title="Drop the spot onto whatever is selected in Model objects"
+                    onClick={() => vm.onSnapSlotToSelection(index)}
                   >
-                    −
-                  </button>
-                  <button
-                    type="button"
-                    style={{ ...button(), alignSelf: 'flex-end' }}
-                    title={`Up ${NUDGE} m`}
-                    onClick={() =>
-                      vm.onMoveSlot(
-                        index,
-                        slot.position?.x ?? 0,
-                        (slot.position?.y ?? 0) + NUDGE,
-                        slot.position?.z ?? 0,
-                      )
-                    }
-                  >
-                    +
+                    ⌖ Snap
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  style={{ ...button(), marginTop: 6, width: '100%' }}
-                  disabled={vm.selectedNodePaths.length === 0}
-                  title="Move the spot onto whatever is selected in Model objects"
-                  onClick={() => vm.onSnapSlotToSelection(index)}
-                >
-                  ⌖ Snap to selected objects
-                </button>
-
-                <p style={{ ...s.hint, marginTop: 6 }}>
-                  Drag the white puck to move the spot, the yellow arrows for height, and the blue
-                  grip round the ring to turn it. The fields above are the same numbers.
+                <p style={{ ...s.hint, marginTop: 4 }}>
+                  White puck moves, yellow arrows lift, blue grip turns.
                 </p>
 
-                <p style={{ ...s.hint, marginTop: 10 }}>Choices</p>
+                <div style={{ ...chip, marginTop: 10 }}>Choices</div>
 
                 <For each={variants} getKey={(variant, i) => variant.key || String(i)}>
                   {(variant, variantIndex) => {
+                    const shown = vm.previewVariantIndex === variantIndex
+                    const isDefault = slot.defaultVariantKey === variant.key
                     const claimed = Array.isArray(variant.nodes)
                       ? variant.nodes.filter((path): path is string => typeof path === 'string')
                       : []
-                    const isDefault = slot.defaultVariantKey === variant.key
-                    const previewed = vm.previewVariantIndex === variantIndex
                     const option = catalogue.find(
                       (entry) =>
                         entry.id ===
@@ -196,25 +153,32 @@ export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
                     )
 
                     return (
-                      <div style={{ ...(previewed ? s.cardSelected : s.card), marginTop: 6 }}>
-                        <div style={s.row}>
-                          <span style={{ flex: 1, fontSize: 12 }}>
+                      <div
+                        style={{
+                          marginTop: 4,
+                          borderRadius: 8,
+                          border: `1px solid ${shown ? tone.accent : tone.lineSoft}`,
+                          background: shown ? '#171b22' : 'transparent',
+                        }}
+                      >
+                        <div style={{ ...row, cursor: 'pointer' }}>
+                          <button
+                            type="button"
+                            style={{ ...iconButton, minWidth: 26 }}
+                            title="Show this choice in the viewport"
+                            onClick={() => vm.onPreviewVariant(variant.key ?? null)}
+                          >
+                            {shown ? '◉' : '○'}
+                          </button>
+                          <span style={{ flex: 1, fontSize: 12, color: tone.text }}>
                             {option?.title ?? 'Catalogue entry'}
-                            <Show when={option?.price != null}>
-                              <span style={{ opacity: 0.6 }}> · ${option?.price}</span>
-                            </Show>
                           </span>
                           <button
                             type="button"
-                            style={button(previewed ? 'primary' : undefined)}
-                            title="Show exactly what the visitor sees for this choice"
-                            onClick={() => vm.onPreviewVariant(variant.key ?? null)}
-                          >
-                            👁
-                          </button>
-                          <button
-                            type="button"
-                            style={button(isDefault ? 'primary' : undefined)}
+                            style={{
+                              ...iconButton,
+                              color: isDefault ? '#facc15' : tone.textFaint,
+                            }}
                             title="What the visitor arrives on"
                             onClick={() => vm.onSetDefaultVariant(index, variant.key ?? '')}
                           >
@@ -222,148 +186,129 @@ export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
                           </button>
                           <button
                             type="button"
-                            style={button('danger')}
+                            style={{ ...iconButton, color: tone.danger }}
                             onClick={() => vm.onRemoveVariant(index, variantIndex)}
                           >
                             ✕
                           </button>
                         </div>
 
-                        <button
-                          type="button"
-                          style={{ ...button(), marginTop: 6, width: '100%' }}
-                          disabled={vm.selectedNodePaths.length === 0}
-                          title="Objects of this building's model that this choice shows"
-                          onClick={() => vm.onClaimNodes(index, variantIndex)}
-                        >
-                          ⊕ Claim selected objects ({vm.selectedNodePaths.length})
-                        </button>
+                        <Show when={shown}>
+                          <div style={{ padding: '0 8px 8px' }}>
+                            <For each={variant.parts ?? []} getKey={(_, i) => String(i)}>
+                              {(part, partIndex) => {
+                                const held = vm.selectedPartIndex === partIndex
+                                const model = assetRefOf(part.model, assets)
 
-                        <For each={claimed} getKey={(path) => path}>
-                          {(path) => (
-                            <div style={{ ...s.row, marginTop: 4 }}>
-                              <span
-                                style={{
-                                  flex: 1,
-                                  fontSize: 11,
-                                  opacity: contested.has(path) ? 1 : 0.7,
-                                  color: contested.has(path) ? tone.danger : undefined,
-                                }}
-                                title={
-                                  contested.has(path)
-                                    ? 'Another spot claims this object too — it will show whenever either one asks for it'
-                                    : path
+                                return (
+                                  <div
+                                    style={{
+                                      ...row,
+                                      background: held ? '#1d2a22' : tone.well,
+                                      border: `1px solid ${held ? '#35553f' : tone.line}`,
+                                      marginTop: 4,
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      style={{
+                                        ...iconButton,
+                                        minWidth: 26,
+                                        color: held ? '#fff' : tone.textFaint,
+                                      }}
+                                      title="Put the handles on this model"
+                                      onClick={() => vm.onSelectPart(held ? null : partIndex)}
+                                    >
+                                      ⊹
+                                    </button>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <AssetPicker
+                                        collection="models"
+                                        accept={MODEL_ACCEPT}
+                                        library={assets}
+                                        onLibraryChange={refresh}
+                                        value={model}
+                                        emptyLabel="Pick a model"
+                                        onChange={(asset) =>
+                                          asset &&
+                                          vm.onSetPartModel(index, variantIndex, partIndex, {
+                                            id: asset.id,
+                                            url: asset.url,
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      style={{ ...iconButton, color: tone.danger }}
+                                      onClick={() => vm.onRemovePart(index, variantIndex, partIndex)}
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                )
+                              }}
+                            </For>
+
+                            {/* Uploads land in the model library from here, so a
+                                new ramp never means leaving the scene. */}
+                            <div style={{ marginTop: 6 }}>
+                              <AssetPicker
+                                collection="models"
+                                accept={MODEL_ACCEPT}
+                                library={assets}
+                                onLibraryChange={refresh}
+                                value={null}
+                                emptyLabel="+ Model — pick or upload"
+                                onChange={(asset) =>
+                                  asset &&
+                                  vm.onAddPart(index, variantIndex, { id: asset.id, url: asset.url })
                                 }
-                              >
-                                {vm.modelNodes.find((node) => node.path === path)?.name ?? path}
-                                {contested.has(path) ? ' ⚠' : ''}
-                              </span>
+                              />
+                            </div>
+
+                            <div style={{ ...s.row, marginTop: 6 }}>
                               <button
                                 type="button"
-                                style={button()}
-                                onClick={() => vm.onUnclaimNode(index, variantIndex, path)}
+                                style={{ ...iconButton, flex: 1 }}
+                                disabled={vm.selectedNodePaths.length === 0}
+                                title="Objects of this building's own model that this choice shows"
+                                onClick={() => vm.onClaimNodes(index, variantIndex)}
                               >
-                                ✕
+                                ⊕ Claim {vm.selectedNodePaths.length || ''} selected
                               </button>
                             </div>
-                          )}
-                        </For>
 
-                        <For each={variant.parts ?? []} getKey={(_, i) => String(i)}>
-                          {(part, partIndex) => (
-                            <div style={{ marginTop: 6, paddingLeft: 8, borderLeft: `2px solid ${tone.lineSoft}` }}>
-                              <div style={s.row}>
-                                <span style={{ flex: 1, fontSize: 11, opacity: 0.7 }}>
-                                  {typeof part.model === 'object'
-                                    ? (part.model?.title ?? part.model?.filename ?? 'Model')
-                                    : `#${part.model}`}
-                                </span>
-                                <button
-                                  type="button"
-                                  style={button('danger')}
-                                  onClick={() => vm.onRemovePart(index, variantIndex, partIndex)}
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                              <div
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: '1fr 1fr 1fr',
-                                  gap: 4,
-                                  marginTop: 4,
-                                }}
-                              >
-                                <NumberInput
-                                  style={s.input}
-                                  value={part.position?.x ?? 0}
-                                  onCommit={(value) =>
-                                    vm.onMovePart(
-                                      index,
-                                      variantIndex,
-                                      partIndex,
-                                      value,
-                                      part.position?.y ?? 0,
-                                      part.position?.z ?? 0,
-                                    )
-                                  }
-                                />
-                                <NumberInput
-                                  style={s.input}
-                                  value={part.position?.y ?? 0}
-                                  onCommit={(value) =>
-                                    vm.onMovePart(
-                                      index,
-                                      variantIndex,
-                                      partIndex,
-                                      part.position?.x ?? 0,
-                                      value,
-                                      part.position?.z ?? 0,
-                                    )
-                                  }
-                                />
-                                <NumberInput
-                                  style={s.input}
-                                  value={part.position?.z ?? 0}
-                                  onCommit={(value) =>
-                                    vm.onMovePart(
-                                      index,
-                                      variantIndex,
-                                      partIndex,
-                                      part.position?.x ?? 0,
-                                      part.position?.y ?? 0,
-                                      value,
-                                    )
-                                  }
-                                />
-                              </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 4 }}>
-                                <label style={s.field}>
-                                  <span style={s.label}>Facing °</span>
-                                  <NumberInput
-                                    style={s.input}
-                                    step={5}
-                                    value={part.yawDeg ?? 0}
-                                    onCommit={(value) =>
-                                      vm.onSetPartYaw(index, variantIndex, partIndex, value)
+                            <For each={claimed} getKey={(path) => path}>
+                              {(path) => (
+                                <div style={{ ...row, marginTop: 2 }}>
+                                  <span
+                                    style={{
+                                      flex: 1,
+                                      fontSize: 11,
+                                      color: contested.has(path) ? tone.danger : tone.textMuted,
+                                    }}
+                                    title={
+                                      contested.has(path)
+                                        ? 'Another spot claims this object too'
+                                        : path
                                     }
-                                  />
-                                </label>
-                                <label style={s.field}>
-                                  <span style={s.label}>Scale</span>
-                                  <NumberInput
-                                    style={s.input}
-                                    step={0.01}
-                                    value={part.scale ?? 1}
-                                    onCommit={(value) =>
-                                      vm.onSetPartScale(index, variantIndex, partIndex, value)
-                                    }
-                                  />
-                                </label>
-                              </div>
-                            </div>
-                          )}
-                        </For>
+                                  >
+                                    {vm.modelNodes.find((node) => node.path === path)?.name ?? path}
+                                    {contested.has(path) ? ' ⚠' : ''}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    style={iconButton}
+                                    onClick={() => vm.onUnclaimNode(index, variantIndex, path)}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
                       </div>
                     )
                   }}
@@ -377,7 +322,7 @@ export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
                     if (option) vm.onAddVariant(index, option)
                   }}
                 >
-                  <option value="">+ Add a choice from the catalogue…</option>
+                  <option value="">+ Choice from the catalogue…</option>
                   <For each={catalogue} getKey={(option) => option.id}>
                     {(option) => <option value={option.id}>{option.title}</option>}
                   </For>

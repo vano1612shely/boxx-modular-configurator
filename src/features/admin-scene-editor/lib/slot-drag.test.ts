@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { bearingDeg, draggedYaw, normaliseDeg } from './slot-drag'
+import { bearingDeg, draggedYaw, normaliseDeg, slotToWorld, worldToSlot } from './slot-drag'
 
 describe('bearingDeg', () => {
   // Matches what a yaw of the same number does to the spot's own +Z arrow.
@@ -19,6 +19,48 @@ describe('normaliseDeg', () => {
     expect(normaliseDeg(-90)).toBe(270)
     expect(normaliseDeg(450)).toBe(90)
     expect(normaliseDeg(-450)).toBe(270)
+  })
+})
+
+describe('slotToWorld and worldToSlot', () => {
+  const frame = { x: 3, y: 0.8, z: -2, yawDeg: 37 }
+
+  it('leave a point alone at an unturned spot standing at the origin', () => {
+    const flat = { x: 0, y: 0, z: 0, yawDeg: 0 }
+    expect(slotToWorld(flat, { x: 1, y: 2, z: 3 })).toEqual({ x: 1, y: 2, z: 3 })
+  })
+
+  // The spot's own arrow: +Z locally is where the facing points.
+  it('send the local forward axis where the spot faces', () => {
+    const east = { x: 0, y: 0, z: 0, yawDeg: 90 }
+    const out = slotToWorld(east, { x: 0, y: 0, z: 1 })
+
+    expect(out.x).toBeCloseTo(1, 9)
+    expect(out.z).toBeCloseTo(0, 9)
+  })
+
+  // The pair is what a drag runs through — out to the world to be moved, back
+  // to the spot to be written down. Anything lost here is drift the admin sees
+  // as the model creeping every time they touch it.
+  it('undo one another', () => {
+    for (const local of [
+      { x: 0, y: 0, z: 0 },
+      { x: 1.4, y: -0.6, z: 2.2 },
+      { x: -3, y: 5, z: -0.25 },
+    ]) {
+      const round = worldToSlot(frame, slotToWorld(frame, local))
+      expect(round.x).toBeCloseTo(local.x, 9)
+      expect(round.y).toBeCloseTo(local.y, 9)
+      expect(round.z).toBeCloseTo(local.z, 9)
+    }
+  })
+
+  it('measure from the spot, not from the origin', () => {
+    expect(worldToSlot({ x: 5, y: 1, z: 5, yawDeg: 0 }, { x: 5, y: 1, z: 5 })).toEqual({
+      x: 0,
+      y: 0,
+      z: 0,
+    })
   })
 })
 

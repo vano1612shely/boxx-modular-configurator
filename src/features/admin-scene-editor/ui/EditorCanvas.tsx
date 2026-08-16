@@ -55,7 +55,7 @@ import { For, Show } from '@/shared/ui/control-flow'
 
 import { defaultYRange, planCutY } from '../lib/blocks'
 import { floorPlaneBounds } from '../lib/floor-plane'
-import { bearingDeg, draggedYaw } from '../lib/slot-drag'
+import { bearingDeg, draggedYaw, slotToWorld, worldToSlot } from '../lib/slot-drag'
 
 import { SIDE_COLORS } from './editor-styles'
 
@@ -112,11 +112,21 @@ type DragState =
   | { kind: 'floor-plane'; cx: number; cz: number }
   | { kind: 'roof-move'; grabDX: number; grabDZ: number; y: number }
   | { kind: 'roof-height'; cx: number; cz: number; grabDY: number }
-  | { kind: 'slot-move'; index: number; grabDX: number; grabDZ: number; y: number }
-  | { kind: 'slot-height'; index: number; cx: number; cz: number; grabDY: number }
+  // `part` is the index within the previewed choice, or null for the spot
+  // itself — the same three gestures either way, so they share the state.
+  | {
+      kind: 'slot-move'
+      index: number
+      part: number | null
+      grabDX: number
+      grabDZ: number
+      y: number
+    }
+  | { kind: 'slot-height'; index: number; part: number | null; cx: number; cz: number; grabDY: number }
   | {
       kind: 'slot-yaw'
       index: number
+      part: number | null
       cx: number
       cz: number
       y: number
@@ -422,7 +432,11 @@ function BuildingGlb({
     root.traverse((object) => {
       const mesh = object as Mesh
       if (!mesh.isMesh) return
-      saved.set(mesh, mesh.material)
+      // Never record the ghost as the thing to come back to. If this ever runs
+      // twice without its own cleanup in between, the model would be restored
+      // to the ghost and stay there — a building that reads as a dark silhouette
+      // with its insides showing through, for the rest of the session.
+      if (mesh.material !== GHOST_MATERIAL) saved.set(mesh, mesh.material)
       mesh.material = GHOST_MATERIAL
     })
 
@@ -1007,6 +1021,34 @@ function EditorScene({
     if (items.length) onOpenMenu({ x: event.clientX, y: event.clientY, items })
   }
 
+  /** Where a spot stands and which way it faces, for converting a drag back. */
+  const slotFrame = (index: number) => {
+    const slot = vm.exteriorSlots[index]
+    return {
+      x: slot?.position?.x ?? 0,
+      y: slot?.position?.y ?? 0,
+      z: slot?.position?.z ?? 0,
+      yawDeg: slot?.yawDeg ?? 0,
+    }
+  }
+
+  /** The part under the handles, with the choice it belongs to. */
+  const partAt = (index: number, partIndex: number) => {
+    const variantIndex = vm.previewVariantIndex
+    if (variantIndex === null) return null
+
+    const part = (vm.exteriorSlots[index]?.variants ?? [])[variantIndex]?.parts?.[partIndex]
+    if (!part) return null
+
+    return {
+      variantIndex,
+      x: part.position?.x ?? 0,
+      y: part.position?.y ?? 0,
+      z: part.position?.z ?? 0,
+      yawDeg: part.yawDeg ?? 0,
+    }
+  }
+
   const applyDragRef = useRef<(ray: Ray) => void>(() => {})
   const applyDrag = (ray: Ray) => {
     if (!drag) return
@@ -1053,38 +1095,63 @@ function EditorScene({
     if (drag.kind === 'slot-move') {
       const hit = rayAtY(ray, drag.y)
       if (!hit) return
-      const position = vm.exteriorSlots[drag.index]?.position
-      vm.onMoveSlot(
-        drag.index,
-        snap(hit.x - drag.grabDX),
-        position?.y ?? 0,
-        snap(hit.z - drag.grabDZ),
-      )
+
+      const x = snap(hit.x - drag.grabDX)
+      const z = snap(hit.z - drag.grabDZ)
+
+      if (drag.part === null) {
+        const position = vm.exteriorSlots[drag.index]?.position
+        vm.onMoveSlot(drag.index, x, position?.y ?? 0, z)
+        return
+      }
+
+      const held = partAt(drag.index, drag.part)
+      if (!held) return
+      // Dragged in the world, stored against the spot — so a spot moved later
+      // carries the whole arrangement with it.
+      const local = worldToSlot(slotFrame(drag.index), { x, y: drag.y, z })
+      vm.onMovePart(drag.index, held.variantIndex, drag.part, snap(local.x), held.y, snap(local.z))
       return
     }
 
     if (drag.kind === 'slot-height') {
       const y = rayAtVertical(ray, drag.cx, drag.cz)
       if (y === null) return
-      const position = vm.exteriorSlots[drag.index]?.position
-      vm.onMoveSlot(drag.index, position?.x ?? 0, snap(y - drag.grabDY), position?.z ?? 0)
+
+      if (drag.part === null) {
+        const position = vm.exteriorSlots[drag.index]?.position
+        vm.onMoveSlot(drag.index, position?.x ?? 0, snap(y - drag.grabDY), position?.z ?? 0)
+        return
+      }
+
+      const held = partAt(drag.index, drag.part)
+      if (!held) return
+      const lift = snap(y - drag.grabDY - slotFrame(drag.index).y)
+      vm.onMovePart(drag.index, held.variantIndex, drag.part, held.x, lift, held.z)
       return
     }
 
     if (drag.kind === 'slot-yaw') {
       const hit = rayAtY(ray, drag.y)
       if (!hit) return
-      vm.onSetSlotYaw(
-        drag.index,
-        Math.round(
-          draggedYaw({
-            startYaw: drag.startYaw,
-            startBearing: drag.startBearing,
-            bearing: bearingDeg(hit.x - drag.cx, hit.z - drag.cz),
-            currentYaw: vm.exteriorSlots[drag.index]?.yawDeg ?? 0,
-          }),
-        ),
+
+      const bearing = bearingDeg(hit.x - drag.cx, hit.z - drag.cz)
+      const held = drag.part === null ? null : partAt(drag.index, drag.part)
+
+      // The spot's own facing is constant through the gesture, so measuring a
+      // part's turn in world bearings costs nothing — the offset cancels in the
+      // delta.
+      const turned = Math.round(
+        draggedYaw({
+          startYaw: drag.startYaw,
+          startBearing: drag.startBearing,
+          bearing,
+          currentYaw: held ? held.yawDeg : (vm.exteriorSlots[drag.index]?.yawDeg ?? 0),
+        }),
       )
+
+      if (held) vm.onSetPartYaw(drag.index, held.variantIndex, drag.part!, turned)
+      else vm.onSetSlotYaw(drag.index, turned)
       return
     }
 
@@ -1837,44 +1904,61 @@ function EditorScene({
         register={registerHandle}
         // The grab offset is taken on the spot's own ground plane, so a puck
         // caught off centre does not snap the spot under the cursor.
-        onStartMove={(index, ray, y) => {
+        onStartMove={(index, part, ray, y) => {
           const t =
             Math.abs(ray.direction.y) < 1e-6 ? null : (y - ray.origin.y) / ray.direction.y
-          const position = vm.exteriorSlots[index]?.position
           if (t === null || t < 0) {
-            setDrag({ kind: 'slot-move', index, grabDX: 0, grabDZ: 0, y })
+            setDrag({ kind: 'slot-move', index, part, grabDX: 0, grabDZ: 0, y })
             return
           }
+
+          // Offset from the grip to the thing's own centre, so it does not jump
+          // to sit under the cursor.
+          const held = part === null ? null : partAt(index, part)
+          const frame = slotFrame(index)
+          const centre =
+            held === null
+              ? frame
+              : slotToWorld(frame, { x: held.x, y: held.y, z: held.z })
+
           setDrag({
             kind: 'slot-move',
             index,
-            grabDX: ray.origin.x + ray.direction.x * t - (position?.x ?? 0),
-            grabDZ: ray.origin.z + ray.direction.z * t - (position?.z ?? 0),
+            part,
+            grabDX: ray.origin.x + ray.direction.x * t - centre.x,
+            grabDZ: ray.origin.z + ray.direction.z * t - centre.z,
             y,
           })
         }}
-        onStartHeight={(index, ray, grip) => {
+        onStartHeight={(index, part, ray, grip) => {
           const y = rayAtVertical(ray, grip[0], grip[2])
+          const held = part === null ? null : partAt(index, part)
+          const frame = slotFrame(index)
+          const base = held === null ? frame.y : frame.y + held.y
+
           setDrag({
             kind: 'slot-height',
             index,
+            part,
             cx: grip[0],
             cz: grip[2],
-            grabDY: (y ?? grip[1]) - (vm.exteriorSlots[index]?.position?.y ?? 0),
+            grabDY: (y ?? grip[1]) - base,
           })
         }}
-        onStartYaw={(index, ray, centre) => {
+        onStartYaw={(index, part, ray, centre) => {
           const hit = rayAtY(ray, centre[1])
+          const held = part === null ? null : partAt(index, part)
+          const facing = held ? held.yawDeg : (vm.exteriorSlots[index]?.yawDeg ?? 0)
+
           setDrag({
             kind: 'slot-yaw',
             index,
+            part,
             cx: centre[0],
             cz: centre[2],
             y: centre[1],
-            startBearing: hit
-              ? bearingDeg(hit.x - centre[0], hit.z - centre[2])
-              : (vm.exteriorSlots[index]?.yawDeg ?? 0),
-            startYaw: vm.exteriorSlots[index]?.yawDeg ?? 0,
+            startBearing: hit ? bearingDeg(hit.x - centre[0], hit.z - centre[2]) : facing,
+            startYaw: facing,
           })
         }}
       />

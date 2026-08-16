@@ -145,6 +145,13 @@ export function useSceneEditorModel() {
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null)
   /** Which choice the viewport shows for the selected spot; null follows its default. */
   const [previewVariantKey, setPreviewVariantKey] = useState<string | null>(null)
+  /**
+   * The part the handles are on, or null for the spot itself.
+   *
+   * Imported models rarely share an origin, so each one has to be placeable on
+   * its own; the spot is what carries the whole arrangement once they line up.
+   */
+  const [selectedPartIndex, setSelectedPartIndex] = useState<number | null>(null)
   const [roofHidden, setRoofHidden] = useState(true)
   /** Storey the viewport is cut down to, exactly as the visitor would see it. */
   const [previewFloorIndex, setPreviewFloorIndex] = useState<number | null>(null)
@@ -894,6 +901,7 @@ export function useSceneEditorModel() {
     onSelectSlot: (index: number | null) => {
       setSelectedSlotIndex(index)
       setPreviewVariantKey(null)
+      setSelectedPartIndex(null)
     },
     onRemoveSlot: (index: number) => {
       patchSlots((slots) => slots.filter((_, i) => i !== index))
@@ -924,6 +932,31 @@ export function useSceneEditorModel() {
         position: { x: (minX + maxX) / 2, y: minY, z: (minZ + maxZ) / 2 },
       }))
     },
+    selectedPartIndex,
+    onSelectPart: setSelectedPartIndex,
+    // Straight onto the choice, with no offset of its own: an imported model
+    // arrives wherever its exporter left the origin, and the way to find out is
+    // to see it land and then drag it.
+    onAddPart: (slotIndex: number, variantIndex: number, model: { id: number; url?: string | null }) =>
+      patchVariant(slotIndex, variantIndex, (variant) => ({
+        ...variant,
+        parts: [
+          ...(variant.parts ?? []),
+          { model, position: { x: 0, y: 0, z: 0 }, yawDeg: 0, scale: 1 },
+        ] as VariantDraft['parts'],
+      })),
+    onSetPartModel: (
+      slotIndex: number,
+      variantIndex: number,
+      partIndex: number,
+      model: { id: number; url?: string | null },
+    ) =>
+      patchVariant(slotIndex, variantIndex, (variant) => ({
+        ...variant,
+        parts: (variant.parts ?? []).map((part, i) =>
+          i === partIndex ? ({ ...part, model } as typeof part) : part,
+        ),
+      })),
     onAddVariant: addVariant,
     onRemoveVariant: (slotIndex: number, variantIndex: number) =>
       patchSlot(slotIndex, (slot) => {
@@ -938,7 +971,10 @@ export function useSceneEditorModel() {
       }),
     onSetDefaultVariant: (slotIndex: number, variantKey: string) =>
       patchSlot(slotIndex, (slot) => ({ ...slot, defaultVariantKey: variantKey })),
-    onPreviewVariant: setPreviewVariantKey,
+    onPreviewVariant: (key: string | null) => {
+      setPreviewVariantKey(key)
+      setSelectedPartIndex(null)
+    },
     onClaimNodes: claimNodes,
     onUnclaimNode: (slotIndex: number, variantIndex: number, path: string) =>
       patchVariant(slotIndex, variantIndex, (variant) => ({

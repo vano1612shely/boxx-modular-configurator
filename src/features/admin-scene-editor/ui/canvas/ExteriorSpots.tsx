@@ -7,6 +7,7 @@ import { MathUtils, type Mesh, type Ray } from 'three'
 import { assetUrl } from '@/shared/lib'
 import { For, Show } from '@/shared/ui/control-flow'
 
+import { slotToWorld } from '../../lib/slot-drag'
 import type { SceneEditorVm } from '../../model/use-scene-editor-model'
 import { tone } from '../editor-styles'
 import { HandlePoint, type RegisterHandle } from './handles'
@@ -70,9 +71,19 @@ export function shownVariantIndex(vm: SceneEditorVm, slotIndex: number): number 
 type Props = {
   vm: SceneEditorVm
   register: RegisterHandle
-  onStartMove: (index: number, ray: Ray, planeY: number) => void
-  onStartHeight: (index: number, ray: Ray, grip: [number, number, number]) => void
-  onStartYaw: (index: number, ray: Ray, centre: [number, number, number]) => void
+  onStartMove: (index: number, part: number | null, ray: Ray, planeY: number) => void
+  onStartHeight: (
+    index: number,
+    part: number | null,
+    ray: Ray,
+    grip: [number, number, number],
+  ) => void
+  onStartYaw: (
+    index: number,
+    part: number | null,
+    ray: Ray,
+    centre: [number, number, number],
+  ) => void
 }
 
 /**
@@ -95,6 +106,24 @@ export function ExteriorSpots({ vm, register, onStartMove, onStartHeight, onStar
           slot.position?.y ?? 0,
           slot.position?.z ?? 0,
         ]
+
+        // What the handles are on: one part of the choice, or the spot itself.
+        const part = selected ? vm.selectedPartIndex : null
+        const handled = part === null ? slot : ((variant?.parts ?? [])[part] ?? slot)
+        const origin =
+          part === null || handled === slot
+            ? centre
+            : ((): [number, number, number] => {
+                const world = slotToWorld(
+                  { x: centre[0], y: centre[1], z: centre[2], yawDeg: slot.yawDeg ?? 0 },
+                  {
+                    x: handled.position?.x ?? 0,
+                    y: handled.position?.y ?? 0,
+                    z: handled.position?.z ?? 0,
+                  },
+                )
+                return [world.x, world.y, world.z]
+              })()
 
         return (
           <group position={centre} rotation-y={MathUtils.degToRad(slot.yawDeg ?? 0)}>
@@ -144,73 +173,90 @@ export function ExteriorSpots({ vm, register, onStartMove, onStartHeight, onStar
               )}
             </Show>
 
-            {/* Handles live inside the spot's own frame, so the turn grip rides
-                round with the facing it sets and needs no maths to place. */}
+            {/* Handles live inside the frame of whatever they move — the spot,
+                or one part of it — so the turn grip rides round with the facing
+                it sets and needs no maths to place. */}
             <Show when={selected}>
-              <mesh position={[0, 0.02, 0]} rotation-x={-Math.PI / 2} raycast={() => {}}>
-                <ringGeometry args={[RING - 0.03, RING, 64]} />
-                <meshBasicMaterial color={TURN_COLOR} transparent opacity={0.5} depthWrite={false} />
-              </mesh>
-
-              <HandlePoint
-                position={[0, 0.05, 0]}
-                hitRadius={0.26}
-                register={register}
-                begin={(ray) => onStartMove(index, ray, centre[1])}
+              <group
+                position={[
+                  handled?.position?.x ?? 0,
+                  handled?.position?.y ?? 0,
+                  handled?.position?.z ?? 0,
+                ]}
+                rotation-y={MathUtils.degToRad(handled?.yawDeg ?? 0)}
               >
-                <mesh>
-                  <cylinderGeometry args={[0.16, 0.16, 0.045, 24]} />
-                  <meshBasicMaterial color={MOVE_COLOR} depthTest={false} transparent />
-                </mesh>
-                <mesh rotation={[Math.PI / 2, 0, 0]}>
-                  <torusGeometry args={[0.3, 0.018, 8, 32]} />
+                <mesh position={[0, 0.02, 0]} rotation-x={-Math.PI / 2} raycast={() => {}}>
+                  <ringGeometry args={[RING - 0.03, RING, 64]} />
                   <meshBasicMaterial
-                    color={MOVE_COLOR}
-                    depthTest={false}
+                    color={TURN_COLOR}
                     transparent
-                    opacity={0.7}
+                    opacity={0.5}
+                    depthWrite={false}
                   />
                 </mesh>
-              </HandlePoint>
 
-              <HandlePoint
-                position={[0, LIFT, 0]}
-                hitRadius={0.24}
-                register={register}
-                begin={(ray) => onStartHeight(index, ray, [centre[0], centre[1] + LIFT, centre[2]])}
-              >
-                <mesh position={[0, 0.28, 0]}>
-                  <coneGeometry args={[0.11, 0.22, 16]} />
-                  <meshBasicMaterial color={HEIGHT_COLOR} depthTest={false} transparent />
-                </mesh>
-                <mesh position={[0, -0.28, 0]} rotation={[Math.PI, 0, 0]}>
-                  <coneGeometry args={[0.11, 0.22, 16]} />
-                  <meshBasicMaterial color={HEIGHT_COLOR} depthTest={false} transparent />
-                </mesh>
-                <mesh>
-                  <cylinderGeometry args={[0.022, 0.022, 0.46, 10]} />
-                  <meshBasicMaterial color={HEIGHT_COLOR} depthTest={false} transparent />
-                </mesh>
-              </HandlePoint>
+                <HandlePoint
+                  position={[0, 0.05, 0]}
+                  hitRadius={0.26}
+                  register={register}
+                  begin={(ray) => onStartMove(index, part, ray, origin[1])}
+                >
+                  <mesh>
+                    <cylinderGeometry args={[0.16, 0.16, 0.045, 24]} />
+                    <meshBasicMaterial color={MOVE_COLOR} depthTest={false} transparent />
+                  </mesh>
+                  <mesh rotation={[Math.PI / 2, 0, 0]}>
+                    <torusGeometry args={[0.3, 0.018, 8, 32]} />
+                    <meshBasicMaterial
+                      color={MOVE_COLOR}
+                      depthTest={false}
+                      transparent
+                      opacity={0.7}
+                    />
+                  </mesh>
+                </HandlePoint>
 
-              {/* On the +Z arm, which is the direction the facing points, so the
-                  grip is also the readout: where it sits is where the spot
-                  faces. */}
-              <HandlePoint
-                position={[0, 0.05, RING]}
-                hitRadius={0.24}
-                register={register}
-                begin={(ray) => onStartYaw(index, ray, centre)}
-              >
-                <mesh rotation={[Math.PI / 2, 0, 0]}>
-                  <cylinderGeometry args={[0.13, 0.13, 0.05, 20]} />
-                  <meshBasicMaterial color={TURN_COLOR} depthTest={false} transparent />
-                </mesh>
-                <mesh position={[0, 0, 0.22]} rotation={[-Math.PI / 2, 0, 0]}>
-                  <coneGeometry args={[0.1, 0.2, 16]} />
-                  <meshBasicMaterial color={TURN_COLOR} depthTest={false} transparent />
-                </mesh>
-              </HandlePoint>
+                <HandlePoint
+                  position={[0, LIFT, 0]}
+                  hitRadius={0.24}
+                  register={register}
+                  begin={(ray) =>
+                    onStartHeight(index, part, ray, [origin[0], origin[1] + LIFT, origin[2]])
+                  }
+                >
+                  <mesh position={[0, 0.28, 0]}>
+                    <coneGeometry args={[0.11, 0.22, 16]} />
+                    <meshBasicMaterial color={HEIGHT_COLOR} depthTest={false} transparent />
+                  </mesh>
+                  <mesh position={[0, -0.28, 0]} rotation={[Math.PI, 0, 0]}>
+                    <coneGeometry args={[0.11, 0.22, 16]} />
+                    <meshBasicMaterial color={HEIGHT_COLOR} depthTest={false} transparent />
+                  </mesh>
+                  <mesh>
+                    <cylinderGeometry args={[0.022, 0.022, 0.46, 10]} />
+                    <meshBasicMaterial color={HEIGHT_COLOR} depthTest={false} transparent />
+                  </mesh>
+                </HandlePoint>
+
+                {/* On the +Z arm, which is the direction the facing points, so
+                    the grip is also the readout: where it sits is where the
+                    thing it turns is pointing. */}
+                <HandlePoint
+                  position={[0, 0.05, RING]}
+                  hitRadius={0.24}
+                  register={register}
+                  begin={(ray) => onStartYaw(index, part, ray, origin)}
+                >
+                  <mesh rotation={[Math.PI / 2, 0, 0]}>
+                    <cylinderGeometry args={[0.13, 0.13, 0.05, 20]} />
+                    <meshBasicMaterial color={TURN_COLOR} depthTest={false} transparent />
+                  </mesh>
+                  <mesh position={[0, 0, 0.22]} rotation={[-Math.PI / 2, 0, 0]}>
+                    <coneGeometry args={[0.1, 0.2, 16]} />
+                    <meshBasicMaterial color={TURN_COLOR} depthTest={false} transparent />
+                  </mesh>
+                </HandlePoint>
+              </group>
             </Show>
           </group>
         )

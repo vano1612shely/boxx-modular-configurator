@@ -98,19 +98,30 @@ export function ExteriorSpotPanel({ vm }: PanelProps) {
         <div style={s.row}>
           <button
             type="button"
-            style={{ ...iconButton, flex: 1 }}
+            style={{
+              ...button(vm.selectedPartIndex === null ? 'primary' : undefined),
+              flex: 1,
+            }}
+            title="Put the handles back on the spot itself"
+            onClick={() => vm.onSelectPart('spot')}
+          >
+            ⊹ Move the spot
+          </button>
+          <button
+            type="button"
+            style={iconButton}
             disabled={vm.selectedNodePaths.length === 0}
             title="Drop the spot onto whatever is selected in Model objects"
             onClick={() => vm.onSnapSlotToSelection(index)}
           >
-            ⌖ Snap to selected objects
+            ⌖ Snap
           </button>
         </div>
 
         <p style={s.hint}>
-          The white puck sets where the spot is and the yellow arrows its height — that is all a
-          spot is, and it is where the visitor&apos;s marker hangs. Each model has its own cage:
-          corners resize, the puck moves, the blue grip turns.
+          {vm.selectedPartIndex === null
+            ? 'The puck sets where the spot is and the arrows its height — that is all a spot is, and it is where the visitor’s marker hangs.'
+            : 'Corners resize the model, the puck moves it, the blue grip turns it.'}
         </p>
       </div>
 

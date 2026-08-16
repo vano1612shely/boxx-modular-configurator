@@ -328,16 +328,22 @@ export function ExteriorSpots({
             </Show>
 
             <Show when={selected}>
-              <MovePuck
-                register={register}
-                begin={(ray) => onStartMove(index, null, ray, spot[1])}
-              />
-              <HeightArrows
-                register={register}
-                begin={(ray) =>
-                  onStartHeight(index, null, ray, [spot[0], spot[1] + LIFT, spot[2]])
-                }
-              />
+              {/* The spot's own handles stand down while a model is being
+                  placed. Both at once put two pucks a few centimetres apart,
+                  and picking the wrong one moved the whole arrangement when the
+                  intent was one deck. */}
+              <Show when={part === null}>
+                <MovePuck
+                  register={register}
+                  begin={(ray) => onStartMove(index, null, ray, spot[1])}
+                />
+                <HeightArrows
+                  register={register}
+                  begin={(ray) =>
+                    onStartHeight(index, null, ray, [spot[0], spot[1] + LIFT, spot[2]])
+                  }
+                />
+              </Show>
 
               <Show when={held !== null && part !== null && sized?.part === part && sized.box}>
                 {(box) => (

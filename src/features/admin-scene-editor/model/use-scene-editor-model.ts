@@ -146,12 +146,15 @@ export function useSceneEditorModel() {
   /** Which choice the viewport shows for the selected spot; null follows its default. */
   const [previewVariantKey, setPreviewVariantKey] = useState<string | null>(null)
   /**
-   * The part the handles are on, or null for the spot itself.
+   * What the handles are on: a part by index, the spot itself, or nothing said
+   * yet — which resolves to the first model.
    *
-   * Imported models rarely share an origin, so each one has to be placeable on
-   * its own; the spot is what carries the whole arrangement once they line up.
+   * Three states rather than two, because "not chosen" and "the spot" want
+   * different answers. Imported models rarely share an origin, so the model is
+   * what an admin reaches for first and the default belongs there; the spot is
+   * what carries the whole arrangement once the models line up.
    */
-  const [selectedPartIndex, setSelectedPartIndex] = useState<number | null>(null)
+  const [partChoice, setPartChoice] = useState<number | 'spot' | null>(null)
   const [roofHidden, setRoofHidden] = useState(true)
   /** Storey the viewport is cut down to, exactly as the visitor would see it. */
   const [previewFloorIndex, setPreviewFloorIndex] = useState<number | null>(null)
@@ -812,18 +815,20 @@ export function useSceneEditorModel() {
   })()
 
   /**
-   * The model wearing the cage.
+   * The model wearing the cage, or null when the spot itself has the handles.
    *
-   * Resolved rather than stored, so a choice with models in it always has one
-   * under the handles: an admin should not have to say "this one" before they
-   * can move the only thing on the spot. A stale index — the model was deleted,
-   * or the preview stepped to a choice with fewer — falls back to the first.
+   * Resolved rather than stored, so a choice with models in it always opens
+   * with one under the handles: an admin should not have to say "this one"
+   * before they can move the only thing on the spot. A stale index — the model
+   * was deleted, or the preview stepped to a choice with fewer — falls back to
+   * the first.
    */
   const cagedPartIndex = (() => {
-    const parts =
-      (selectedSlot?.variants ?? [])[previewVariantIndex ?? -1]?.parts ?? []
+    if (partChoice === 'spot') return null
+
+    const parts = (selectedSlot?.variants ?? [])[previewVariantIndex ?? -1]?.parts ?? []
     if (parts.length === 0) return null
-    return selectedPartIndex !== null && selectedPartIndex < parts.length ? selectedPartIndex : 0
+    return typeof partChoice === 'number' && partChoice < parts.length ? partChoice : 0
   })()
 
   const addSlot = () => {
@@ -927,7 +932,7 @@ export function useSceneEditorModel() {
     onSelectSlot: (index: number | null) => {
       setSelectedSlotIndex(index)
       setPreviewVariantKey(null)
-      setSelectedPartIndex(null)
+      setPartChoice(null)
     },
     onRemoveSlot: (index: number) => {
       patchSlots((slots) => slots.filter((_, i) => i !== index))
@@ -958,7 +963,7 @@ export function useSceneEditorModel() {
         position: { x: (minX + maxX) / 2, y: minY, z: (minZ + maxZ) / 2 },
       }))
     },
-    onSelectPart: setSelectedPartIndex,
+    onSelectPart: (value: number | 'spot') => setPartChoice(value),
     // Straight onto the choice, with no offset of its own: an imported model
     // arrives wherever its exporter left the origin, and the way to find out is
     // to see it land and then drag it.
@@ -998,7 +1003,7 @@ export function useSceneEditorModel() {
       patchSlot(slotIndex, (slot) => ({ ...slot, defaultVariantKey: variantKey })),
     onPreviewVariant: (key: string | null) => {
       setPreviewVariantKey(key)
-      setSelectedPartIndex(null)
+      setPartChoice(null)
     },
     onClaimNodes: claimNodes,
     onUnclaimNode: (slotIndex: number, variantIndex: number, path: string) =>

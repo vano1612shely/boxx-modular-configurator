@@ -79,6 +79,14 @@ export function ModelPreviewField() {
   return (
     <div
       onPointerEnter={() => setHovered(true)}
+      // Entering fires only on crossing the edge, and there is no crossing when
+      // the page opens with the pointer already over the box — which happens
+      // whenever the preview loads in under a cursor that has not moved. The
+      // model then would not turn until the pointer left and came back. Both of
+      // these are ways of learning the pointer is here without having watched it
+      // arrive; the guard keeps a move that changes nothing from re-rendering.
+      onPointerMove={() => !hovered && setHovered(true)}
+      onPointerDown={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       style={{
         height: 420,

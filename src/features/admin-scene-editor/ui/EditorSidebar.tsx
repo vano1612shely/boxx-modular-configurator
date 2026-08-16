@@ -8,6 +8,7 @@ import type { SceneEditorVm } from '../model/use-scene-editor-model'
 import { button, s } from './editor-styles'
 import { EditorMenuPopup, type EditorMenuState } from './EditorMenu'
 import { BuildingPanel } from './panels/BuildingPanel'
+import { ExteriorSpotPanel } from './panels/ExteriorSpotPanel'
 import { RoomPanel } from './panels/RoomPanel'
 import type { OpenMenu } from './panels/shared'
 
@@ -32,7 +33,17 @@ export function EditorSidebar({ vm }: Props) {
 
   return (
     <aside style={s.sidebar}>
-      <Show when={vm.roomMode} fallback={<BuildingPanel vm={vm} onOpenMenu={openMenu} />}>
+      <Show
+        when={vm.roomMode}
+        fallback={
+          <Show
+            when={vm.spotMode}
+            fallback={<BuildingPanel vm={vm} onOpenMenu={openMenu} />}
+          >
+            <ExteriorSpotPanel vm={vm} onOpenMenu={openMenu} />
+          </Show>
+        }
+      >
         <RoomPanel vm={vm} onOpenMenu={openMenu} />
       </Show>
 

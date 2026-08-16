@@ -811,6 +811,21 @@ export function useSceneEditorModel() {
     return fallback >= 0 ? fallback : 0
   })()
 
+  /**
+   * The model wearing the cage.
+   *
+   * Resolved rather than stored, so a choice with models in it always has one
+   * under the handles: an admin should not have to say "this one" before they
+   * can move the only thing on the spot. A stale index — the model was deleted,
+   * or the preview stepped to a choice with fewer — falls back to the first.
+   */
+  const cagedPartIndex = (() => {
+    const parts =
+      (selectedSlot?.variants ?? [])[previewVariantIndex ?? -1]?.parts ?? []
+    if (parts.length === 0) return null
+    return selectedPartIndex !== null && selectedPartIndex < parts.length ? selectedPartIndex : 0
+  })()
+
   const addSlot = () => {
     const index = exteriorSlots.length
     // Where the admin is looking. The footprint is measured off the glb, site
@@ -901,7 +916,13 @@ export function useSceneEditorModel() {
     exteriorSlots,
     selectedSlotIndex,
     selectedSlot,
+    // A spot takes over the sidebar the way a room does, and for the same
+    // reason: it is a place with its own contents.
+    spotMode: selectedSlotIndex !== null && selectedRoomIndex === null,
     previewVariantIndex,
+    // Always on a model when the previewed choice has one, so the cage is there
+    // to grab without being asked for first.
+    selectedPartIndex: cagedPartIndex,
     onAddSlot: addSlot,
     onSelectSlot: (index: number | null) => {
       setSelectedSlotIndex(index)
@@ -937,7 +958,6 @@ export function useSceneEditorModel() {
         position: { x: (minX + maxX) / 2, y: minY, z: (minZ + maxZ) / 2 },
       }))
     },
-    selectedPartIndex,
     onSelectPart: setSelectedPartIndex,
     // Straight onto the choice, with no offset of its own: an imported model
     // arrives wherever its exporter left the origin, and the way to find out is

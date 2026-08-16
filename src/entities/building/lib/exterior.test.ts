@@ -137,43 +137,55 @@ describe('slotOfNode', () => {
 })
 
 describe('entranceView', () => {
-  const at = (position: [number, number, number], yawDeg: number): ExteriorSlot => ({
+  const at = (position: [number, number, number]): ExteriorSlot => ({
     ...slot('front', [variant('a'), variant('b')]),
     position,
-    yawDeg,
   })
+  const MIDDLE = { x: 0, z: 0 }
 
-  it('stands out in front of the spot, not behind it', () => {
-    const view = entranceView(at([0, 0, 0], 0))
+  // The whole point of deriving it: stand on the far side of the spot from the
+  // building, so the building is behind the eye and not in front of it.
+  it('stands outside the building, not through it', () => {
+    const north = entranceView(at([0, 0, 6]), MIDDLE)
+    expect(north.position[2]).toBeGreaterThan(6)
+    expect(north.position[0]).toBeCloseTo(0, 6)
 
-    // Facing 0 points down +Z, so that is the side to stand on.
-    expect(view.position[2]).toBeGreaterThan(0)
-    expect(view.position[0]).toBeCloseTo(0, 6)
-  })
-
-  it('follows the spot round as it is turned', () => {
-    const east = entranceView(at([0, 0, 0], 90))
-
-    expect(east.position[0]).toBeGreaterThan(0)
+    const east = entranceView(at([6, 0, 0]), MIDDLE)
+    expect(east.position[0]).toBeGreaterThan(6)
     expect(east.position[2]).toBeCloseTo(0, 6)
+  })
+
+  it('follows a spot dragged round to another wall, with nothing to update', () => {
+    const south = entranceView(at([0, 0, -6]), MIDDLE)
+    expect(south.position[2]).toBeLessThan(-6)
   })
 
   // Level-ish rather than overhead: the visitor asked to see the ramp, and a
   // ramp seen from above is a stripe.
   it('looks slightly down at the spot from close to eye level', () => {
-    const view = entranceView(at([4, 0.5, -2], 180))
+    const view = entranceView(at([4, 0.5, -2]), MIDDLE)
 
     expect(view.target).toEqual([4, 1.6, -2])
     expect(view.position[1]).toBeGreaterThan(view.target[1])
     expect(view.position[1] - view.target[1]).toBeLessThan(3)
   })
 
-  it('keeps its distance whichever way the spot faces', () => {
-    for (const yaw of [0, 37, 90, 180, 274, 359]) {
-      const view = entranceView(at([1, 0, 1], yaw))
-      const reach = Math.hypot(view.position[0] - 1, view.position[2] - 1)
+  it('keeps its distance wherever the spot sits', () => {
+    for (const spot of [
+      [3, 0, 4],
+      [-7, 0, 1],
+      [0, 0, -9],
+      [2.5, 0, -2.5],
+    ] as Array<[number, number, number]>) {
+      const view = entranceView(at(spot), MIDDLE)
+      const reach = Math.hypot(view.position[0] - spot[0], view.position[2] - spot[2])
       expect(reach).toBeCloseTo(10, 6)
     }
+  })
+
+  it('answers for a spot with no building measured, and for one dead centre', () => {
+    expect(entranceView(at([0, 0, 0]), null).position[2]).toBeCloseTo(10, 6)
+    expect(entranceView(at([0, 0, 0]), MIDDLE).position[2]).toBeCloseTo(10, 6)
   })
 })
 

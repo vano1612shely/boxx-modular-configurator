@@ -104,19 +104,28 @@ const VIEW_UP = 3
 const VIEW_TARGET_UP = 1.1
 
 /**
- * Where to stand to look at an entrance: out in front of it, near eye level.
+ * Where to stand to look at an entrance: outside it, near eye level.
  *
- * Out along the spot's own facing, which is its local +Z — a yaw of θ takes
- * that axis to `(sin θ, cos θ)`, x before z, which is the ordering worth stating
- * once rather than rediscovering. Standing anywhere else would put the deck's
- * own building between the visitor and the thing they asked to see.
+ * Which way is "outside" is worked out rather than authored — from the building
+ * towards the spot, since a spot is by definition out on the edge of one.
+ * Deriving it means there is no facing to set and none to get wrong, and it
+ * cannot fall out of date when the spot is dragged round to another wall. With
+ * no building to measure from, +Z: a guess, but a stable one.
  */
-export function entranceView(slot: ExteriorSlot): { position: Vec3Tuple; target: Vec3Tuple } {
-  const yaw = (slot.yawDeg * Math.PI) / 180
+export function entranceView(
+  slot: ExteriorSlot,
+  buildingCentre: { x: number; z: number } | null,
+): { position: Vec3Tuple; target: Vec3Tuple } {
   const [x, y, z] = slot.position
 
+  const outX = buildingCentre ? x - buildingCentre.x : 0
+  const outZ = buildingCentre ? z - buildingCentre.z : 1
+  const reach = Math.hypot(outX, outZ)
+  // A spot sitting exactly on the centre gives no direction to face it from.
+  const [dirX, dirZ] = reach < 1e-6 ? [0, 1] : [outX / reach, outZ / reach]
+
   return {
-    position: [x + Math.sin(yaw) * VIEW_BACK, y + VIEW_UP, z + Math.cos(yaw) * VIEW_BACK],
+    position: [x + dirX * VIEW_BACK, y + VIEW_UP, z + dirZ * VIEW_BACK],
     target: [x, y + VIEW_TARGET_UP, z],
   }
 }

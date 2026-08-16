@@ -42,6 +42,8 @@ function PartModel({ part }: { part: ExteriorPart }) {
 type SpotProps = {
   slot: ExteriorSlot
   variant: ExteriorVariant
+  /** Middle of the building, so the fly-over knows which side is outside. */
+  centre: { x: number; z: number } | null
 }
 
 /**
@@ -53,7 +55,7 @@ type SpotProps = {
  * to appear, a hover is a thing a phone does not have, and a patch of colour
  * over the deck said nothing the name does not.
  */
-function ExteriorSpot({ slot, variant }: SpotProps) {
+function ExteriorSpot({ slot, variant, centre }: SpotProps) {
   const openSlot = useConfiguratorSession((s) => s.openExteriorSlot)
   const open = useConfiguratorSession((s) => s.openSlotKey === slot.key)
 
@@ -63,7 +65,7 @@ function ExteriorSpot({ slot, variant }: SpotProps) {
 
   const look = () => {
     openSlot(slot.key)
-    const view = entranceView(slot)
+    const view = entranceView(slot, centre)
     useConfiguratorSession.getState().requestMoveTo(view.position, view.target)
   }
 
@@ -129,6 +131,13 @@ function ExteriorSpot({ slot, variant }: SpotProps) {
 export function ExteriorSlots({ building }: { building: BuildingScene }) {
   const selection = useConfiguration((s) => s.exterior)
   const insideRoom = useConfiguratorSession((s) => s.focusedRoomKey !== null)
+  const bounds = useConfiguratorSession((s) => s.buildingBounds)
+
+  // Measured off the model once it is in the scene, so it costs nothing to
+  // author and cannot disagree with what is on screen.
+  const centre = bounds
+    ? { x: (bounds.min[0] + bounds.max[0]) / 2, z: (bounds.min[2] + bounds.max[2]) / 2 }
+    : null
 
   if (insideRoom || building.exteriorSlots.length === 0) return null
 
@@ -138,7 +147,7 @@ export function ExteriorSlots({ building }: { building: BuildingScene }) {
         const variant = selectedVariant(slot, selection)
         if (!variant) return null
 
-        return <ExteriorSpot slot={slot} variant={variant} />
+        return <ExteriorSpot slot={slot} variant={variant} centre={centre} />
       }}
     </For>
   )

@@ -1,6 +1,5 @@
 'use client'
-
-import { Html, useGLTF } from '@react-three/drei'
+import { Html } from '@react-three/drei'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { ChevronUp, RotateCw, Trash2 } from 'lucide-react'
 import { damp, dampAngle } from 'maath/easing'
@@ -49,9 +48,11 @@ import { setSceneCursor } from '@/shared/ui/scene-cursor'
 
 import { framePose } from '../lib/drag-pose'
 import { collidesWithAny } from '../lib/placement-geometry'
+import { nearestFittingAngle, nextFittingQuarter } from '../lib/rotation-fit'
 import { FLOOR_INSETS, toolbarPositioner } from '../lib/toolbar-position'
 import { measureInsets, readChrome, type Insets } from '../lib/scene-insets'
 import { footprintOf, setMeasuredFootprint } from '../lib/measured-footprints'
+import { useModel } from '@/shared/three/use-model'
 
 const ROTATION_TICKS = [-180, -90, 0, 90, 180] as const
 
@@ -304,7 +305,7 @@ function buildOutline(source: Object3D, floorY: number): Outline {
 }
 
 function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: ItemProps) {
-  const { scene } = useGLTF(pkg.modelUrl, false, true)
+  const scene = useModel(pkg.modelUrl)
   const groupRef = useRef<Group>(null)
   const rotationRef = useRef<Group>(null)
   const [rotateOpen, setRotateOpen] = useState(false)
@@ -512,11 +513,34 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
     movePackage(placement.instanceId, pose.x, pose.z)
   }
 
-  // Asked before the button is drawn rather than after it is pressed: a quarter
-  // turn is far more likely to be blocked than the slider's one degree was, and
-  // a control that silently does nothing is worse than one that says it cannot.
-  const nextQuarter = signedDegrees(placement.rotationYDeg) + 90
-  const canTurn = isSelected && !isDragging && resolveRotation(nextQuarter) !== null
+  const fitsAt = (deg: number) => resolveRotation(deg) !== null
+
+  /**
+   * Turns the piece by the hand rather than by the rules.
+   *
+   * The slider is allowed through positions the piece does not fit in — a long
+   * desk in a narrow room passes through every one of them on its way from one
+   * end to the other, and a slider that stopped dead at the first would be a
+   * slider with two positions. It is straightened out on release. The piece is
+   * still kept inside the room it belongs to, which is not a matter of taste.
+   */
+  const previewRotation = (nextDeg: number) => {
+    const clamped = clampPoseToRegion(placement.x, placement.z, nextDeg, footprint, turnFloor)
+    rotatePackage(placement.instanceId, nextDeg)
+    movePackage(placement.instanceId, clamped.x, clamped.z)
+  }
+
+  /** Let go: the nearest angle it actually fits at, which is often where it is. */
+  const settleRotation = () => {
+    const landed = nearestFittingAngle(placement.rotationYDeg, fitsAt)
+    if (landed !== null) applyRotation(landed)
+  }
+
+  // Not the next quarter but the next one it fits at. A desk that only lies
+  // along the room has two positions rather than four, and a button that
+  // refused to move it between them read as a broken button.
+  const nextQuarter = nextFittingQuarter(placement.rotationYDeg, fitsAt)
+  const canTurn = isSelected && !isDragging && nextQuarter !== null
 
   // Neither group carries a `position` or `rotation` prop — see the layout
   // effect above for why the frame loop has to be the only writer.
@@ -608,7 +632,12 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
                     max={180}
                     step={1}
                     value={signedDegrees(placement.rotationYDeg)}
-                    onChange={(event) => applyRotation(Number(event.target.value))}
+                    onChange={(event) => previewRotation(Number(event.target.value))}
+                    // Every way a range input can be let go of: the pointer, the
+                    // keyboard, or the focus moving on with the value changed.
+                    onPointerUp={settleRotation}
+                    onKeyUp={settleRotation}
+                    onBlur={settleRotation}
                     className="rotation-slider relative w-full"
                   />
                 </div>
@@ -629,7 +658,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
                 disabled={!canTurn}
                 title={canTurn ? 'Turn a quarter' : 'No room to turn it here'}
                 leadingIcon={<RotateCw size={16} />}
-                onClick={() => applyRotation(nextQuarter)}
+                onClick={() => nextQuarter !== null && applyRotation(nextQuarter)}
               >
                 Rotate
               </Pill>

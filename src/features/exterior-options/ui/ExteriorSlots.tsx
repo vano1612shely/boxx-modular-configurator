@@ -177,18 +177,22 @@ function ExteriorSpot({ slot, variant, resolve }: SpotProps) {
 /**
  * Every exterior spot on the building, showing what the visitor has picked.
  *
- * Drawn whatever the visitor is looking at, including from inside a room: these
- * are part of the building, and a deck that vanished when someone stepped
- * indoors would read as a bug rather than as focus.
+ * Gone entirely once a room is entered. The building's own model is hidden
+ * there — the visitor is looking at a generated room and nothing else — so a
+ * deck left behind would be a slab of decking floating in the open next to a
+ * single room, which is what it looked like. Previewing a room from above is
+ * not the same thing: the building is still on screen for that, and so are its
+ * entrances.
  */
 export function ExteriorSlots({ building }: { building: BuildingScene }) {
   const selection = useConfiguration((s) => s.exterior)
+  const insideRoom = useConfiguratorSession((s) => s.focusedRoomKey !== null)
   // The same cached scene BuildingModel prepares — useGLTF hands out one object
   // per url, so these resolve to the very nodes on screen.
   const { scene } = useGLTF(building.modelUrl, false, true)
   const resolve = useMemo(() => createNodeResolver(scene), [scene])
 
-  if (building.exteriorSlots.length === 0) return null
+  if (insideRoom || building.exteriorSlots.length === 0) return null
 
   return (
     <For each={building.exteriorSlots} getKey={(slot) => slot.key}>

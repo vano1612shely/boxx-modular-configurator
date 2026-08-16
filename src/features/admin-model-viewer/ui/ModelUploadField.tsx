@@ -1,6 +1,6 @@
 'use client'
 
-import { useDocumentInfo } from '@payloadcms/ui'
+import { useDocumentDrawerContext, useDocumentInfo } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
 import { useRef, useState, type ChangeEvent } from 'react'
 
@@ -19,6 +19,10 @@ import { UploadProgressBar } from './UploadProgressBar'
  */
 export function ModelUploadField() {
   const { id } = useDocumentInfo()
+  // Set when this form is a drawer opened from another document — the "add a
+  // model" a furniture package or a building offers next to its own field.
+  // Undefined on the models collection's own page.
+  const { onSave } = useDocumentDrawerContext()
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
   const folderInput = useRef<HTMLInputElement>(null)
@@ -41,6 +45,22 @@ export function ModelUploadField() {
         router.refresh()
         return
       }
+
+      // Uploading from a furniture package or a building opens this form in a
+      // drawer over the document being edited. Handing the new model to the
+      // drawer picks it in the field that asked for it and shuts the drawer,
+      // which is the whole point of having asked from there. Navigating instead
+      // — which is what this did — threw away the half-filled document behind
+      // it and left the editor on a page they never asked for.
+      if (onSave) {
+        await onSave({
+          doc: { id: model.id } as Parameters<NonNullable<typeof onSave>>[0]['doc'],
+          operation: 'create',
+          result: { id: model.id, title: model.title },
+        })
+        return
+      }
+
       router.push(`/admin/collections/models/${model.id}`)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Upload failed.')

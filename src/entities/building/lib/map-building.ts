@@ -12,7 +12,7 @@ import type { BuildingLine, BuildingModel, ExteriorOption, Model } from '@/paylo
 import type {
   BuildingFloor,
   BuildingScene,
-  ExteriorPart,
+  ExteriorPlacement,
   ExteriorSlot,
   ExteriorVariant,
   OpeningFit,
@@ -113,6 +113,8 @@ export type ExteriorOptionInfo = {
   description: string | null
   price: number | null
   thumbnailUrl: string | null
+  /** Null while an option is being written and has no model on it yet. */
+  modelUrl: string | null
 }
 
 export type ExteriorCatalogue = Map<number, ExteriorOptionInfo>
@@ -124,30 +126,25 @@ export function mapExteriorOption(doc: ExteriorOption): ExteriorOptionInfo {
     description: doc.description ?? null,
     price: typeof doc.price === 'number' ? doc.price : null,
     thumbnailUrl: optionalModelUrl(doc.thumbnail),
+    // The model belongs to the catalogue entry now; only where it stands is a
+    // fact about a particular building.
+    modelUrl: optionalModelUrl(doc.model),
   }
 }
 
 type SlotDoc = NonNullable<NonNullable<BuildingModel['sceneConfig']>['exteriorSlots']>[number]
 type VariantDoc = NonNullable<SlotDoc['variants']>[number]
 
-function exteriorParts(value: VariantDoc['parts']): ExteriorPart[] {
-  return (value ?? []).flatMap((part) => {
-    const url = optionalModelUrl(part.model)
-    if (!url) return []
+function exteriorPlacement(value: VariantDoc['placement']): ExteriorPlacement {
+  // A zero on any axis flattens the model out of existence, and a negative one
+  // turns it inside out. Neither is ever what was meant.
+  const scale = toTuple(value?.scale, [1, 1, 1]).map((axis) => (axis > 0 ? axis : 1))
 
-    // A zero on any axis flattens the model out of existence, and a negative
-    // one turns it inside out. Neither is ever what was meant.
-    const scale = toTuple(part.scale, [1, 1, 1]).map((axis) => (axis > 0 ? axis : 1))
-
-    return [
-      {
-        url,
-        position: toTuple(part.position),
-        yawDeg: numberOr(part.yawDeg, 0),
-        scale: [scale[0], scale[1], scale[2]],
-      },
-    ]
-  })
+  return {
+    position: toTuple(value?.position),
+    yawDeg: numberOr(value?.yawDeg, 0),
+    scale: [scale[0], scale[1], scale[2]],
+  }
 }
 
 /**
@@ -176,7 +173,8 @@ function exteriorVariants(
         price: info.price,
         thumbnailUrl: info.thumbnailUrl,
         nodes: zoneNodePaths(variant.nodes),
-        parts: exteriorParts(variant.parts),
+        modelUrl: info.modelUrl,
+        placement: exteriorPlacement(variant.placement),
       },
     ]
   })

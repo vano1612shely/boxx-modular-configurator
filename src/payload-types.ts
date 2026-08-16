@@ -357,26 +357,19 @@ export interface BuildingModel {
                   | number
                   | boolean
                   | null;
-                /**
-                 * Models placed for this choice. Offsets are from the spot above, so moving the spot carries every choice with it.
-                 */
-                parts?:
-                  | {
-                      model: number | Model;
-                      position?: {
-                        x?: number | null;
-                        y?: number | null;
-                        z?: number | null;
-                      };
-                      scale?: {
-                        x?: number | null;
-                        y?: number | null;
-                        z?: number | null;
-                      };
-                      yawDeg?: number | null;
-                      id?: string | null;
-                    }[]
-                  | null;
+                placement?: {
+                  position?: {
+                    x?: number | null;
+                    y?: number | null;
+                    z?: number | null;
+                  };
+                  scale?: {
+                    x?: number | null;
+                    y?: number | null;
+                    z?: number | null;
+                  };
+                  yawDeg?: number | null;
+                };
                 id?: string | null;
               }[]
             | null;
@@ -660,7 +653,7 @@ export interface Image {
   };
 }
 /**
- * Decks, stairs, ramps and canopies offered at an exterior spot. Placed per building in the Scene Editor.
+ * Decks, stairs and ramps offered at an entrance. Positioned per building in the Scene Editor.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "exterior-options".
@@ -669,36 +662,15 @@ export interface ExteriorOption {
   id: number;
   title: string;
   /**
+   * The 3D model placed at the entrance when a visitor picks this.
+   */
+  model: number | Model;
+  /**
    * USD. Left blank the option is offered without a price.
    */
   price?: number | null;
   thumbnail?: (number | null) | Image;
   description?: string | null;
-  /**
-   * Models this option is made of, with the offsets they usually sit at. Copied into a building when the option is added there — later edits here do not move anything already placed. An option built entirely from objects already in the building model needs none of these.
-   */
-  parts?:
-    | {
-        model: number | Model;
-        position?: {
-          x?: number | null;
-          y?: number | null;
-          z?: number | null;
-        };
-        scale?: {
-          x?: number | null;
-          y?: number | null;
-          z?: number | null;
-        };
-        yawDeg?: number | null;
-        id?: string | null;
-      }[]
-    | null;
-  /**
-   * Which lines this is offered for at all. Empty means every line. It only filters the picker — what a building actually offers is chosen there, spot by spot.
-   */
-  compatibleLines?: (number | BuildingLine)[] | null;
-  regions?: (number | Region)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1093,10 +1065,9 @@ export interface BuildingModelsSelect<T extends boolean = true> {
                     key?: T;
                     option?: T;
                     nodes?: T;
-                    parts?:
+                    placement?:
                       | T
                       | {
-                          model?: T;
                           position?:
                             | T
                             | {
@@ -1112,7 +1083,6 @@ export interface BuildingModelsSelect<T extends boolean = true> {
                                 z?: T;
                               };
                           yawDeg?: T;
-                          id?: T;
                         };
                     id?: T;
                   };
@@ -1223,32 +1193,10 @@ export interface BuildingModelsSelect<T extends boolean = true> {
  */
 export interface ExteriorOptionsSelect<T extends boolean = true> {
   title?: T;
+  model?: T;
   price?: T;
   thumbnail?: T;
   description?: T;
-  parts?:
-    | T
-    | {
-        model?: T;
-        position?:
-          | T
-          | {
-              x?: T;
-              y?: T;
-              z?: T;
-            };
-        scale?:
-          | T
-          | {
-              x?: T;
-              y?: T;
-              z?: T;
-            };
-        yawDeg?: T;
-        id?: T;
-      };
-  compatibleLines?: T;
-  regions?: T;
   updatedAt?: T;
   createdAt?: T;
 }

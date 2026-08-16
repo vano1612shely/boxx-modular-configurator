@@ -5,7 +5,7 @@ export type {
   BuildingScene,
   CameraConfig,
   CameraPreset,
-  ExteriorPart,
+  ExteriorPlacement,
   ExteriorSlot,
   ExteriorVariant,
   OpeningFit,

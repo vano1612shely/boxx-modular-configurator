@@ -315,21 +315,15 @@ export const BuildingModels: CollectionConfig = {
                           },
                         },
                         {
-                          name: 'parts',
-                          type: 'array',
-                          labels: { singular: 'Part', plural: 'Parts' },
-                          admin: {
-                            description:
-                              'Models placed for this choice. Offsets are from the spot above, ' +
-                              'so moving the spot carries every choice with it.',
-                          },
+                          // Where this choice's model stands, relative to the
+                          // spot — so moving the spot carries every choice with
+                          // it. One model to a choice: the model itself belongs
+                          // to the option, and only its placement is per
+                          // building. Dragged in the Scene Editor, not typed.
+                          name: 'placement',
+                          type: 'group',
+                          label: 'Placement',
                           fields: [
-                            {
-                              name: 'model',
-                              type: 'relationship',
-                              relationTo: 'models',
-                              required: true,
-                            },
                             vec3Field('position'),
                             vec3Field('scale', { defaultValue: 1 }),
                             { name: 'yawDeg', type: 'number', defaultValue: 0 },

@@ -141,9 +141,8 @@ export type Room = {
   cameraPreset: CameraPreset
 }
 
-/** One model placed for a choice, positioned in its spot's own frame. */
-export type ExteriorPart = {
-  url: string
+/** Where a choice's model stands, in its spot's own frame. */
+export type ExteriorPlacement = {
   position: Vec3Tuple
   /** Degrees about Y, on top of the spot's own facing. */
   yawDeg: number
@@ -156,8 +155,9 @@ export type ExteriorPart = {
  *
  * Built from either source, or both at once: `nodes` are objects the building's
  * own model already contains, which need no placing because a modeller placed
- * them, and `parts` are models loaded on top. A choice reusing the built-in
- * deck and adding a bought ramp is the case the pair exists for.
+ * them, and `modelUrl` is a catalogue model loaded on top and dragged into
+ * place. A choice reusing the built-in deck and adding a bought ramp is the
+ * case the pair exists for.
  */
 export type ExteriorVariant = {
   key: string
@@ -167,7 +167,9 @@ export type ExteriorVariant = {
   price: number | null
   thumbnailUrl: string | null
   nodes: string[]
-  parts: ExteriorPart[]
+  /** Null for a choice made entirely of objects already in the building. */
+  modelUrl: string | null
+  placement: ExteriorPlacement
 }
 
 /**

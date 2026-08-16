@@ -19,7 +19,8 @@ function variant(key: string, nodes: string[] = []): ExteriorVariant {
     price: null,
     thumbnailUrl: null,
     nodes,
-    parts: [],
+    modelUrl: null,
+    placement: { position: [0, 0, 0], yawDeg: 0, scale: [1, 1, 1] },
   }
 }
 

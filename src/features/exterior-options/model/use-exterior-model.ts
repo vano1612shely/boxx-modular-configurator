@@ -11,7 +11,6 @@ export type ExteriorSpotVm = {
   slot: ExteriorSlot
   chosen: ExteriorVariant
   open: boolean
-  hovered: boolean
 }
 
 /**
@@ -27,7 +26,6 @@ export function useExteriorModel({ building }: { building: BuildingScene }) {
   const setVariant = useConfiguration((s) => s.setExteriorVariant)
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
   const openSlotKey = useConfiguratorSession((s) => s.openSlotKey)
-  const hoveredSlotKey = useConfiguratorSession((s) => s.hoveredSlotKey)
   const openSlot = useConfiguratorSession((s) => s.openExteriorSlot)
 
   const pickable = useMemo(
@@ -53,11 +51,10 @@ export function useExteriorModel({ building }: { building: BuildingScene }) {
             slot,
             chosen,
             open: slot.key === openKey,
-            hovered: slot.key === hoveredSlotKey,
           },
         ]
       }),
-    [pickable, selection, openKey, hoveredSlotKey],
+    [pickable, selection, openKey],
   )
 
   return {

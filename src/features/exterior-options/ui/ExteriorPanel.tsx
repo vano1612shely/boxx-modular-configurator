@@ -169,12 +169,7 @@ function SpotAccordion({
         type="button"
         aria-expanded={spot.open}
         onClick={onOpen}
-        className={cn(
-          'mb-card flex w-full items-center gap-2 text-left transition-colors',
-          // Lit while the pointer is on the deck out in the scene, so the two
-          // halves of the same click target say they belong together.
-          spot.hovered && !spot.open && 'text-ring',
-        )}
+        className="mb-card flex w-full items-center gap-2 text-left"
       >
         <span className="flex-1 truncate text-sm font-medium">{spot.slot.name}</span>
         <Show when={!spot.open}>

@@ -62,8 +62,6 @@ type ConfiguratorSessionState = {
    * next piece lands.
    */
   activeZoneKey: string | null
-  /** Exterior spot under the pointer, or null. A cue, nothing more. */
-  hoveredSlotKey: string | null
   /**
    * Exterior spot whose choices are open in the panel.
    *
@@ -74,7 +72,6 @@ type ConfiguratorSessionState = {
   /** One pose to fly to, consumed by the camera on the next request and then cleared. */
   moveToTarget: MoveToRequest | null
   focusRoom: (key: string) => void
-  hoverExteriorSlot: (key: string | null) => void
   openExteriorSlot: (key: string | null) => void
   exitRoomFocus: () => void
   setInteractionLock: (locked: boolean) => void
@@ -111,7 +108,6 @@ const VISITOR_STATE = {
   selectedFloorKey: null as string | null,
   previewRoomKey: null as string | null,
   activeZoneKey: null as string | null,
-  hoveredSlotKey: null as string | null,
   openSlotKey: null as string | null,
   moveToTarget: null as MoveToRequest | null,
 }
@@ -151,7 +147,6 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
       viewRequestId: s.viewRequestId + 1,
     })),
   setActiveZone: (key) => set({ activeZoneKey: key }),
-  hoverExteriorSlot: (key) => set({ hoveredSlotKey: key }),
   // One spot is open at a time and one always is, so this sets rather than
   // toggles: clicking the deck you are already looking at should leave its
   // choices on screen, not fold them away.

@@ -194,24 +194,6 @@ export function BuildingModel({ building }: Props) {
     return { ours: false, slotKey: null }
   }
 
-  const onPointerMove = (event: ThreeEvent<PointerEvent>) => {
-    const front = event.intersections[0]?.object
-    if (!front) return
-
-    const owner = ownerOf(front)
-    if (!owner.ours) return
-
-    const session = useConfiguratorSession.getState()
-    // Guarded because this runs on every pointer move over the building, and an
-    // unconditional write would re-render the panel at pointer rate.
-    if (session.hoveredSlotKey !== owner.slotKey) session.hoverExteriorSlot(owner.slotKey)
-  }
-
-  const onPointerOut = () => {
-    const session = useConfiguratorSession.getState()
-    if (session.hoveredSlotKey !== null) session.hoverExteriorSlot(null)
-  }
-
   const onClick = (event: ThreeEvent<MouseEvent>) => {
     const front = event.intersections[0]?.object
     if (!front) return
@@ -258,8 +240,6 @@ export function BuildingModel({ building }: Props) {
     <primitive
       ref={rootRef}
       object={preparedScene}
-      onPointerMove={interactive ? onPointerMove : undefined}
-      onPointerOut={interactive ? onPointerOut : undefined}
       onClick={interactive ? onClick : undefined}
     />
   )

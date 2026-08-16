@@ -43,6 +43,7 @@ export {
 } from './lib/map-building'
 export {
   claimedNodes,
+  entranceView,
   hasExteriorChoices,
   hiddenExteriorNodes,
   revealedNodes,

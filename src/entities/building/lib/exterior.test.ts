@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExteriorSlot, ExteriorVariant } from '../model/types'
 import {
   claimedNodes,
+  entranceView,
   hasExteriorChoices,
   hiddenExteriorNodes,
   revealedNodes,
@@ -132,6 +133,47 @@ describe('slotOfNode', () => {
   it('finds the spot an object belongs to, picked or not', () => {
     expect(slotOfNode([FRONT], 'ramp')?.key).toBe('front')
     expect(slotOfNode([FRONT], 'chassis')).toBeNull()
+  })
+})
+
+describe('entranceView', () => {
+  const at = (position: [number, number, number], yawDeg: number): ExteriorSlot => ({
+    ...slot('front', [variant('a'), variant('b')]),
+    position,
+    yawDeg,
+  })
+
+  it('stands out in front of the spot, not behind it', () => {
+    const view = entranceView(at([0, 0, 0], 0))
+
+    // Facing 0 points down +Z, so that is the side to stand on.
+    expect(view.position[2]).toBeGreaterThan(0)
+    expect(view.position[0]).toBeCloseTo(0, 6)
+  })
+
+  it('follows the spot round as it is turned', () => {
+    const east = entranceView(at([0, 0, 0], 90))
+
+    expect(east.position[0]).toBeGreaterThan(0)
+    expect(east.position[2]).toBeCloseTo(0, 6)
+  })
+
+  // Level-ish rather than overhead: the visitor asked to see the ramp, and a
+  // ramp seen from above is a stripe.
+  it('looks slightly down at the spot from close to eye level', () => {
+    const view = entranceView(at([4, 0.5, -2], 180))
+
+    expect(view.target).toEqual([4, 1.6, -2])
+    expect(view.position[1]).toBeGreaterThan(view.target[1])
+    expect(view.position[1] - view.target[1]).toBeLessThan(3)
+  })
+
+  it('keeps its distance whichever way the spot faces', () => {
+    for (const yaw of [0, 37, 90, 180, 274, 359]) {
+      const view = entranceView(at([1, 0, 1], yaw))
+      const reach = Math.hypot(view.position[0] - 1, view.position[2] - 1)
+      expect(reach).toBeCloseTo(10, 6)
+    }
   })
 })
 

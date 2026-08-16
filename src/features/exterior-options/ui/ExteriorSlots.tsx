@@ -1,24 +1,19 @@
 'use client'
 
 import { Html, useGLTF } from '@react-three/drei'
-import { Suspense, useMemo, useRef, useState } from 'react'
-import { Box3, MathUtils, Mesh, Vector3, type Group, type Object3D } from 'three'
+import { Suspense, useMemo } from 'react'
+import { MathUtils, Mesh } from 'three'
 
 import type { BuildingScene, ExteriorPart, ExteriorSlot, ExteriorVariant } from '@/entities/building'
-import { selectedVariant } from '@/entities/building'
+import { entranceView, selectedVariant } from '@/entities/building'
 import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
-import { createNodeResolver } from '@/shared/three/node-path'
-import { HIGHLIGHT } from '@/shared/three/scene-tokens'
+import { cn } from '@/shared/lib'
 import { Chip } from '@/shared/ui/boxx'
-import { For, Show } from '@/shared/ui/control-flow'
+import { For } from '@/shared/ui/control-flow'
 
-/** Ground room around the structure, so the plate reads as its own area. */
-const PLATE_MARGIN = 0.35
-/** Clear of the ground it lies on, without floating off it. */
-const PLATE_LIFT = 0.012
-
-type Resolver = (path: string) => Object3D | null
+/** Head height over the spot, so the marker reads as belonging to it. */
+const LABEL_LIFT = 1.1
 
 function PartModel({ part }: { part: ExteriorPart }) {
   const { scene } = useGLTF(part.url, false, true)
@@ -44,91 +39,37 @@ function PartModel({ part }: { part: ExteriorPart }) {
   )
 }
 
-type Plate = { center: [number, number, number]; width: number; depth: number }
-
-const BOX = new Box3()
-const SIZE = new Vector3()
-const CENTRE = new Vector3()
-
-/**
- * The footprint of whatever this spot is currently showing.
- *
- * Measured rather than authored, and measured on hover rather than on mount:
- * the parts arrive through Suspense, so anything computed earlier would be the
- * footprint of an empty group. By the time a pointer is on the thing, the thing
- * is on screen.
- */
-function measure(group: Group | null, nodes: string[], resolve: Resolver): Plate | null {
-  BOX.makeEmpty()
-  if (group) BOX.expandByObject(group)
-  for (const path of nodes) {
-    const object = resolve(path)
-    if (object) BOX.expandByObject(object)
-  }
-  if (BOX.isEmpty()) return null
-
-  BOX.getSize(SIZE)
-  BOX.getCenter(CENTRE)
-
-  return {
-    center: [CENTRE.x, BOX.min.y + PLATE_LIFT, CENTRE.z],
-    width: SIZE.x + PLATE_MARGIN * 2,
-    depth: SIZE.z + PLATE_MARGIN * 2,
-  }
-}
-
 type SpotProps = {
   slot: ExteriorSlot
   variant: ExteriorVariant
-  resolve: Resolver
 }
 
 /**
- * One exterior spot: what is picked there, and the area that says it is pickable.
+ * One exterior spot: what is picked there, and a marker naming it.
  *
- * The models are drawn in the spot's own frame, so moving the spot in the editor
- * carries every choice with it. Objects that come from the building's own model
- * are not drawn here at all — they are already in the scene, and all this does
- * for them is measure them and take the click, which `BuildingModel` forwards.
+ * The marker is always on, like the room markers it sits among, and clicking it
+ * does the two things the visitor wanted: opens that spot's choices and flies
+ * over to look at them. There is no highlight on the ground — it needed a hover
+ * to appear, a hover is a thing a phone does not have, and a patch of colour
+ * over the deck said nothing the name does not.
  */
-function ExteriorSpot({ slot, variant, resolve }: SpotProps) {
-  const groupRef = useRef<Group>(null)
-  const [plate, setPlate] = useState<Plate | null>(null)
-
-  const hovered = useConfiguratorSession((s) => s.hoveredSlotKey === slot.key)
-  const open = useConfiguratorSession((s) => s.openSlotKey === slot.key)
-  const hoverSlot = useConfiguratorSession((s) => s.hoverExteriorSlot)
+function ExteriorSpot({ slot, variant }: SpotProps) {
   const openSlot = useConfiguratorSession((s) => s.openExteriorSlot)
+  const open = useConfiguratorSession((s) => s.openSlotKey === slot.key)
 
   // One choice is not a choice: the structure is simply part of the building,
-  // and lighting it up would promise a picker that never opens.
+  // and a marker would promise a picker that never opens.
   const pickable = slot.variants.length > 1
-  const lit = pickable && (hovered || open)
 
-  const enter = () => {
-    if (!pickable) return
-    setPlate(measure(groupRef.current, variant.nodes, resolve))
-    hoverSlot(slot.key)
+  const look = () => {
+    openSlot(slot.key)
+    const view = entranceView(slot)
+    useConfiguratorSession.getState().requestMoveTo(view.position, view.target)
   }
 
   return (
     <>
-      <group
-        ref={groupRef}
-        position={slot.position}
-        rotation-y={MathUtils.degToRad(slot.yawDeg)}
-        onPointerOver={(event) => {
-          if (!pickable) return
-          event.stopPropagation()
-          enter()
-        }}
-        onPointerOut={() => pickable && hoverSlot(null)}
-        onClick={(event) => {
-          if (!pickable) return
-          event.stopPropagation()
-          openSlot(slot.key)
-        }}
-      >
+      <group position={slot.position} rotation-y={MathUtils.degToRad(slot.yawDeg)}>
         <For each={variant.parts} getKey={(_, index) => `${variant.key}-${index}`}>
           {(part) => (
             <Suspense fallback={null}>
@@ -138,38 +79,40 @@ function ExteriorSpot({ slot, variant, resolve }: SpotProps) {
         </For>
       </group>
 
-      <Show when={lit && plate !== null}>
-        {/* Its own subtree, outside the group above: the plate is measured in
-            world space, so putting it under a rotated parent would turn it. */}
-        <mesh
-          position={plate?.center}
-          rotation-x={-Math.PI / 2}
-          onPointerOver={(event) => {
-            event.stopPropagation()
-            hoverSlot(slot.key)
-          }}
-          onPointerOut={() => hoverSlot(null)}
-          onClick={(event) => {
-            event.stopPropagation()
-            openSlot(slot.key)
-          }}
+      {pickable && (
+        <Html
+          position={[slot.position[0], slot.position[1] + LABEL_LIFT, slot.position[2]]}
+          center
+          zIndexRange={[10, 0]}
+          // Only the marker itself takes the pointer, never the box drei wraps
+          // it in — an invisible wrapper that swallows drags reads as a patch of
+          // building that will not turn.
+          style={{ pointerEvents: 'none' }}
         >
-          <planeGeometry args={[plate?.width ?? 1, plate?.depth ?? 1]} />
-          <meshBasicMaterial
-            color={HIGHLIGHT.selected}
-            transparent
-            opacity={open ? 0.34 : 0.22}
-            toneMapped={false}
-            depthWrite={false}
-          />
-        </mesh>
-
-        <Html position={plate?.center} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-          <Chip tone="glass" className="whitespace-nowrap shadow-md">
-            {slot.name}
-          </Chip>
+          <button
+            type="button"
+            // The label reads as a name; what pressing it does is worth saying
+            // out loud, since it both opens the choices and flies over to them.
+            aria-label={`Look at ${slot.name}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              look()
+            }}
+            className="group pointer-events-auto flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <Chip
+              tone="glass"
+              className={cn(
+                'shadow-md transition-transform group-hover:scale-105',
+                open && 'ring-1 ring-primary',
+              )}
+            >
+              {slot.name}
+            </Chip>
+          </button>
         </Html>
-      </Show>
+      )}
     </>
   )
 }
@@ -180,17 +123,12 @@ function ExteriorSpot({ slot, variant, resolve }: SpotProps) {
  * Gone entirely once a room is entered. The building's own model is hidden
  * there — the visitor is looking at a generated room and nothing else — so a
  * deck left behind would be a slab of decking floating in the open next to a
- * single room, which is what it looked like. Previewing a room from above is
- * not the same thing: the building is still on screen for that, and so are its
- * entrances.
+ * single room. Previewing a room from above is not the same thing: the building
+ * is still on screen for that, and so are its entrances.
  */
 export function ExteriorSlots({ building }: { building: BuildingScene }) {
   const selection = useConfiguration((s) => s.exterior)
   const insideRoom = useConfiguratorSession((s) => s.focusedRoomKey !== null)
-  // The same cached scene BuildingModel prepares — useGLTF hands out one object
-  // per url, so these resolve to the very nodes on screen.
-  const { scene } = useGLTF(building.modelUrl, false, true)
-  const resolve = useMemo(() => createNodeResolver(scene), [scene])
 
   if (insideRoom || building.exteriorSlots.length === 0) return null
 
@@ -200,7 +138,7 @@ export function ExteriorSlots({ building }: { building: BuildingScene }) {
         const variant = selectedVariant(slot, selection)
         if (!variant) return null
 
-        return <ExteriorSpot slot={slot} variant={variant} resolve={resolve} />
+        return <ExteriorSpot slot={slot} variant={variant} />
       }}
     </For>
   )

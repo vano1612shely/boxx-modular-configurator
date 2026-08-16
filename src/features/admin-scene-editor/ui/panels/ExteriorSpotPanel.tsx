@@ -1,13 +1,13 @@
 'use client'
 
+import { useState } from 'react'
+
 import { For, Show } from '@/shared/ui/control-flow'
 
-import { AssetPicker, assetRefOf, useAssetLibrary } from '../controls/AssetPicker'
-import { useExteriorCatalogue } from '../controls/exterior-catalogue'
+import { optionIdOf } from '../../lib/exterior-option'
 import { button, s, tone } from '../editor-styles'
+import { NewExteriorOption } from './NewExteriorOption'
 import type { PanelProps } from './shared'
-
-const MODEL_ACCEPT = '.glb,.gltf,model/gltf-binary,model/gltf+json'
 
 const row: React.CSSProperties = {
   display: 'flex',
@@ -57,13 +57,14 @@ function contestedPaths(vm: PanelProps['vm']): Set<string> {
 export function ExteriorSpotPanel({ vm }: PanelProps) {
   const index = vm.selectedSlotIndex
   const slot = index === null ? undefined : vm.exteriorSlots[index]
-  const catalogue = useExteriorCatalogue()
-  const { assets, refresh } = useAssetLibrary('models')
   const contested = contestedPaths(vm)
+  const [adding, setAdding] = useState(false)
 
   if (index === null || !slot) return null
 
+  const catalogue = vm.exteriorCatalogue
   const variants = slot.variants ?? []
+  const movingSpot = !vm.cagingVariant
 
   return (
     <>
@@ -98,12 +99,9 @@ export function ExteriorSpotPanel({ vm }: PanelProps) {
         <div style={s.row}>
           <button
             type="button"
-            style={{
-              ...button(vm.selectedPartIndex === null ? 'primary' : undefined),
-              flex: 1,
-            }}
-            title="Put the handles back on the spot itself"
-            onClick={() => vm.onSelectPart('spot')}
+            style={{ ...button(movingSpot ? 'primary' : undefined), flex: 1 }}
+            title="Put the handles on the spot itself rather than on the model"
+            onClick={() => vm.onMoveTheSpot(!movingSpot)}
           >
             ⊹ Move the spot
           </button>
@@ -119,9 +117,9 @@ export function ExteriorSpotPanel({ vm }: PanelProps) {
         </div>
 
         <p style={s.hint}>
-          {vm.selectedPartIndex === null
+          {movingSpot
             ? 'The puck sets where the spot is and the arrows its height — that is all a spot is, and it is where the visitor’s marker hangs.'
-            : 'Corners resize the model, the puck moves it, the blue grip turns it.'}
+            : 'Corners resize the model, the cage moves it, the blue grip turns it.'}
         </p>
       </div>
 
@@ -140,11 +138,7 @@ export function ExteriorSpotPanel({ vm }: PanelProps) {
             const claimed = Array.isArray(variant.nodes)
               ? variant.nodes.filter((path): path is string => typeof path === 'string')
               : []
-            const option = catalogue.find(
-              (entry) =>
-                entry.id ===
-                (typeof variant.option === 'number' ? variant.option : variant.option?.id),
-            )
+            const option = catalogue.find((entry) => entry.id === optionIdOf(variant.option))
 
             return (
               <div
@@ -186,75 +180,58 @@ export function ExteriorSpotPanel({ vm }: PanelProps) {
 
                 <Show when={shown}>
                   <div style={{ padding: '0 8px 8px' }}>
-                    <For each={variant.parts ?? []} getKey={(_, i) => String(i)}>
-                      {(part, partIndex) => {
-                        const caged = vm.selectedPartIndex === partIndex
-                        const model = assetRefOf(part.model, assets)
-
-                        return (
-                          <div
-                            style={{
-                              ...row,
-                              background: caged ? '#1d2a22' : tone.well,
-                              border: `1px solid ${caged ? '#35553f' : tone.line}`,
-                              marginTop: 4,
-                            }}
-                          >
-                            <button
-                              type="button"
-                              style={{
-                                ...iconButton,
-                                minWidth: 26,
-                                color: caged ? '#fff' : tone.textFaint,
-                              }}
-                              title="Put the cage on this model"
-                              onClick={() => vm.onSelectPart(partIndex)}
-                            >
-                              ⊹
-                            </button>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <AssetPicker
-                                collection="models"
-                                accept={MODEL_ACCEPT}
-                                library={assets}
-                                onLibraryChange={refresh}
-                                value={model}
-                                emptyLabel="Pick a model"
-                                onChange={(asset) =>
-                                  asset &&
-                                  vm.onSetPartModel(index, variantIndex, partIndex, {
-                                    id: asset.id,
-                                    url: asset.url,
-                                  })
-                                }
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              style={{ ...iconButton, color: tone.danger }}
-                              onClick={() => vm.onRemovePart(index, variantIndex, partIndex)}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        )
+                    {/* What the choice draws, which is the catalogue entry's own
+                        model. Changing it means editing that entry — a ramp is
+                        the same ramp on every building it is offered on. */}
+                    <div
+                      style={{
+                        ...row,
+                        background: tone.well,
+                        border: `1px solid ${tone.line}`,
+                        marginTop: 4,
                       }}
-                    </For>
-
-                    {/* Uploads land in the model library from here, so a ramp
-                        fresh out of the exporter never means leaving the scene. */}
-                    <div style={{ marginTop: 6 }}>
-                      <AssetPicker
-                        collection="models"
-                        accept={MODEL_ACCEPT}
-                        library={assets}
-                        onLibraryChange={refresh}
-                        value={null}
-                        emptyLabel="+ Model — pick or upload"
-                        onChange={(asset) =>
-                          asset && vm.onAddPart(index, variantIndex, { id: asset.id, url: asset.url })
-                        }
-                      />
+                    >
+                      <button
+                        type="button"
+                        style={{
+                          ...iconButton,
+                          minWidth: 26,
+                          color: vm.cagingVariant ? '#fff' : tone.textFaint,
+                        }}
+                        title="Put the cage back on this model"
+                        onClick={() => vm.onMoveTheSpot(false)}
+                      >
+                        ⊹
+                      </button>
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 11,
+                          color: option?.modelUrl ? tone.textMuted : tone.danger,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={option?.modelUrl ?? undefined}
+                      >
+                        {option?.modelUrl
+                          ? 'Model from the catalogue'
+                          : 'No model on this catalogue entry'}
+                      </span>
+                      <Show when={option}>
+                        {(entry) => (
+                          <a
+                            href={`/admin/collections/exterior-options/${entry.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ ...iconButton, textDecoration: 'none' }}
+                            title="Edit this catalogue entry"
+                          >
+                            ✎
+                          </a>
+                        )}
+                      </Show>
                     </div>
 
                     <button
@@ -313,7 +290,30 @@ export function ExteriorSpotPanel({ vm }: PanelProps) {
             {(option) => <option value={option.id}>{option.title}</option>}
           </For>
         </select>
+
+        {/* The catalogue is written from here as well as picked from, so a ramp
+            fresh out of the exporter never means leaving the scene to file it. */}
+        <button
+          type="button"
+          style={{ ...button(), marginTop: 6, width: '100%' }}
+          onClick={() => setAdding(true)}
+        >
+          ↑ New option — upload a model
+        </button>
       </div>
+
+      <Show when={adding}>
+        <NewExteriorOption
+          onClose={() => setAdding(false)}
+          onCreated={(option) => {
+            // Onto the spot with the cage already on it — the point of adding
+            // one here is to stand it up. The refetch is for everything the
+            // dialog did not hand back, and can land whenever it lands.
+            vm.onAddVariant(index, option)
+            vm.onReloadExteriorCatalogue()
+          }}
+        />
+      </Show>
     </>
   )
 }

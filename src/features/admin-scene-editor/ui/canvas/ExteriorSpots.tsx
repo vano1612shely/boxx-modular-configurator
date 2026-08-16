@@ -3,9 +3,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Box3, BoxGeometry, DoubleSide, MathUtils, Vector3, type Mesh, type Ray } from 'three'
 
-import { assetUrl } from '@/shared/lib'
 import { For, Show } from '@/shared/ui/control-flow'
 
+import { optionModelUrl } from '../../lib/exterior-option'
 import { slotToWorld } from '../../lib/slot-drag'
 import type { SceneEditorVm } from '../../model/use-scene-editor-model'
 import { tone } from '../editor-styles'
@@ -26,19 +26,20 @@ const LIFT = 1.4
 
 type SlotRow = SceneEditorVm['exteriorSlots'][number]
 type VariantRow = NonNullable<SlotRow['variants']>[number]
-type PartRow = NonNullable<VariantRow['parts']>[number]
+type PlacementRow = NonNullable<VariantRow['placement']>
 type Triple = [number, number, number]
 
-function PartModel({
+function VariantModel({
   url,
-  part,
-  index,
+  placement,
+  id,
   onMeasured,
 }: {
   url: string
-  part: PartRow
-  index: number
-  onMeasured: (index: number, box: Box3) => void
+  placement: PlacementRow | undefined
+  /** Which choice this is, so a cage is never drawn round another one's size. */
+  id: string
+  onMeasured: (id: string, box: Box3) => void
 }) {
   const scene = useModel(url)
 
@@ -54,22 +55,22 @@ function PartModel({
   }, [scene])
 
   // Measured unscaled and untranslated, so a cage can be drawn round it at
-  // whatever scale the part is currently set to.
+  // whatever scale the choice is currently set to.
   const box = useMemo(() => {
     const measured = new Box3().setFromObject(object)
     return measured.isEmpty() ? null : measured
   }, [object])
 
   useEffect(() => {
-    if (box) onMeasured(index, box)
-  }, [box, index, onMeasured])
+    if (box) onMeasured(id, box)
+  }, [box, id, onMeasured])
 
   return (
     <primitive
       object={object}
-      position={[part.position?.x ?? 0, part.position?.y ?? 0, part.position?.z ?? 0]}
-      rotation-y={MathUtils.degToRad(part.yawDeg ?? 0)}
-      scale={[part.scale?.x || 1, part.scale?.y || 1, part.scale?.z || 1]}
+      position={[placement?.position?.x ?? 0, placement?.position?.y ?? 0, placement?.position?.z ?? 0]}
+      rotation-y={MathUtils.degToRad(placement?.yawDeg ?? 0)}
+      scale={[placement?.scale?.x || 1, placement?.scale?.y || 1, placement?.scale?.z || 1]}
     />
   )
 }
@@ -160,7 +161,7 @@ const FACE_HANDLES: Array<{ axis: Axis; sign: 1 | -1; rotation: Triple }> = [
  * that axis alone. Sized from the model rather than authored, which is the whole
  * point — two imports rarely arrive at the same size or with the same origin.
  */
-function PartCage({
+function ModelCage({
   box,
   scale,
   register,
@@ -316,10 +317,11 @@ export function shownVariantIndex(vm: SceneEditorVm, slotIndex: number): number 
 type Props = {
   vm: SceneEditorVm
   register: RegisterHandle
-  onStartMove: (index: number, part: number | null, ray: Ray, planeY: number) => void
-  onStartHeight: (index: number, part: number | null, ray: Ray, grip: Triple) => void
-  onStartYaw: (index: number, part: number | null, ray: Ray, centre: Triple) => void
-  onStartScale: (index: number, part: number, ray: Ray, axis: 'x' | 'y' | 'z' | null) => void
+  /** `held` is the previewed choice's model; false is the spot itself. */
+  onStartMove: (index: number, held: boolean, ray: Ray, planeY: number) => void
+  onStartHeight: (index: number, held: boolean, ray: Ray, grip: Triple) => void
+  onStartYaw: (index: number, held: boolean, ray: Ray, centre: Triple) => void
+  onStartScale: (index: number, ray: Ray, axis: 'x' | 'y' | 'z' | null) => void
 }
 
 /**
@@ -341,10 +343,14 @@ export function ExteriorSpots({
   onStartYaw,
   onStartScale,
 }: Props) {
-  // Kept with the index it was measured for, so the cage never shows one
-  // model's size around another.
-  const [sized, setSized] = useState<{ part: number; box: Box3 } | null>(null)
-  const measure = useCallback((part: number, box: Box3) => setSized({ part, box }), [])
+  // Kept against the choice each was measured for, so the cage never shows one
+  // model's size around another — every spot on the building reports here.
+  const [boxes, setBoxes] = useState<Record<string, Box3>>({})
+  const measure = useCallback(
+    (id: string, box: Box3) =>
+      setBoxes((prev) => (prev[id] === box ? prev : { ...prev, [id]: box })),
+    [],
+  )
 
   return (
     <For each={vm.exteriorSlots} getKey={(slot, index) => slot.key || String(index)}>
@@ -354,12 +360,17 @@ export function ExteriorSpots({
         const selected = vm.selectedSlotIndex === index
         const spot: Triple = [slot.position?.x ?? 0, slot.position?.y ?? 0, slot.position?.z ?? 0]
 
-        const part = selected ? vm.selectedPartIndex : null
-        const held = part === null ? null : ((variant?.parts ?? [])[part] ?? null)
+        const id = `${slot.key || index}:${variant?.key ?? ''}`
+        const url = optionModelUrl(variant?.option, vm.exteriorCatalogue)
+
+        // The cage goes on the previewed choice's model, and only once there is
+        // one on screen to put it round.
+        const caged = selected && vm.cagingVariant && variant !== null && url !== null
+        const placement = variant?.placement
         const heldAt: Triple = [
-          held?.position?.x ?? 0,
-          held?.position?.y ?? 0,
-          held?.position?.z ?? 0,
+          placement?.position?.x ?? 0,
+          placement?.position?.y ?? 0,
+          placement?.position?.z ?? 0,
         ]
         const heldWorld = slotToWorld(
           { x: spot[0], y: spot[1], z: spot[2], yawDeg: slot.yawDeg ?? 0 },
@@ -388,20 +399,19 @@ export function ExteriorSpots({
               />
             </mesh>
 
-            <Show when={variant}>
-              {(shownVariant) => (
-                <For each={shownVariant.parts ?? []} getKey={(_, i) => String(i)}>
-                  {(one, partIndex) => {
-                    const url = typeof one.model === 'object' ? assetUrl(one.model) : null
-                    if (!url) return null
-
-                    return (
-                      <Suspense fallback={null}>
-                        <PartModel url={url} part={one} index={partIndex} onMeasured={measure} />
-                      </Suspense>
-                    )
-                  }}
-                </For>
+            {/* A choice made entirely of objects already in the building model
+                has nothing of its own to draw — those are revealed by node
+                path — so a missing url is a state, not a fault. */}
+            <Show when={url}>
+              {(modelUrl) => (
+                <Suspense fallback={null}>
+                  <VariantModel
+                    url={modelUrl}
+                    placement={placement}
+                    id={id}
+                    onMeasured={measure}
+                  />
+                </Suspense>
               )}
             </Show>
 
@@ -410,39 +420,40 @@ export function ExteriorSpots({
                   placed. Both at once put two pucks a few centimetres apart,
                   and picking the wrong one moved the whole arrangement when the
                   intent was one deck. */}
-              <Show when={part === null}>
+              <Show when={!caged}>
                 <MovePuck
                   register={register}
-                  begin={(ray) => onStartMove(index, null, ray, spot[1])}
+                  begin={(ray) => onStartMove(index, false, ray, spot[1])}
                 />
                 <HeightArrows
                   register={register}
                   begin={(ray) =>
-                    onStartHeight(index, null, ray, [spot[0], spot[1] + LIFT, spot[2]])
+                    onStartHeight(index, false, ray, [spot[0], spot[1] + LIFT, spot[2]])
                   }
                 />
               </Show>
 
-              <Show when={held !== null && part !== null && sized?.part === part && sized.box}>
+              <Show when={caged && boxes[id]}>
                 {(box) => (
-                  <group
-                    position={heldAt}
-                    rotation-y={MathUtils.degToRad(held?.yawDeg ?? 0)}
-                  >
-                    <PartCage
+                  <group position={heldAt} rotation-y={MathUtils.degToRad(placement?.yawDeg ?? 0)}>
+                    <ModelCage
                       box={box}
-                      scale={[held?.scale?.x || 1, held?.scale?.y || 1, held?.scale?.z || 1]}
+                      scale={[
+                        placement?.scale?.x || 1,
+                        placement?.scale?.y || 1,
+                        placement?.scale?.z || 1,
+                      ]}
                       register={register}
-                      onStartScale={(ray, axis) => onStartScale(index, part!, ray, axis)}
-                      onStartMove={(ray) => onStartMove(index, part, ray, heldOrigin[1])}
+                      onStartScale={(ray, axis) => onStartScale(index, ray, axis)}
+                      onStartMove={(ray) => onStartMove(index, true, ray, heldOrigin[1])}
                       onStartHeight={(ray) =>
-                        onStartHeight(index, part, ray, [
+                        onStartHeight(index, true, ray, [
                           heldOrigin[0],
                           heldOrigin[1] + LIFT,
                           heldOrigin[2],
                         ])
                       }
-                      onStartYaw={(ray) => onStartYaw(index, part, ray, heldOrigin)}
+                      onStartYaw={(ray) => onStartYaw(index, true, ray, heldOrigin)}
                     />
                   </group>
                 )}

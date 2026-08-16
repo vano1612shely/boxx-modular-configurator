@@ -48,15 +48,13 @@ import {
   type EditorBox,
 } from '../lib/blocks'
 import type { PlaneBounds } from '../lib/floor-plane'
+import { useExteriorCatalogue, type ExteriorOptionRef } from './use-exterior-catalogue'
 import type { BuildingModel, Model } from '@/payload-types'
 
+export type { ExteriorOptionRef }
+
 export type EditorMode =
-  | 'select'
-  | 'draw-room'
-  | 'block-roof'
-  | 'place-opening'
-  | 'floor-level'
-  | 'cut-zone'
+  'select' | 'draw-room' | 'block-roof' | 'place-opening' | 'floor-level' | 'cut-zone'
 
 export { blockRefKey, defaultYRange, sameBlockRef }
 export type { BlockRef, BlockScope, EditorBox }
@@ -89,15 +87,7 @@ function modelUrlOf(model: number | Model | null | undefined): string | null {
 
 type SlotDraft = NonNullable<NonNullable<Draft['sceneConfig']>['exteriorSlots']>[number]
 type VariantDraft = NonNullable<SlotDraft['variants']>[number]
-type PartDraft = NonNullable<VariantDraft['parts']>[number]
-
-/** One catalogue entry as the picker hands it over, parts and all. */
-export type ExteriorOptionRef = {
-  id: number
-  title: string
-  price: number | null
-  parts: PartDraft[]
-}
+type PlacementDraft = NonNullable<VariantDraft['placement']>
 
 /**
  * A key nothing in the list is using.
@@ -112,9 +102,9 @@ function freeKey(rows: Array<{ key?: string | null }>, prefix: string): string {
   return `${prefix}-${n}`
 }
 
-
 export function useSceneEditorModel() {
   const { id } = useDocumentInfo()
+  const catalogue = useExteriorCatalogue()
 
   const [doc, setDoc] = useState<BuildingModel | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -134,9 +124,7 @@ export function useSceneEditorModel() {
   const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null)
   const zoneSeq = useRef(1)
   const [selectedBlocks, setSelectedBlocks] = useState<BlockRef[]>([])
-  const selectedBlock = selectedBlocks.length
-    ? selectedBlocks[selectedBlocks.length - 1]
-    : null
+  const selectedBlock = selectedBlocks.length ? selectedBlocks[selectedBlocks.length - 1] : null
   const setSelectedBlock = useCallback((ref: BlockRef | null) => {
     setSelectedBlocks(ref ? [ref] : [])
   }, [])
@@ -146,15 +134,13 @@ export function useSceneEditorModel() {
   /** Which choice the viewport shows for the selected spot; null follows its default. */
   const [previewVariantKey, setPreviewVariantKey] = useState<string | null>(null)
   /**
-   * What the handles are on: a part by index, the spot itself, or nothing said
-   * yet — which resolves to the first model.
+   * What the handles are on: the spot itself, or the previewed choice's model.
    *
-   * Three states rather than two, because "not chosen" and "the spot" want
-   * different answers. Imported models rarely share an origin, so the model is
-   * what an admin reaches for first and the default belongs there; the spot is
-   * what carries the whole arrangement once the models line up.
+   * The model is the default, because an imported model arrives wherever its
+   * exporter left it and lining it up is the first thing anyone does. The spot
+   * is what carries the whole arrangement once the models line up.
    */
-  const [partChoice, setPartChoice] = useState<number | 'spot' | null>(null)
+  const [movingSpot, setMovingSpot] = useState(false)
   const [roofHidden, setRoofHidden] = useState(true)
   /** Storey the viewport is cut down to, exactly as the visitor would see it. */
   const [previewFloorIndex, setPreviewFloorIndex] = useState<number | null>(null)
@@ -401,10 +387,8 @@ export function useSceneEditorModel() {
   const patchPolygon = (roomIndex: number, update: (vertices: RoomVertex[]) => RoomVertex[]) =>
     patchRoom(roomIndex, (room) => withPolygon(room, update(roomVertices(room))))
 
-  const patchOpenings = (
-    roomIndex: number,
-    update: (openings: RoomOpening[]) => RoomOpening[],
-  ) => patchRoom(roomIndex, (room) => ({ ...room, openings: update(roomOpenings(room.openings)) }))
+  const patchOpenings = (roomIndex: number, update: (openings: RoomOpening[]) => RoomOpening[]) =>
+    patchRoom(roomIndex, (room) => ({ ...room, openings: update(roomOpenings(room.openings)) }))
 
   const addOpening = (roomIndex: number, kind: OpeningKind, side: WallSide, along: number) => {
     const opening: RoomOpening = {
@@ -475,8 +459,14 @@ export function useSceneEditorModel() {
   const removeBlock = (ref: BlockRef) => {
     patchDraft((d) =>
       ref.scope === 'roof'
-        ? writeBlocks(d, roofBlocks(d).filter((_, i) => i !== ref.index))
-        : writeFloors(d, draftFloors(d).filter((_, i) => i !== ref.index)),
+        ? writeBlocks(
+            d,
+            roofBlocks(d).filter((_, i) => i !== ref.index),
+          )
+        : writeFloors(
+            d,
+            draftFloors(d).filter((_, i) => i !== ref.index),
+          ),
     )
     setSelectedBlock(null)
     // Every index above the gap has shifted; nothing is worth guessing here.
@@ -563,8 +553,7 @@ export function useSceneEditorModel() {
   // Held on the document, not in this hook: a level that lived only in the
   // session came back at zero after a reload, and every room drawn afterwards
   // started on the wrong plane.
-  const looseFloorY =
-    typeof draft?.sceneConfig?.floorY === 'number' ? draft.sceneConfig.floorY : 0
+  const looseFloorY = typeof draft?.sceneConfig?.floorY === 'number' ? draft.sceneConfig.floorY : 0
   const drawFloorY = previewedStorey ? previewedStorey.floorY : looseFloorY
 
   const setLooseFloorY = (level: number) =>
@@ -740,8 +729,7 @@ export function useSceneEditorModel() {
   const selectedShell = (
     selectedRoomIndex === null ? null : draft?.rooms?.[selectedRoomIndex]?.shell
   ) as { floorY?: number | null } | null | undefined
-  const floorPlaneY =
-    typeof selectedShell?.floorY === 'number' ? selectedShell.floorY : drawFloorY
+  const floorPlaneY = typeof selectedShell?.floorY === 'number' ? selectedShell.floorY : drawFloorY
 
   const setFloorLevel = (y: number) => {
     const level = Math.round(y * 1000) / 1000
@@ -802,6 +790,23 @@ export function useSceneEditorModel() {
       ),
     }))
 
+  /** Where a choice's model stands, which is the only per-building fact about it. */
+  const patchPlacement = (
+    slotIndex: number,
+    variantIndex: number,
+    update: (placement: PlacementDraft) => PlacementDraft,
+  ) =>
+    patchVariant(slotIndex, variantIndex, (variant) => ({
+      ...variant,
+      placement: update(
+        variant.placement ?? {
+          position: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          yawDeg: 0,
+        },
+      ),
+    }))
+
   /** The variant the viewport is showing for the selected spot. */
   const previewVariantIndex = (() => {
     const variants = selectedSlot?.variants ?? []
@@ -815,21 +820,14 @@ export function useSceneEditorModel() {
   })()
 
   /**
-   * The model wearing the cage, or null when the spot itself has the handles.
+   * Whether the cage is on the previewed choice's model.
    *
-   * Resolved rather than stored, so a choice with models in it always opens
-   * with one under the handles: an admin should not have to say "this one"
-   * before they can move the only thing on the spot. A stale index — the model
-   * was deleted, or the preview stepped to a choice with fewer — falls back to
-   * the first.
+   * Either the spot itself is being positioned, or the model of the choice on
+   * screen is — there is no third thing to choose between now that a choice
+   * owns exactly one model. Resolved rather than stored, so a spot with a
+   * choice on it always opens with something under the handles.
    */
-  const cagedPartIndex = (() => {
-    if (partChoice === 'spot') return null
-
-    const parts = (selectedSlot?.variants ?? [])[previewVariantIndex ?? -1]?.parts ?? []
-    if (parts.length === 0) return null
-    return typeof partChoice === 'number' && partChoice < parts.length ? partChoice : 0
-  })()
+  const cagingVariant = !movingSpot && previewVariantIndex !== null
 
   const addSlot = () => {
     const index = exteriorSlots.length
@@ -864,28 +862,43 @@ export function useSceneEditorModel() {
   }
 
   const addVariant = (slotIndex: number, option: ExteriorOptionRef) => {
+    const key = freeKey(exteriorSlots[slotIndex]?.variants ?? [], 'choice')
+
+    // A choice stores only the option's id, so the viewport reads the model
+    // back out of the catalogue — which has to know about an entry created a
+    // moment ago in the dialog, not just the ones fetched at mount.
+    catalogue.remember(option)
+
     patchSlot(slotIndex, (slot) => {
       const variants = slot.variants ?? []
-      const key = freeKey(variants, 'choice')
 
       return {
         ...slot,
-        // The catalogue's parts are a starting point, copied in with their
-        // offsets so the admin drags from somewhere rather than from nowhere.
-        // Copied rather than linked: tidying the catalogue later must not move
-        // geometry that has already been lined up on a building.
+        // Lands on the spot's own origin. An imported model arrives wherever
+        // its exporter left it, so there is no offset worth guessing: the way
+        // to find out is to see it land and then drag it.
         variants: [
           ...variants,
           {
             key,
             option: option.id,
             nodes: [],
-            parts: option.parts.map((part) => ({ ...part })),
+            placement: {
+              position: { x: 0, y: 0, z: 0 },
+              scale: { x: 1, y: 1, z: 1 },
+              yawDeg: 0,
+            },
           },
         ],
         defaultVariantKey: slot.defaultVariantKey || key,
       }
     })
+
+    // Straight onto the viewport with the handles on it. A ramp is added in
+    // order to stand it somewhere, and having to find it in the list and press
+    // preview first was a step that never had another answer.
+    setPreviewVariantKey(key)
+    setMovingSpot(false)
   }
 
   /** Takes whatever is selected in the outliner into this choice. */
@@ -925,14 +938,16 @@ export function useSceneEditorModel() {
     // reason: it is a place with its own contents.
     spotMode: selectedSlotIndex !== null && selectedRoomIndex === null,
     previewVariantIndex,
-    // Always on a model when the previewed choice has one, so the cage is there
-    // to grab without being asked for first.
-    selectedPartIndex: cagedPartIndex,
+    // The cage is on the previewed choice's model unless the spot itself is
+    // being positioned — there is no longer a third thing to choose between.
+    cagingVariant,
+    exteriorCatalogue: catalogue.options,
+    onReloadExteriorCatalogue: catalogue.reload,
     onAddSlot: addSlot,
     onSelectSlot: (index: number | null) => {
       setSelectedSlotIndex(index)
       setPreviewVariantKey(null)
-      setPartChoice(null)
+      setMovingSpot(false)
     },
     onRemoveSlot: (index: number) => {
       patchSlots((slots) => slots.filter((_, i) => i !== index))
@@ -963,35 +978,7 @@ export function useSceneEditorModel() {
         position: { x: (minX + maxX) / 2, y: minY, z: (minZ + maxZ) / 2 },
       }))
     },
-    onSelectPart: (value: number | 'spot') => setPartChoice(value),
-    // Straight onto the choice, with no offset of its own: an imported model
-    // arrives wherever its exporter left the origin, and the way to find out is
-    // to see it land and then drag it.
-    onAddPart: (slotIndex: number, variantIndex: number, model: { id: number; url?: string | null }) =>
-      patchVariant(slotIndex, variantIndex, (variant) => ({
-        ...variant,
-        parts: [
-          ...(variant.parts ?? []),
-          {
-            model,
-            position: { x: 0, y: 0, z: 0 },
-            scale: { x: 1, y: 1, z: 1 },
-            yawDeg: 0,
-          },
-        ] as VariantDraft['parts'],
-      })),
-    onSetPartModel: (
-      slotIndex: number,
-      variantIndex: number,
-      partIndex: number,
-      model: { id: number; url?: string | null },
-    ) =>
-      patchVariant(slotIndex, variantIndex, (variant) => ({
-        ...variant,
-        parts: (variant.parts ?? []).map((part, i) =>
-          i === partIndex ? ({ ...part, model } as typeof part) : part,
-        ),
-      })),
+    onMoveTheSpot: (moving: boolean) => setMovingSpot(moving),
     onAddVariant: addVariant,
     onRemoveVariant: (slotIndex: number, variantIndex: number) =>
       patchSlot(slotIndex, (slot) => {
@@ -1008,7 +995,7 @@ export function useSceneEditorModel() {
       patchSlot(slotIndex, (slot) => ({ ...slot, defaultVariantKey: variantKey })),
     onPreviewVariant: (key: string | null) => {
       setPreviewVariantKey(key)
-      setPartChoice(null)
+      setMovingSpot(false)
     },
     onClaimNodes: claimNodes,
     onUnclaimNode: (slotIndex: number, variantIndex: number, path: string) =>
@@ -1016,44 +1003,20 @@ export function useSceneEditorModel() {
         ...variant,
         nodes: zoneNodePaths(variant.nodes).filter((claimed) => claimed !== path),
       })),
-    onMovePart: (
+    // One model to a choice, so these say where that model stands rather than
+    // which of several is being moved.
+    onMoveVariant: (slotIndex: number, variantIndex: number, x: number, y: number, z: number) =>
+      patchPlacement(slotIndex, variantIndex, (placement) => ({
+        ...placement,
+        position: { x, y, z },
+      })),
+    onSetVariantYaw: (slotIndex: number, variantIndex: number, yawDeg: number) =>
+      patchPlacement(slotIndex, variantIndex, (placement) => ({ ...placement, yawDeg })),
+    onSetVariantScale: (
       slotIndex: number,
       variantIndex: number,
-      partIndex: number,
-      x: number,
-      y: number,
-      z: number,
-    ) =>
-      patchVariant(slotIndex, variantIndex, (variant) => ({
-        ...variant,
-        parts: (variant.parts ?? []).map((part, i) =>
-          i === partIndex ? { ...part, position: { x, y, z } } : part,
-        ),
-      })),
-    onSetPartYaw: (slotIndex: number, variantIndex: number, partIndex: number, yawDeg: number) =>
-      patchVariant(slotIndex, variantIndex, (variant) => ({
-        ...variant,
-        parts: (variant.parts ?? []).map((part, i) =>
-          i === partIndex ? { ...part, yawDeg } : part,
-        ),
-      })),
-    onSetPartScale: (
-      slotIndex: number,
-      variantIndex: number,
-      partIndex: number,
       scale: { x: number; y: number; z: number },
-    ) =>
-      patchVariant(slotIndex, variantIndex, (variant) => ({
-        ...variant,
-        parts: (variant.parts ?? []).map((part, i) =>
-          i === partIndex ? { ...part, scale } : part,
-        ),
-      })),
-    onRemovePart: (slotIndex: number, variantIndex: number, partIndex: number) =>
-      patchVariant(slotIndex, variantIndex, (variant) => ({
-        ...variant,
-        parts: (variant.parts ?? []).filter((_, i) => i !== partIndex),
-      })),
+    ) => patchPlacement(slotIndex, variantIndex, (placement) => ({ ...placement, scale })),
     floors,
     storeyRoomCounts,
     roomsOffStoreys,
@@ -1061,10 +1024,13 @@ export function useSceneEditorModel() {
     previewFloorName: previewedStorey?.name ?? null,
     previewFloorBaseY: storeyBaseY,
     previewFloorIndex,
-    previewFloorBox: previewFloorIndex === null ? null : boxAt(draft, {
-      scope: 'floor',
-      index: previewFloorIndex,
-    }),
+    previewFloorBox:
+      previewFloorIndex === null
+        ? null
+        : boxAt(draft, {
+            scope: 'floor',
+            index: previewFloorIndex,
+          }),
     dirty,
     saveState,
     onRegisterCameraGetter: (getter: (() => CameraSnapshot | null) | null) => {

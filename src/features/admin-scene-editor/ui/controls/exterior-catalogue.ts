@@ -9,55 +9,42 @@ import type { ExteriorOptionRef } from '../../model/use-scene-editor-model'
 /**
  * The exterior catalogue, for the picker that adds a choice to a spot.
  *
- * Read at depth 1 so each part carries its populated model: the parts are copied
- * into the building on add, and the viewport renders the draft, so it needs the
- * file url in hand rather than an id it would have to resolve again.
+ * Read at depth 1 so each entry carries its populated model: the viewport
+ * renders the draft, so it needs the file url in hand rather than an id it
+ * would have to resolve again.
  */
 export function useExteriorCatalogue() {
   const [options, setOptions] = useState<ExteriorOptionRef[]>([])
 
+  const load = async () => {
+    const response = await fetch('/api/exterior-options?limit=200&depth=1&sort=title', {
+      credentials: 'include',
+    })
+    if (!response.ok) return []
+
+    const page = (await response.json()) as { docs: ExteriorOption[] }
+
+    return page.docs.map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      price: typeof doc.price === 'number' ? doc.price : null,
+      model: doc.model,
+    }))
+  }
+
   useEffect(() => {
     let live = true
 
-    const load = async () => {
-      const response = await fetch('/api/exterior-options?limit=200&depth=1&sort=title', {
-        credentials: 'include',
-      })
-      if (!response.ok) return
+    void load().then((docs) => {
+      if (live) setOptions(docs)
+    })
 
-      const page = (await response.json()) as { docs: ExteriorOption[] }
-      if (!live) return
-
-      setOptions(
-        page.docs.map((doc) => ({
-          id: doc.id,
-          title: doc.title,
-          price: typeof doc.price === 'number' ? doc.price : null,
-          parts: (doc.parts ?? []).map((part) => ({
-            model: part.model,
-            position: {
-              x: part.position?.x ?? 0,
-              y: part.position?.y ?? 0,
-              z: part.position?.z ?? 0,
-            },
-            yawDeg: part.yawDeg ?? 0,
-            // One per axis, and never zero — a zero flattens the copy the
-            // admin is about to place out of existence.
-            scale: {
-              x: part.scale?.x || 1,
-              y: part.scale?.y || 1,
-              z: part.scale?.z || 1,
-            },
-          })),
-        })),
-      )
-    }
-
-    void load()
     return () => {
       live = false
     }
   }, [])
 
-  return options
+  // Handed back so a newly uploaded ramp shows up in the picker without a
+  // reload — the editor creates options without leaving the scene.
+  return { options, reload: () => void load().then(setOptions) }
 }

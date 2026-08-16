@@ -44,12 +44,19 @@ export function useExteriorModel({ building }: { building: BuildingScene }) {
 
   const spots: ExteriorSpotVm[] = useMemo(
     () =>
-      pickable.map((slot) => ({
-        slot,
-        chosen: selectedVariant(slot, selection),
-        open: slot.key === openKey,
-        hovered: slot.key === hoveredSlotKey,
-      })),
+      pickable.flatMap((slot) => {
+        const chosen = selectedVariant(slot, selection)
+        if (!chosen) return []
+
+        return [
+          {
+            slot,
+            chosen,
+            open: slot.key === openKey,
+            hovered: slot.key === hoveredSlotKey,
+          },
+        ]
+      }),
     [pickable, selection, openKey, hoveredSlotKey],
   )
 

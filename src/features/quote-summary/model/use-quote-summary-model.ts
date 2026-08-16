@@ -77,6 +77,7 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
       building.exteriorSlots.flatMap((slot) => {
         if (slot.variants.length < 2) return []
         const variant = selectedVariant(slot, exterior)
+        if (!variant) return []
 
         return [
           {

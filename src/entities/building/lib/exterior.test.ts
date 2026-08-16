@@ -22,7 +22,11 @@ function variant(key: string, nodes: string[] = []): ExteriorVariant {
   }
 }
 
-function slot(key: string, variants: ExteriorVariant[], defaultKey = variants[0].key): ExteriorSlot {
+function slot(
+  key: string,
+  variants: ExteriorVariant[],
+  defaultKey = variants[0]?.key ?? '',
+): ExteriorSlot {
   return {
     key,
     name: key,
@@ -43,22 +47,29 @@ const FRONT = slot('front', [
 
 describe('selectedVariant', () => {
   it('falls back to the spot default with nothing picked', () => {
-    expect(selectedVariant(FRONT, {}).key).toBe('deck-stairs')
+    expect(selectedVariant(FRONT, {})?.key).toBe('deck-stairs')
   })
 
   it('answers with the pick when there is one', () => {
-    expect(selectedVariant(FRONT, { front: 'deck-stairs-ramp' }).key).toBe('deck-stairs-ramp')
+    expect(selectedVariant(FRONT, { front: 'deck-stairs-ramp' })?.key).toBe('deck-stairs-ramp')
   })
 
   // A stale pick outlives the variant it names: the visitor chose, the admin
   // renamed. Showing the default beats showing an empty spot.
   it('ignores a pick that names nothing', () => {
-    expect(selectedVariant(FRONT, { front: 'gone' }).key).toBe('deck-stairs')
+    expect(selectedVariant(FRONT, { front: 'gone' })?.key).toBe('deck-stairs')
   })
 
   it('ignores a default that names nothing either', () => {
     const broken = slot('back', [variant('a'), variant('b')], 'missing')
-    expect(selectedVariant(broken, {}).key).toBe('a')
+    expect(selectedVariant(broken, {})?.key).toBe('a')
+  })
+
+  // The state a spot is in between being added and being given its first
+  // choice. The mapping drops these before the client ever sees one, but the
+  // editor reads the draft straight, and this used to throw there.
+  it('answers for a spot with nothing to choose from', () => {
+    expect(selectedVariant(slot('fresh', [], ''), {})).toBeNull()
   })
 })
 
@@ -96,6 +107,15 @@ describe('hiddenExteriorNodes', () => {
 
   it('has nothing to say about a building with no spots', () => {
     expect(hiddenExteriorNodes([], {})).toEqual([])
+  })
+
+  // An empty spot alongside a real one: the editor renders both the moment
+  // "+ Spot" is pressed, and the whole scene came down with it.
+  it('steps over a spot that has no choices yet', () => {
+    const fresh = slot('fresh', [], '')
+    expect(new Set(hiddenExteriorNodes([FRONT, fresh], { front: 'deck-stairs' }))).toEqual(
+      new Set(['canopy', 'ramp']),
+    )
   })
 })
 

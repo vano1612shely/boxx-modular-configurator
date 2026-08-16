@@ -4,18 +4,25 @@ import type { ExteriorSlot, ExteriorVariant } from '../model/types'
 export type ExteriorSelection = Record<string, string>
 
 /**
- * The choice in force at a spot.
+ * The choice in force at a spot, or null at one with nothing to choose from.
  *
- * Never null: a spot with no variants never reaches the client, and a selection
- * naming a variant that no longer exists falls back to the default rather than
- * leaving the spot showing nothing.
+ * A selection naming a variant that no longer exists falls back to the default
+ * rather than leaving the spot showing nothing.
+ *
+ * Null is reachable only where a spot is being built: the mapping drops empty
+ * ones, so the client never sees one. It is answered for anyway because the
+ * editor reads the draft directly, and a spot has no choices for as long as it
+ * takes to add the first — which was long enough to crash on.
  */
-export function selectedVariant(slot: ExteriorSlot, selection: ExteriorSelection): ExteriorVariant {
+export function selectedVariant(
+  slot: ExteriorSlot,
+  selection: ExteriorSelection,
+): ExteriorVariant | null {
   const key = selection[slot.key]
   const picked = key === undefined ? undefined : slot.variants.find((v) => v.key === key)
   if (picked) return picked
 
-  return slot.variants.find((v) => v.key === slot.defaultVariantKey) ?? slot.variants[0]
+  return slot.variants.find((v) => v.key === slot.defaultVariantKey) ?? slot.variants[0] ?? null
 }
 
 /**
@@ -32,7 +39,7 @@ export function revealedNodes(
 ): Set<string> {
   const revealed = new Set<string>()
   for (const slot of slots) {
-    for (const path of selectedVariant(slot, selection).nodes) revealed.add(path)
+    for (const path of selectedVariant(slot, selection)?.nodes ?? []) revealed.add(path)
   }
   return revealed
 }

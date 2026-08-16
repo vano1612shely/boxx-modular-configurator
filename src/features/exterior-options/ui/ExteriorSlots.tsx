@@ -192,13 +192,12 @@ export function ExteriorSlots({ building }: { building: BuildingScene }) {
 
   return (
     <For each={building.exteriorSlots} getKey={(slot) => slot.key}>
-      {(slot) => (
-        <ExteriorSpot
-          slot={slot}
-          variant={selectedVariant(slot, selection)}
-          resolve={resolve}
-        />
-      )}
+      {(slot) => {
+        const variant = selectedVariant(slot, selection)
+        if (!variant) return null
+
+        return <ExteriorSpot slot={slot} variant={variant} resolve={resolve} />
+      }}
     </For>
   )
 }

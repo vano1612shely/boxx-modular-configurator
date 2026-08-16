@@ -1,2 +1,2 @@
 export { useConfiguration } from './model/store'
-export type { PlacedPackage } from './model/types'
+export type { DragPose, PlacedPackage } from './model/types'

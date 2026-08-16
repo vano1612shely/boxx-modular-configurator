@@ -25,7 +25,6 @@ import {
   Raycaster,
   Vector2,
   Vector3,
-
   type Group,
   type Object3D,
 } from 'three'
@@ -48,6 +47,7 @@ import { FloatingBar, Pill } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
 import { setSceneCursor } from '@/shared/ui/scene-cursor'
 
+import { framePose } from '../lib/drag-pose'
 import { collidesWithAny } from '../lib/placement-geometry'
 import { FLOOR_INSETS, toolbarPositioner } from '../lib/toolbar-position'
 import { measureInsets, readChrome, type Insets } from '../lib/scene-insets'
@@ -135,13 +135,11 @@ export function PlacedPackages({ building, packages }: Props) {
   )
   // Furniture on a storey that has been cut away would otherwise hang in the air.
   const roomsOnView = useMemo(
-    () => new Set(roomsOnFloor(building.rooms, building.floors, selectedFloorKey).map((r) => r.key)),
+    () =>
+      new Set(roomsOnFloor(building.rooms, building.floors, selectedFloorKey).map((r) => r.key)),
     [building.rooms, building.floors, selectedFloorKey],
   )
-  const neighbours = useMemo(
-    () => obstaclesByRoom(placed, packagesById),
-    [placed, packagesById],
-  )
+  const neighbours = useMemo(() => obstaclesByRoom(placed, packagesById), [placed, packagesById])
 
   return (
     <>
@@ -342,12 +340,17 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const movePackage = useConfiguration((s) => s.movePackage)
   const removePackage = useConfiguration((s) => s.removePackage)
   const setInteractionLock = useConfiguratorSession((s) => s.setInteractionLock)
+  const panelCollapsed = useConfiguratorSession((s) => s.panelCollapsed)
 
-  const dragValid = useConfiguration((s) => s.dragValid)
+  // Asked about this piece rather than read wholesale: validity is a statement
+  // about whichever piece is in the air, and subscribing to the flag itself made
+  // every other piece in the room re-render each time that piece crossed a wall.
+  const isInvalid = useConfiguration(
+    (s) => s.draggingInstanceId === placement.instanceId && !s.dragValid,
+  )
 
   const isSelected = selectedInstanceId === placement.instanceId
   const isDragging = draggingInstanceId === placement.instanceId
-  const isInvalid = isDragging && !dragValid
 
   // Two more deep clones of the model, and it is only ever drawn around the
   // item under the pointer — building one per placement meant leaving a room
@@ -406,19 +409,27 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
     damp(group.scale, 'y', 1, POP_IN, delta)
     damp(group.scale, 'z', 1, POP_IN, delta)
 
-    // Under the finger it goes exactly where the finger is. The easing below is
-    // for moves the visitor did not make by hand — a turn nudging a piece off a
+    // The live pose is read from the store rather than taken off a prop: it is
+    // rewritten on every pointer move, and putting it through React would
+    // re-render the panel, the quote and the bar for a change nothing outside
+    // this mesh can see. Null means leave the piece where it stands — see
+    // `framePose` for the two frames of a drag where that is the right answer.
+    const pose = framePose(placement, isDragging, useConfiguration.getState().dragPose)
+    if (!pose) return
+
+    // Under the finger it goes exactly where the finger is. The easing is for
+    // moves the visitor did not make by hand — a turn nudging a piece off a
     // wall, a blocked drag being put back — where a jump would read as a glitch.
     // Applied to a drag it only added lag to a position that was already right.
-    if (isDragging) {
-      group.position.x = placement.x
-      group.position.z = placement.z
+    if (pose.snap) {
+      group.position.x = pose.x
+      group.position.z = pose.z
     } else {
-      damp(group.position, 'x', placement.x, FOLLOW, delta)
-      damp(group.position, 'z', placement.z, FOLLOW, delta)
+      damp(group.position, 'x', pose.x, FOLLOW, delta)
+      damp(group.position, 'z', pose.z, FOLLOW, delta)
     }
     group.position.y = floorY
-    dampAngle(rotation.rotation, 'y', MathUtils.degToRad(placement.rotationYDeg), TURN, delta)
+    dampAngle(rotation.rotation, 'y', MathUtils.degToRad(pose.rotationYDeg), TURN, delta)
   })
 
   const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
@@ -443,9 +454,19 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const insets = useMemo<Insets>(() => ({ ...FLOOR_INSETS }), [])
   useEffect(() => {
     if (!isSelected) return
-    const { size, panels } = readChrome(domElement)
-    Object.assign(insets, measureInsets(size, panels, FLOOR_INSETS))
-  }, [isSelected, domElement, viewport, insets])
+
+    const read = () => {
+      const { size, panels } = readChrome(domElement)
+      Object.assign(insets, measureInsets(size, panels, FLOOR_INSETS))
+    }
+
+    read()
+    // Shrinking the sidebar to its rail hands back a third of the screen, and
+    // the width it hands it back over is animated: read again once it has
+    // settled, or the bar goes on avoiding a panel that is no longer there.
+    const settled = setTimeout(read, 350)
+    return () => clearTimeout(settled)
+  }, [isSelected, domElement, viewport, insets, panelCollapsed])
 
   // Memoised on the measurements rather than on the footprint object, which is
   // rebuilt every render: the positioner carries the side it last reported and
@@ -520,15 +541,15 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
         </group>
         <Show when={isSelected && outline ? outline : null}>
           {(shells) => (
-          <For each={shells.layers} getKey={(_, index) => index}>
-            {(layer) => (
-              // Scaled by a group: the shell carries the recentring offset in
-              // its own transform, which scaling it directly would multiply too.
-              <group scale={layer.scale}>
-                <primitive object={layer.shell} />
-              </group>
-            )}
-          </For>
+            <For each={shells.layers} getKey={(_, index) => index}>
+              {(layer) => (
+                // Scaled by a group: the shell carries the recentring offset in
+                // its own transform, which scaling it directly would multiply too.
+                <group scale={layer.scale}>
+                  <primitive object={layer.shell} />
+                </group>
+              )}
+            </For>
           )}
         </Show>
       </group>
@@ -679,18 +700,16 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
 
   const endDrag = () => {
     const state = useConfiguration.getState()
-    const dragging = state.draggingInstanceId
 
-    if (dragging && !state.dragValid && lastValidRef.current) {
-      const pose = lastValidRef.current
-      state.movePackage(dragging, pose.x, pose.z)
-      state.rotatePackage(dragging, pose.rotationYDeg)
-    }
+    // Where it actually landed, or the last place it was allowed to be. The
+    // configuration is written once, here — everything before this was the
+    // frame loop's business alone.
+    const landed = state.dragValid ? state.dragPose : lastValidRef.current
+    state.dropDrag(landed)
 
     lastValidRef.current = null
     freeRotationRef.current = null
     dragFloorRef.current = null
-    state.endDrag()
     useConfiguratorSession.getState().setInteractionLock(false)
     setSceneCursor('default')
   }
@@ -737,12 +756,7 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
       dragFloorRef.current.region,
     )
 
-    const obstacles = obstaclesFor(
-      state.placed,
-      packages,
-      placement.roomKey,
-      placement.instanceId,
-    )
+    const obstacles = obstaclesFor(state.placed, packages, placement.roomKey, placement.instanceId)
 
     const valid = !collidesWithAny(
       { x: snapped.x, z: snapped.z, rotationYDeg: snapped.rotationYDeg, footprint },
@@ -753,10 +767,14 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
       lastValidRef.current = { x: snapped.x, z: snapped.z, rotationYDeg: snapped.rotationYDeg }
     }
 
-    state.movePackage(dragging, snapped.x, snapped.z)
-    if (snapped.rotationYDeg !== placement.rotationYDeg) {
-      state.rotatePackage(dragging, snapped.rotationYDeg)
-    }
+    // Not into `placed`: the mesh under the finger reads this in the frame loop,
+    // and the configuration is only written when the piece is put down.
+    state.setDragPose({
+      instanceId: dragging,
+      x: snapped.x,
+      z: snapped.z,
+      rotationYDeg: snapped.rotationYDeg,
+    })
     state.setDragValid(valid)
   }
 

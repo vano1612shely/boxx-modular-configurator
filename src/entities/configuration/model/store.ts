@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 import { uniqueId } from '@/shared/lib'
 
-import type { PlacedPackage } from './types'
+import type { DragPose, PlacedPackage } from './types'
 
 type ConfigurationState = {
   placed: PlacedPackage[]
@@ -17,6 +17,17 @@ type ConfigurationState = {
   exterior: Record<string, string>
   selectedInstanceId: string | null
   draggingInstanceId: string | null
+  /**
+   * Where the piece under the finger is right now, or null.
+   *
+   * Deliberately not written into `placed`. A drag produces a pose per pointer
+   * move, and `placed` is the configuration itself — the furniture panel, the
+   * quote and the view bar all read it, so rewriting it sixty times a second
+   * re-rendered the entire screen for a change only one mesh in the canvas cares
+   * about. That mesh reads this imperatively in the frame loop, and nothing
+   * re-renders until the piece is put down.
+   */
+  dragPose: DragPose | null
   /** False while the dragged package overlaps another one or leaves its room. */
   dragValid: boolean
   setExteriorVariant: (slotKey: string, variantKey: string) => void
@@ -26,7 +37,9 @@ type ConfigurationState = {
   rotatePackage: (instanceId: string, rotationYDeg: number) => void
   selectPackage: (instanceId: string | null) => void
   startDrag: (instanceId: string) => void
-  endDrag: () => void
+  setDragPose: (pose: DragPose) => void
+  /** Puts the dragged piece down at `pose`, or back where it was when null. */
+  dropDrag: (pose: Omit<DragPose, 'instanceId'> | null) => void
   setDragValid: (valid: boolean) => void
   clear: () => void
 }
@@ -36,6 +49,7 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
   exterior: {},
   selectedInstanceId: null,
   draggingInstanceId: null,
+  dragPose: null,
   dragValid: true,
 
   setExteriorVariant: (slotKey, variantKey) =>
@@ -63,16 +77,42 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
 
   rotatePackage: (instanceId, rotationYDeg) =>
     set((state) => ({
-      placed: state.placed.map((p) =>
-        p.instanceId === instanceId ? { ...p, rotationYDeg } : p,
-      ),
+      placed: state.placed.map((p) => (p.instanceId === instanceId ? { ...p, rotationYDeg } : p)),
     })),
 
   selectPackage: (instanceId) => set({ selectedInstanceId: instanceId }),
   startDrag: (instanceId) =>
-    set({ draggingInstanceId: instanceId, selectedInstanceId: instanceId, dragValid: true }),
-  endDrag: () => set({ draggingInstanceId: null, dragValid: true }),
+    set({
+      draggingInstanceId: instanceId,
+      selectedInstanceId: instanceId,
+      dragPose: null,
+      dragValid: true,
+    }),
+  setDragPose: (dragPose) => set({ dragPose }),
+  // One write for the whole landing: the pose, the end of the drag and the
+  // clearing of the live one. Three would be three renders of everything that
+  // reads the configuration, for one thing happening.
+  dropDrag: (pose) =>
+    set((state) => ({
+      placed:
+        pose && state.draggingInstanceId
+          ? state.placed.map((p) =>
+              p.instanceId === state.draggingInstanceId
+                ? { ...p, x: pose.x, z: pose.z, rotationYDeg: pose.rotationYDeg }
+                : p,
+            )
+          : state.placed,
+      draggingInstanceId: null,
+      dragPose: null,
+      dragValid: true,
+    })),
   setDragValid: (valid) => set({ dragValid: valid }),
   clear: () =>
-    set({ placed: [], exterior: {}, selectedInstanceId: null, draggingInstanceId: null }),
+    set({
+      placed: [],
+      exterior: {},
+      selectedInstanceId: null,
+      draggingInstanceId: null,
+      dragPose: null,
+    }),
 }))

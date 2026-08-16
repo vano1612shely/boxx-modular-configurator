@@ -1,6 +1,5 @@
 'use client'
 
-import { useGLTF } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Box3, type Material, type Mesh, type Object3D } from 'three'
@@ -19,6 +18,7 @@ import { useConfiguratorSession } from '@/entities/configurator-session'
 
 import { createNodeResolver } from '@/shared/three/node-path'
 import { applyOverviewClipping } from '@/shared/three/overview-clipping'
+import { useModel } from '@/shared/three/use-model'
 
 type Props = {
   building: BuildingScene
@@ -48,7 +48,7 @@ function longestSide(box: Box3): number {
 }
 
 export function BuildingModel({ building }: Props) {
-  const { scene } = useGLTF(building.modelUrl, false, true)
+  const scene = useModel(building.modelUrl)
   // Two, not one: with a single storey there is nothing the picker can cut to,
   // and the clipping planes would be six tests a fragment for no cut.
   const cuttable = building.floors.length >= 2

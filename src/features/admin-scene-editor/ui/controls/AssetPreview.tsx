@@ -3,7 +3,6 @@
 // Before any Canvas: r3f builds a THREE.Clock the moment a store is created.
 import '@/shared/three/quiet-deprecations'
 
-import { useGLTF } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useMemo } from 'react'
 import { createPortal } from 'react-dom'
@@ -13,6 +12,7 @@ import { Show } from '@/shared/ui/control-flow'
 
 import { tone } from '../editor-styles'
 import type { AssetCollection, AssetRef } from './asset-library'
+import { useModel } from '@/shared/three/use-model'
 
 const SIZE = 190
 
@@ -23,7 +23,7 @@ type Props = {
 }
 
 function ModelBody({ url }: { url: string }) {
-  const { scene } = useGLTF(previewUrl(url), false, true)
+  const scene = useModel(previewUrl(url))
   const object = useMemo(() => scene.clone(true), [scene])
 
   return (

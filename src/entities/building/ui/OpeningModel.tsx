@@ -7,6 +7,7 @@ import { Box3, MathUtils, Vector3, type Mesh } from 'three'
 import type { OpeningPlacement } from '../lib/room-shell'
 import type { OpeningFit, OpeningModelStyle, Room } from '../model/types'
 import { OPENING_KINDS } from '../model/types'
+import { useModel } from '@/shared/three/use-model'
 
 type Props = {
   placement: OpeningPlacement
@@ -15,7 +16,7 @@ type Props = {
 
 export function OpeningModel({ placement, style }: Props) {
   // The URL is checked by the caller; a null one never reaches this component.
-  const { scene } = useGLTF(style.url as string, false, true)
+  const scene = useModel(style.url as string)
 
   const model = useMemo(() => {
     const object = scene.clone(true)

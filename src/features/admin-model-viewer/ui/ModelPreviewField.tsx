@@ -4,16 +4,17 @@
 import '@/shared/three/quiet-deprecations'
 
 import { useFormFields } from '@payloadcms/ui'
-import { CameraControls, useGLTF } from '@react-three/drei'
+import { CameraControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 
 import { assetUrl } from '@/shared/lib'
 import { FitOnce, ModelStage, previewUrl } from '@/shared/three/ModelStage'
+import { useModel } from '@/shared/three/use-model'
 
 function Preview({ url }: { url: string }) {
   // Separate cache key from the Scene Editor's copy of the same building.
-  const { scene } = useGLTF(previewUrl(url), false, true)
+  const scene = useModel(previewUrl(url))
   const object = useMemo(() => scene.clone(true), [scene])
 
   return (

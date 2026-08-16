@@ -1,6 +1,5 @@
 'use client'
 
-import { useGLTF } from '@react-three/drei'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Box3, BoxGeometry, DoubleSide, MathUtils, Vector3, type Mesh, type Ray } from 'three'
 
@@ -11,6 +10,7 @@ import { slotToWorld } from '../../lib/slot-drag'
 import type { SceneEditorVm } from '../../model/use-scene-editor-model'
 import { tone } from '../editor-styles'
 import { HandlePoint, SURFACE_PRIORITY, type RegisterHandle } from './handles'
+import { useModel } from '@/shared/three/use-model'
 
 /** Same colours the roof and the volumes use, so the same gesture looks the same. */
 const MOVE_COLOR = '#ffffff'
@@ -40,7 +40,7 @@ function PartModel({
   index: number
   onMeasured: (index: number, box: Box3) => void
 }) {
-  const { scene } = useGLTF(url, false, true)
+  const scene = useModel(url)
 
   const object = useMemo(() => {
     const clone = scene.clone(true)

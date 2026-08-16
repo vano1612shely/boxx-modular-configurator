@@ -1,12 +1,12 @@
 'use client'
 
-import { useGLTF } from '@react-three/drei'
 import { useEffect, useMemo } from 'react'
 import { Box3, MathUtils, Vector3, type Ray } from 'three'
 
 import type { Extent } from '@/entities/building'
 
 import { HandlePoint, type RegisterHandle } from './handles'
+import { useModel } from '@/shared/three/use-model'
 
 /** Matches the roof volumes' own handles, so the same gesture looks the same. */
 const MOVE_COLOR = '#ffffff'
@@ -37,7 +37,7 @@ export function RoofModelGizmo({
   onStartMove,
   onStartHeight,
 }: Props) {
-  const { scene } = useGLTF(url, false, true)
+  const scene = useModel(url)
   const object = useMemo(() => scene.clone(true), [scene])
 
   const box = useMemo(() => {

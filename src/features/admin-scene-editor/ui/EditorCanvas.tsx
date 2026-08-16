@@ -3,7 +3,7 @@
 // Before any Canvas: r3f builds a THREE.Clock the moment a store is created.
 import '@/shared/three/quiet-deprecations'
 
-import { CameraControls, Edges, Grid, Line, OrthographicCamera, useGLTF } from '@react-three/drei'
+import { CameraControls, Edges, Grid, Line, OrthographicCamera } from '@react-three/drei'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import CameraControlsImpl from 'camera-controls'
 import {
@@ -82,6 +82,7 @@ import {
 } from './canvas/handles'
 import { EditorMenuPopup, type EditorMenuItem, type EditorMenuState } from './EditorMenu'
 import { blockMenuItems, nodeMenuItems } from './menu-items'
+import { useModel } from '@/shared/three/use-model'
 
 type VmProps = { vm: SceneEditorVm }
 
@@ -251,7 +252,7 @@ function BuildingGlb({
   resolveRef: MutableRefObject<(path: string) => Object3D | null>
   onPick: (event: ThreeEvent<MouseEvent>) => void
 }) {
-  const { scene } = useGLTF(vm.modelUrl ?? '', false, true)
+  const scene = useModel(vm.modelUrl ?? '')
   const preparedRef = useRef<Object3D>(null)
 
   const { prepared, controller, resolveNode } = useMemo(() => {

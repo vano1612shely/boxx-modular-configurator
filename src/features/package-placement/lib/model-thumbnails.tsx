@@ -3,12 +3,12 @@
 // Before any Canvas: r3f builds a THREE.Clock the moment a store is created.
 import '@/shared/three/quiet-deprecations'
 
-import { useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Box3, MathUtils, Vector3, type PerspectiveCamera } from 'three'
 
 import { ModelStage } from '@/shared/three/ModelStage'
+import { useModel } from '@/shared/three/use-model'
 
 const SIZE = 256
 const cache = new Map<string, string>()
@@ -72,7 +72,7 @@ export function ModelThumbnailFactory({ urls }: { urls: ReadonlyArray<string> })
 const DIRECTION = new Vector3(1, 0.75, 1.35).normalize()
 
 function Shot({ url, onDone }: { url: string; onDone: () => void }) {
-  const { scene } = useGLTF(url, false, true)
+  const scene = useModel(url)
   const gl = useThree((state) => state.gl)
   const camera = useThree((state) => state.camera) as PerspectiveCamera
 

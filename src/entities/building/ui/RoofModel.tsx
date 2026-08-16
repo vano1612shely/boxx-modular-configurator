@@ -1,14 +1,14 @@
 'use client'
 
-import { useGLTF } from '@react-three/drei'
 import { useMemo } from 'react'
 import { MathUtils, type Mesh, type Object3D } from 'three'
 
 import type { RoofConfig } from '../model/types'
+import { useModel } from '@/shared/three/use-model'
 
 // Cloned because the loader cache hands every caller the same scene instance.
 export function RoofModel({ roof, visible = true }: { roof: RoofConfig; visible?: boolean }) {
-  const { scene } = useGLTF(roof.url, false, true)
+  const scene = useModel(roof.url)
 
   const object = useMemo(() => {
     const clone = scene.clone(true)

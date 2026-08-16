@@ -1,6 +1,6 @@
 'use client'
 
-import { Html, useGLTF } from '@react-three/drei'
+import { Html } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import { MathUtils, Mesh } from 'three'
 
@@ -11,12 +11,13 @@ import { useConfiguratorSession } from '@/entities/configurator-session'
 import { cn } from '@/shared/lib'
 import { Chip } from '@/shared/ui/boxx'
 import { For } from '@/shared/ui/control-flow'
+import { useModel } from '@/shared/three/use-model'
 
 /** Head height over the spot, so the marker reads as belonging to it. */
 const LABEL_LIFT = 1.1
 
 function PartModel({ part }: { part: ExteriorPart }) {
-  const { scene } = useGLTF(part.url, false, true)
+  const scene = useModel(part.url)
 
   const object = useMemo(() => {
     const clone = scene.clone(true)

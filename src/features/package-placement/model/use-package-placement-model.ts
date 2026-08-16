@@ -188,18 +188,28 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     if (zoneKey !== null && !zone) return false
 
     const centroid = polygonCentroid(zone ? zone.polygon : room.floorPolygon)
-    const rotationYDeg = 0
     const region = reachableFloor(room, pkg.compatibleRoomTypes, centroid.x, centroid.z)
 
     const others = placedInFocusedRoom.flatMap((p) =>
       p.pkg ? [{ x: p.x, z: p.z, rotationYDeg: p.rotationYDeg, footprint: p.pkg.footprint }] : [],
     )
 
-    const spot = findFreeSpotInRegion(centroid, pkg.footprint, rotationYDeg, region, others)
-    if (!spot) return false
+    // Tried the way it faces first, then turned. A long package in a narrow
+    // kitchen goes in sideways or not at all, and asking only for the way it
+    // happens to face made a piece that plainly fits impossible to add — the
+    // room was told it had no space for something it could hold perfectly well.
+    //
+    // Two angles, not four: the floor a rectangle covers is the same turned
+    // half round, so 180 and 270 could only ever fail wherever 0 and 90 did.
+    for (const rotationYDeg of [0, 90]) {
+      const spot = findFreeSpotInRegion(centroid, pkg.footprint, rotationYDeg, region, others)
+      if (!spot) continue
 
-    addPackage({ packageId: pkg.id, roomKey: room.key, ...spot, rotationYDeg })
-    return true
+      addPackage({ packageId: pkg.id, roomKey: room.key, ...spot, rotationYDeg })
+      return true
+    }
+
+    return false
   }
 
   return {

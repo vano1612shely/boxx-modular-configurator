@@ -70,8 +70,10 @@ export interface Config {
     regions: Region;
     'building-lines': BuildingLine;
     'building-models': BuildingModel;
+    'room-types': RoomType;
     'exterior-options': ExteriorOption;
     'furniture-packages': FurniturePackage;
+    'furniture-tiers': FurnitureTier;
     quotes: Quote;
     images: Image;
     models: Model;
@@ -87,8 +89,10 @@ export interface Config {
     regions: RegionsSelect<false> | RegionsSelect<true>;
     'building-lines': BuildingLinesSelect<false> | BuildingLinesSelect<true>;
     'building-models': BuildingModelsSelect<false> | BuildingModelsSelect<true>;
+    'room-types': RoomTypesSelect<false> | RoomTypesSelect<true>;
     'exterior-options': ExteriorOptionsSelect<false> | ExteriorOptionsSelect<true>;
     'furniture-packages': FurniturePackagesSelect<false> | FurniturePackagesSelect<true>;
+    'furniture-tiers': FurnitureTiersSelect<false> | FurnitureTiersSelect<true>;
     quotes: QuotesSelect<false> | QuotesSelect<true>;
     images: ImagesSelect<false> | ImagesSelect<true>;
     models: ModelsSelect<false> | ModelsSelect<true>;
@@ -396,7 +400,7 @@ export interface BuildingModel {
     | {
         key: string;
         name: string;
-        roomType: 'office' | 'classroom' | 'conference' | 'kitchen' | 'restroom' | 'lounge' | 'hallway' | 'other';
+        roomType: number | RoomType;
         /**
          * Floor area in ft². Empty means it is worked out from the outline below — fill it in only when you have a better figure than the trace.
          */
@@ -675,6 +679,25 @@ export interface ExteriorOption {
   createdAt: string;
 }
 /**
+ * What rooms can be, and what furniture can be offered for. Used by building models and by furniture packages.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "room-types".
+ */
+export interface RoomType {
+  id: number;
+  /**
+   * Shown in the admin and to the visitor.
+   */
+  name: string;
+  /**
+   * Stable key, e.g. "kitchen". Rooms and packages are matched on this, so changing it on a type already in use breaks that match.
+   */
+  slug: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Tileable surface textures (walls, floors, ceilings, doors, windows). Re-encoded to webp and capped at 2048px on upload.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -717,8 +740,10 @@ export interface Texture {
 export interface FurniturePackage {
   id: number;
   title: string;
-  family: 'office' | 'conference' | 'kitchen' | 'seating' | 'other';
-  tier: 'core' | 'plus';
+  /**
+   * The grade shown on the package card.
+   */
+  tier?: (number | null) | FurnitureTier;
   model: number | Model;
   thumbnail?: (number | null) | Image;
   /**
@@ -736,15 +761,29 @@ export interface FurniturePackage {
   /**
    * Where this package is offered at all. Empty means every room.
    */
-  compatibleRoomTypes?:
-    ('office' | 'classroom' | 'conference' | 'kitchen' | 'restroom' | 'lounge' | 'hallway' | 'other')[] | null;
+  compatibleRoomTypes?: (number | RoomType)[] | null;
   /**
    * Where it is offered first. In these rooms it appears under "Recommended", above everything else — it does not change where the package can go.
    */
-  recommendedFor?:
-    ('office' | 'classroom' | 'conference' | 'kitchen' | 'restroom' | 'lounge' | 'hallway' | 'other')[] | null;
+  recommendedFor?: (number | RoomType)[] | null;
   compatibleLines?: (number | BuildingLine)[] | null;
   regions?: (number | Region)[] | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Grades a furniture package can be offered at, shown on its card.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "furniture-tiers".
+ */
+export interface FurnitureTier {
+  id: number;
+  name: string;
+  /**
+   * Stable key, e.g. "core".
+   */
+  slug: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -842,12 +881,20 @@ export interface PayloadLockedDocument {
         value: number | BuildingModel;
       } | null)
     | ({
+        relationTo: 'room-types';
+        value: number | RoomType;
+      } | null)
+    | ({
         relationTo: 'exterior-options';
         value: number | ExteriorOption;
       } | null)
     | ({
         relationTo: 'furniture-packages';
         value: number | FurniturePackage;
+      } | null)
+    | ({
+        relationTo: 'furniture-tiers';
+        value: number | FurnitureTier;
       } | null)
     | ({
         relationTo: 'quotes';
@@ -1189,6 +1236,16 @@ export interface BuildingModelsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "room-types_select".
+ */
+export interface RoomTypesSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "exterior-options_select".
  */
 export interface ExteriorOptionsSelect<T extends boolean = true> {
@@ -1206,7 +1263,6 @@ export interface ExteriorOptionsSelect<T extends boolean = true> {
  */
 export interface FurniturePackagesSelect<T extends boolean = true> {
   title?: T;
-  family?: T;
   tier?: T;
   model?: T;
   thumbnail?: T;
@@ -1222,6 +1278,16 @@ export interface FurniturePackagesSelect<T extends boolean = true> {
   recommendedFor?: T;
   compatibleLines?: T;
   regions?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "furniture-tiers_select".
+ */
+export interface FurnitureTiersSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
   updatedAt?: T;
   createdAt?: T;
 }

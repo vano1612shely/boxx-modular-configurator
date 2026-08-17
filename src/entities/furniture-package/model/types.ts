@@ -8,8 +8,8 @@ export type PackageFootprint = {
 export type FurniturePackageEntity = {
   id: number
   title: string
-  family: 'office' | 'conference' | 'kitchen' | 'seating' | 'other'
-  tier: 'core' | 'plus'
+  /** The grade shown on the card, as named in the catalogue. Null if unset. */
+  tier: string | null
   modelUrl: string
   thumbnailUrl: string | null
   price: number | null

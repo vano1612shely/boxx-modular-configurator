@@ -1,13 +1,12 @@
 import type { CollectionConfig } from 'payload'
 
-import { ROOM_TYPE_OPTIONS } from '../../shared/room-types'
 import { measureFootprint } from '../hooks/measure-footprint'
 
 export const FurniturePackages: CollectionConfig = {
   slug: 'furniture-packages',
   admin: {
     group: 'Catalog',
-    defaultColumns: ['title', 'family', 'tier', 'price', 'updatedAt'],
+    defaultColumns: ['title', 'tier', 'price', 'updatedAt'],
     useAsTitle: 'title',
     description:
       'Furniture packages placed as whole groups. Compatibility controls where they are offered.',
@@ -21,31 +20,10 @@ export const FurniturePackages: CollectionConfig = {
   fields: [
     { name: 'title', type: 'text', required: true },
     {
-      type: 'row',
-      fields: [
-        {
-          name: 'family',
-          type: 'select',
-          required: true,
-          options: [
-            { label: 'Office', value: 'office' },
-            { label: 'Conference', value: 'conference' },
-            { label: 'Kitchen', value: 'kitchen' },
-            { label: 'Seating / Lounge', value: 'seating' },
-            { label: 'Other', value: 'other' },
-          ],
-        },
-        {
-          name: 'tier',
-          type: 'select',
-          required: true,
-          defaultValue: 'core',
-          options: [
-            { label: 'Core', value: 'core' },
-            { label: 'Plus', value: 'plus' },
-          ],
-        },
-      ],
+      name: 'tier',
+      type: 'relationship',
+      relationTo: 'furniture-tiers',
+      admin: { description: 'The grade shown on the package card.' },
     },
     {
       name: 'model',
@@ -90,18 +68,18 @@ export const FurniturePackages: CollectionConfig = {
     },
     {
       name: 'compatibleRoomTypes',
-      type: 'select',
+      type: 'relationship',
+      relationTo: 'room-types',
       hasMany: true,
-      options: [...ROOM_TYPE_OPTIONS],
       admin: {
         description: 'Where this package is offered at all. Empty means every room.',
       },
     },
     {
       name: 'recommendedFor',
-      type: 'select',
+      type: 'relationship',
+      relationTo: 'room-types',
       hasMany: true,
-      options: [...ROOM_TYPE_OPTIONS],
       admin: {
         description:
           'Where it is offered first. In these rooms it appears under "Recommended", above ' +

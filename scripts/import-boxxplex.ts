@@ -243,7 +243,28 @@ async function prepare(sourcePath: string): Promise<{ glb: Buffer; restroom: Per
   return { glb, restroom }
 }
 
+/**
+ * The id of a room type by its key, since rooms point at the catalogue now.
+ *
+ * Throws rather than guessing: an import that quietly typed every room as
+ * whatever came first would be worse than one that stops and says the
+ * catalogue is missing a type it needs.
+ */
+async function roomTypeIds(payload: Payload) {
+  const types = await payload.find({ collection: 'room-types', limit: 200, depth: 0 })
+  const bySlug = new Map(types.docs.map((type) => [type.slug, type.id]))
+
+  return (slug: string) => {
+    const id = bySlug.get(slug)
+    if (id === undefined) {
+      throw new Error(`No room type "${slug}" in the catalogue — add it before importing.`)
+    }
+    return id
+  }
+}
+
 async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
+  const roomType = await roomTypeIds(payload)
   const existing = await payload.find({
     collection: 'building-models',
     where: { title: { equals: 'BOXXPlex — 4 offices' } },
@@ -307,7 +328,7 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
         {
           key: 'office-1',
           name: 'Office 1',
-          roomType: 'office',
+          roomType: roomType('office'),
           floorPolygon: [
             { x: -3.45, z: -8.2, side: 'w1' },
             { x: -0.05, z: -8.2, side: 'w2' },
@@ -328,7 +349,7 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
         {
           key: 'office-2',
           name: 'Office 2',
-          roomType: 'office',
+          roomType: roomType('office'),
           floorPolygon: [
             { x: 0.05, z: -8.2, side: 'w1' },
             { x: 3.45, z: -8.2, side: 'w2' },
@@ -349,7 +370,7 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
         {
           key: 'office-3',
           name: 'Office 3',
-          roomType: 'office',
+          roomType: roomType('office'),
           floorPolygon: [
             { x: -3.45, z: 4.4, side: 'w1' },
             { x: -0.05, z: 4.4, side: 'w2' },
@@ -370,7 +391,7 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
         {
           key: 'office-4',
           name: 'Office 4',
-          roomType: 'office',
+          roomType: roomType('office'),
           floorPolygon: [
             { x: 0.05, z: 4.4, side: 'w1' },
             { x: 3.45, z: 4.4, side: 'w2' },
@@ -391,7 +412,7 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
         {
           key: 'restroom',
           name: 'Restroom',
-          roomType: 'restroom',
+          roomType: roomType('restroom'),
           // Traced from the glb — the only room whose walls are off the grid.
           floorPolygon: [
             { x: restroom.minX, z: restroom.minZ, side: 'w1' },
@@ -413,7 +434,7 @@ async function importModel(payload: Payload, glb: Buffer, restroom: Perimeter) {
         {
           key: 'common',
           name: 'Open Space',
-          roomType: 'conference',
+          roomType: roomType('conference'),
           floorPolygon: [
             { x: -1.2, z: -4.5, side: 'w1' },
             { x: 3.45, z: -4.5, side: 'w2' },

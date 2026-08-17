@@ -6,7 +6,7 @@ import {
   TEXTURED_SURFACES,
   WALL_SIDES,
 } from '@/modules/shared/room-shell'
-import { ROOM_TYPE_OPTIONS } from '@/modules/shared/room-types'
+import { roomTypeSlug } from '@/modules/shared/room-types'
 import type { BuildingLine, BuildingModel, ExteriorOption, Model } from '@/payload-types'
 
 import type {
@@ -22,7 +22,6 @@ import type {
   RoofConfig,
   RoomOpening,
   RoomShellConfig,
-  RoomType,
   RoomVertex,
   Room,
   ShellSurface,
@@ -219,9 +218,14 @@ function isSunDirection(value: unknown): value is SunDirection {
   return typeof value === 'string' && value in SUN_BEARINGS
 }
 
-function isRoomType(value: unknown): value is RoomType {
-  return ROOM_TYPE_OPTIONS.some((option) => option.value === value)
-}
+/**
+ * A room with no type, or one whose type was deleted from the catalogue.
+ *
+ * Not a valid key, so nothing matches it — a package offered for "kitchen"
+ * stays out, and one offered for everything still goes in. Which is what an
+ * untyped room should do.
+ */
+const UNTYPED = ''
 
 // Legacy rows carry no `side`, or the schema default on every vertex; both mean
 // unassigned, so the grouping is derived from geometry instead.
@@ -289,7 +293,8 @@ export function roomZones(value: unknown): Zone[] {
     zones.push({
       key: zone.key,
       name: typeof zone.name === 'string' && zone.name ? zone.name : zone.key,
-      roomType: isRoomType(zone.roomType) ? zone.roomType : 'other',
+      // Zones live in a JSON column, so this is already the key itself.
+      roomType: roomTypeSlug(zone.roomType) ?? UNTYPED,
       // Zero is a figure someone typed; only an empty field means "work it out".
       areaSqFt: typeof zone.areaSqFt === 'number' ? zone.areaSqFt : null,
       areaSqM: typeof zone.areaSqM === 'number' ? zone.areaSqM : null,
@@ -398,7 +403,8 @@ export function mapRoom(room: RoomDoc): Room {
   return {
     key: room.key,
     name: room.name,
-    roomType: room.roomType,
+    // Populated at depth 1; an id on its own cannot be resolved to a key here.
+    roomType: roomTypeSlug(room.roomType) ?? UNTYPED,
     // Zero is a figure someone typed; only an empty field means "work it out".
     areaSqFt: typeof room.areaSqFt === 'number' ? room.areaSqFt : null,
     areaSqM: typeof room.areaSqM === 'number' ? room.areaSqM : null,
@@ -425,6 +431,7 @@ function assertDoc<T>(value: number | T | null | undefined, label: string): T {
 export function mapBuildingScene(
   doc: BuildingModel,
   catalogue: ExteriorCatalogue = new Map(),
+  roomTypeNames: Record<string, string> = {},
 ): BuildingScene {
   const line = assertDoc<BuildingLine>(doc.line, 'line')
   const model = assertDoc<Model>(doc.model, 'model')
@@ -479,6 +486,7 @@ export function mapBuildingScene(
     roofModel: mapRoofModel(doc.sceneConfig?.roofModel),
     hiddenNodePaths,
     rooms,
+    roomTypeNames,
     exteriorSlots: mapExteriorSlots(doc.sceneConfig?.exteriorSlots, catalogue),
   }
 }

@@ -1,8 +1,9 @@
 'use client'
 
 import { roomOpenings } from '@/entities/building'
-import { ROOM_TYPE_OPTIONS } from '@/modules/shared/room-types'
 import { For } from '@/shared/ui/control-flow'
+
+import { roomTypeIdOf } from '../../model/use-room-types'
 
 import { Accordion } from '../controls/Accordion'
 import { SegmentedControl } from '../controls/SegmentedControl'
@@ -54,17 +55,14 @@ export function RoomPanel({ vm }: PanelProps) {
               value={room.name}
               onChange={(e) => vm.onUpdateRoom(roomIndex, { name: e.target.value })}
             />
+            {/* A room's type is a relationship, so the value here is its id. */}
             <select
               style={s.select}
-              value={room.roomType}
-              onChange={(e) =>
-                vm.onUpdateRoom(roomIndex, {
-                  roomType: e.target.value as (typeof ROOM_TYPE_OPTIONS)[number]['value'],
-                })
-              }
+              value={roomTypeIdOf(room.roomType)}
+              onChange={(e) => vm.onUpdateRoom(roomIndex, { roomType: Number(e.target.value) })}
             >
-              <For each={ROOM_TYPE_OPTIONS} getKey={(option) => option.value}>
-                {(option) => <option value={option.value}>{option.label}</option>}
+              <For each={vm.roomTypes} getKey={(type) => type.id}>
+                {(type) => <option value={type.id}>{type.name}</option>}
               </For>
             </select>
           </div>

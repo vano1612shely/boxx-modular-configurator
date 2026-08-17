@@ -49,6 +49,7 @@ import {
 } from '../lib/blocks'
 import type { PlaneBounds } from '../lib/floor-plane'
 import { useExteriorCatalogue, type ExteriorOptionRef } from './use-exterior-catalogue'
+import { useRoomTypes } from './use-room-types'
 import type { BuildingModel, Model } from '@/payload-types'
 
 export type { ExteriorOptionRef }
@@ -105,6 +106,7 @@ function freeKey(rows: Array<{ key?: string | null }>, prefix: string): string {
 export function useSceneEditorModel() {
   const { id } = useDocumentInfo()
   const catalogue = useExteriorCatalogue()
+  const roomTypes = useRoomTypes()
 
   const [doc, setDoc] = useState<BuildingModel | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -231,7 +233,9 @@ export function useSceneEditorModel() {
         {
           key: `room-${nextIndex + 1}`,
           name: `Room ${nextIndex + 1}`,
-          roomType: 'office',
+          // Whatever the catalogue lists first, since there is no longer a
+          // kind of room the code knows to prefer. The picker is right there.
+          roomType: roomTypes[0]?.id ?? 0,
           floorPolygon: rectifyPolygon(drawingPoints.map((p) => ({ x: p.x, z: p.z }))).map(
             (p, i, all) => ({ ...p, side: autoAssignSides(all)[i] }),
           ),
@@ -943,6 +947,7 @@ export function useSceneEditorModel() {
     cagingVariant,
     exteriorCatalogue: catalogue.options,
     onReloadExteriorCatalogue: catalogue.reload,
+    roomTypes,
     onAddSlot: addSlot,
     onSelectSlot: (index: number | null) => {
       setSelectedSlotIndex(index)

@@ -10,7 +10,6 @@ import {
   TEXTURED_SURFACE_OPTIONS,
   WALL_SIDE_OPTIONS,
 } from '../../shared/room-shell'
-import { ROOM_TYPE_OPTIONS } from '../../shared/room-types'
 
 export const BuildingModels: CollectionConfig = {
   slug: 'building-models',
@@ -358,9 +357,9 @@ export const BuildingModels: CollectionConfig = {
                     { name: 'name', type: 'text', required: true },
                     {
                       name: 'roomType',
-                      type: 'select',
+                      type: 'relationship',
+                      relationTo: 'room-types',
                       required: true,
-                      options: [...ROOM_TYPE_OPTIONS],
                     },
                   ],
                 },

@@ -57,8 +57,27 @@ async function exteriorCatalogue(payload: Payload, doc: BuildingModel): Promise<
   return new Map(options.docs.map((option) => [option.id, mapExteriorOption(option)]))
 }
 
+/**
+ * Room type keys to their names, for anything on screen that says what a room
+ * is for.
+ *
+ * A room carries its type populated, but a zone carries only the key — zones
+ * live in a JSON column — so one list read once answers for both. A short one:
+ * these are the kinds of room the whole catalogue is built from.
+ */
+async function roomTypeNames(payload: Payload): Promise<Record<string, string>> {
+  const types = await payload.find({ collection: 'room-types', depth: 0, limit: 200 })
+
+  return Object.fromEntries(types.docs.map((type) => [type.slug, type.name]))
+}
+
 async function sceneFor(payload: Payload, doc: BuildingModel): Promise<BuildingScene> {
-  return mapBuildingScene(doc, await exteriorCatalogue(payload, doc))
+  const [catalogue, names] = await Promise.all([
+    exteriorCatalogue(payload, doc),
+    roomTypeNames(payload),
+  ])
+
+  return mapBuildingScene(doc, catalogue, names)
 }
 
 export async function getBuildingScene(query: Query): Promise<BuildingResolution> {

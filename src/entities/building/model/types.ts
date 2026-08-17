@@ -230,6 +230,15 @@ export type BuildingScene = {
   roofModel: RoofConfig | null
   hiddenNodePaths: string[]
   rooms: Room[]
+  /**
+   * Room type keys to the names an admin gave them, for anything on screen that
+   * says what a room is for.
+   *
+   * Carried on the scene because the keys are all a room or a zone stores, and
+   * the names live in a collection of their own. A key with no entry here is
+   * one whose type was deleted; callers show the key, which is at least true.
+   */
+  roomTypeNames: Record<string, string>
   /** Empty for a building nobody has set exterior choices up on. */
   exteriorSlots: ExteriorSlot[]
 }

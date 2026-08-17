@@ -7,12 +7,12 @@ import type { BuildingScene, Room, SummaryFact, Zone } from '@/entities/building
 import { buildingSummary, roomArea, zoneArea } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { changeSelectionHref, type IntakeAnswers } from '@/features/building-intake'
-import { ROOM_TYPE_OPTIONS } from '@/modules/shared/room-types'
 import { areaIn, areaUnitLabel, AREA_UNITS, cn, formatArea, type AreaUnit } from '@/shared/lib'
 import { Card, Chip, Eyebrow, FloatingBar, Pill, PillLink, SceneOverlay } from '@/shared/ui/boxx'
 import { For, Show } from '@/shared/ui/control-flow'
 
-const ROOM_TYPE_LABELS = new Map(ROOM_TYPE_OPTIONS.map((o) => [o.value, o.label]))
+/** What a room is for, in words. Falling back to the key, which is at least true. */
+type TypeNames = Record<string, string>
 
 /**
  * The ft²/m² switch, sized to sit on the same line as the figure it converts.
@@ -126,21 +126,25 @@ function FactsPanel({
  * because that is what its `roomType` happens to say would be a plain untruth,
  * and the zone list below already says what the halves are.
  */
-function roomFacts(room: Room, zone: Zone | null, unit: AreaUnit): SummaryFact[] {
+function roomFacts(
+  room: Room,
+  zone: Zone | null,
+  unit: AreaUnit,
+  typeNames: TypeNames,
+): SummaryFact[] {
+  const named = (key: string) => typeNames[key] ?? key
+
   if (zone) {
     return [
-      { label: 'Type', value: ROOM_TYPE_LABELS.get(zone.roomType) ?? zone.roomType },
+      { label: 'Type', value: named(zone.roomType) },
       { label: 'Approx. floor area', value: formatArea(zoneArea(zone, unit), unit), inUnits: true },
     ]
   }
 
   return [
     ...(room.zones.length > 0
-      ? room.zones.map((each) => ({
-          label: each.name,
-          value: ROOM_TYPE_LABELS.get(each.roomType) ?? each.roomType,
-        }))
-      : [{ label: 'Type', value: ROOM_TYPE_LABELS.get(room.roomType) ?? room.roomType }]),
+      ? room.zones.map((each) => ({ label: each.name, value: named(each.roomType) }))
+      : [{ label: 'Type', value: named(room.roomType) }]),
     // Always present: a room has an outline, so there is always an area to
     // measure even when nobody has written one down.
     { label: 'Approx. floor area', value: formatArea(roomArea(room, unit), unit), inUnits: true },
@@ -277,7 +281,7 @@ export function ConfiguratorHeader({
               </FloatingBar>
 
               <FactsPanel
-                facts={roomFacts(focused, zone, unit)}
+                facts={roomFacts(focused, zone, unit, building.roomTypeNames)}
                 open={detailsOpen}
                 unit={unit}
                 onUnit={setAreaUnit}

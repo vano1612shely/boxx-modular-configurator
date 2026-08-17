@@ -2,7 +2,6 @@
 
 import type { CutFailure, RoomDoc, Zone } from '@/entities/building'
 import { polygonAreaSqFt, polygonSignedArea } from '@/entities/building'
-import { ROOM_TYPE_OPTIONS } from '@/modules/shared/room-types'
 import { ZONE_TINTS } from '@/shared/three/scene-tokens'
 import { For, Show } from '@/shared/ui/control-flow'
 
@@ -192,8 +191,10 @@ export function RoomZonesSection({ vm, room }: { vm: SceneEditorVm; room: RoomDo
                     })
                   }
                 >
-                  <For each={ROOM_TYPE_OPTIONS} getKey={(option) => option.value}>
-                    {(option) => <option value={option.value}>{option.label}</option>}
+                  {/* A zone lives in a JSON column, so this stores the key
+                      itself rather than a reference to the type. */}
+                  <For each={vm.roomTypes} getKey={(type) => type.id}>
+                    {(type) => <option value={type.slug}>{type.name}</option>}
                   </For>
                 </select>
               </div>

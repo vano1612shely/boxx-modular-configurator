@@ -372,10 +372,15 @@ function OfferTile({ offer, onAdd }: OfferTileProps) {
       plate="cream"
       title={pkg.title}
       meta={pkg.price === null ? null : `$${pkg.price.toLocaleString('en-US')}`}
+      // Only when there is a grade to name. It used to read "office · core",
+      // where the first half repeated what the room it was being offered in
+      // already said.
       badge={
-        <Chip tone="glass" size="xs">
-          {pkg.family} · {pkg.tier}
-        </Chip>
+        pkg.tier === null ? null : (
+          <Chip tone="glass" size="xs">
+            {pkg.tier}
+          </Chip>
+        )
       }
       disabled={!fits}
       disabledNote="Too large for this room"

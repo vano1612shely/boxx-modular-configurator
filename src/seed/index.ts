@@ -3,6 +3,7 @@ import 'dotenv/config'
 import { getPayload, type Payload } from 'payload'
 
 import { SHELL_DEFAULTS } from '@/modules/shared/room-shell'
+import { STARTER_FURNITURE_TIERS, STARTER_ROOM_TYPES } from '@/modules/shared/room-types'
 
 import config from '../payload.config'
 import {
@@ -37,10 +38,44 @@ async function ensureAdminUser(payload: Payload) {
   payload.logger.info(`Created dev admin ${email}.`)
 }
 
+/**
+ * The kinds of room and the grades of furniture, keyed by slug.
+ *
+ * Written before anything that points at them, and skipped one by one rather
+ * than all-or-nothing: this also runs against an install that already has some
+ * of them, where creating a duplicate slug would simply fail.
+ */
+async function ensureCatalogueTerms(payload: Payload) {
+  const ids = new Map<string, number>()
+
+  for (const [collection, terms] of [
+    ['room-types', STARTER_ROOM_TYPES],
+    ['furniture-tiers', STARTER_FURNITURE_TIERS],
+  ] as const) {
+    for (const term of terms) {
+      const found = await payload.find({
+        collection,
+        where: { slug: { equals: term.slug } },
+        limit: 1,
+      })
+
+      const doc =
+        found.docs[0] ?? (await payload.create({ collection, data: { ...term } }))
+      ids.set(`${collection}:${term.slug}`, doc.id)
+    }
+  }
+
+  return {
+    roomType: (slug: string) => ids.get(`room-types:${slug}`)!,
+    tier: (slug: string) => ids.get(`furniture-tiers:${slug}`)!,
+  }
+}
+
 async function seed() {
   const payload = await getPayload({ config })
 
   await ensureAdminUser(payload)
+  const term = await ensureCatalogueTerms(payload)
 
   const existing = await payload.find({
     collection: 'regions',
@@ -98,14 +133,13 @@ async function seed() {
     collection: 'furniture-packages',
     data: {
       title: 'Office Core',
-      family: 'office',
-      tier: 'core',
+      tier: term.tier('core'),
       model: officeCoreModel.id,
       price: 1450,
       description: 'Desk, task chair and storage cabinet.',
       footprint: { width: 2.6, depth: 2 },
-      compatibleRoomTypes: ['office'],
-      recommendedFor: ['office'],
+      compatibleRoomTypes: [term.roomType('office')],
+      recommendedFor: [term.roomType('office')],
       compatibleLines: [line.id],
       regions: [region.id],
     },
@@ -115,16 +149,15 @@ async function seed() {
     collection: 'furniture-packages',
     data: {
       title: 'Conference Core',
-      family: 'conference',
-      tier: 'core',
+      tier: term.tier('core'),
       model: conferenceCoreModel.id,
       price: 2900,
       description: 'Conference table with six chairs.',
       footprint: { width: 3.4, depth: 2.9 },
       // Offered in an office too, but only recommended where it belongs — which
       // is what puts it under "More furniture" rather than at the top.
-      compatibleRoomTypes: ['conference', 'office'],
-      recommendedFor: ['conference'],
+      compatibleRoomTypes: [term.roomType('conference'), term.roomType('office')],
+      recommendedFor: [term.roomType('conference')],
       compatibleLines: [line.id],
       regions: [region.id],
     },
@@ -163,7 +196,7 @@ async function seed() {
         {
           key: 'office-1',
           name: 'Office 1',
-          roomType: 'office',
+          roomType: term.roomType('office'),
           // Wall sides come straight from the outline geometry; the demo rooms
           // are rectangles, so each edge is its own wall.
           floorPolygon: [
@@ -186,7 +219,7 @@ async function seed() {
         {
           key: 'office-2',
           name: 'Office 2',
-          roomType: 'office',
+          roomType: term.roomType('office'),
           // Wall sides come straight from the outline geometry; the demo rooms
           // are rectangles, so each edge is its own wall.
           floorPolygon: [

@@ -15,6 +15,7 @@ import * as migration_20260811_214553_add_exterior_options from './20260811_2145
 import * as migration_20260815_232801_add_quiz_show_logo from './20260815_232801_add_quiz_show_logo';
 import * as migration_20260816_163500_stretch_exterior_parts from './20260816_163500_stretch_exterior_parts';
 import * as migration_20260816_225837_one_model_per_exterior_option from './20260816_225837_one_model_per_exterior_option';
+import * as migration_20260817_233000_room_types_and_tiers_as_collections from './20260817_233000_room_types_and_tiers_as_collections';
 
 export const migrations = [
   {
@@ -101,5 +102,10 @@ export const migrations = [
     up: migration_20260816_225837_one_model_per_exterior_option.up,
     down: migration_20260816_225837_one_model_per_exterior_option.down,
     name: '20260816_225837_one_model_per_exterior_option'
+  },
+  {
+    up: migration_20260817_233000_room_types_and_tiers_as_collections.up,
+    down: migration_20260817_233000_room_types_and_tiers_as_collections.down,
+    name: '20260817_233000_room_types_and_tiers_as_collections',
   },
 ];

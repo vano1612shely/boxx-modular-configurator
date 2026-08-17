@@ -16,6 +16,7 @@ import { SceneViewer } from '@/features/scene-viewer'
 import { withModule } from '@/shared/lib'
 import { Callout, CenteredPanel } from '@/shared/ui/boxx'
 
+import { dropSelectionOnMove } from '../lib/drop-selection-on-move'
 import { ConfiguratorHeader } from './ConfiguratorHeader'
 
 type Props = {
@@ -87,6 +88,8 @@ export function ConfiguratorScreen({
   defaultAreaUnit,
 }: Props) {
   useResetOnBuildingChange(building.id)
+  // A piece stays picked up only while the visitor is still looking at it.
+  useEffect(dropSelectionOnMove, [])
 
   return (
     <main className="relative h-dvh w-full overflow-hidden">

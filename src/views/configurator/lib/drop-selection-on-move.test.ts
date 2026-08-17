@@ -25,6 +25,51 @@ describe('dropSelectionOnMove', () => {
 
   afterEach(() => stop())
 
+  /**
+   * The one that got away the first time.
+   *
+   * Clicking a room's floor out in the building view frames it from above
+   * without going in — a camera move under its own name, `previewRoom`, and
+   * neither of the two fields this rule was first written against. So the
+   * visitor pressed a room, the eye flew to it, and the toolbar of a piece two
+   * rooms over stayed on screen.
+   */
+  it('lets go when a room is framed from the outside', () => {
+    pickSomething()
+
+    session().previewRoom('room-5')
+
+    expect(configuration().selectedInstanceId).toBeNull()
+  })
+
+  it('lets go again when that framing is dropped', () => {
+    session().previewRoom('room-5')
+    pickSomething()
+
+    session().clearPreview()
+
+    expect(configuration().selectedInstanceId).toBeNull()
+  })
+
+  // Another storey is not another view of the same place — the furniture on
+  // every other one is cut away entirely.
+  it('lets go when the storey changes', () => {
+    pickSomething()
+
+    session().selectFloor('floor-2')
+
+    expect(configuration().selectedInstanceId).toBeNull()
+  })
+
+  // Opening an entrance's choices flies the eye outside the building.
+  it('lets go when an entrance is opened', () => {
+    pickSomething()
+
+    session().openExteriorSlot('spot-1')
+
+    expect(configuration().selectedInstanceId).toBeNull()
+  })
+
   // The report: in the whole-room view, clicking a zone to zoom into it left
   // the toolbar of a piece in the other half sitting on screen, and the only
   // way to be rid of it was to hunt for bare floor.
@@ -79,6 +124,12 @@ describe('dropSelectionOnMove', () => {
     session().setInteractionLock(true)
     session().setPanelCollapsed(true)
     session().setActiveZone('kitchen')
+    // Looking at the same place differently: turning the view, dropping the
+    // roof, dragging the piece about. None of it goes anywhere.
+    session().setViewMode('dollhouse')
+    session().setRoofShown(true)
+    session().rotateView(1)
+    session().noteManualView()
 
     expect(configuration().selectedInstanceId).toBe('instance-1')
   })

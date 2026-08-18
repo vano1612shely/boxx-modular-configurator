@@ -3,7 +3,7 @@ import 'dotenv/config'
 import { getPayload, type Payload } from 'payload'
 
 import { SHELL_DEFAULTS } from '@/modules/shared/room-shell'
-import { STARTER_FURNITURE_TIERS, STARTER_ROOM_TYPES } from '@/modules/shared/room-types'
+import { ensureCatalogueTerms } from '@/modules/shared/catalogue-terms'
 
 import config from '../payload.config'
 import {
@@ -36,39 +36,6 @@ async function ensureAdminUser(payload: Payload) {
 
   await payload.create({ collection: 'users', data: { email, password } })
   payload.logger.info(`Created dev admin ${email}.`)
-}
-
-/**
- * The kinds of room and the grades of furniture, keyed by slug.
- *
- * Written before anything that points at them, and skipped one by one rather
- * than all-or-nothing: this also runs against an install that already has some
- * of them, where creating a duplicate slug would simply fail.
- */
-async function ensureCatalogueTerms(payload: Payload) {
-  const ids = new Map<string, number>()
-
-  for (const [collection, terms] of [
-    ['room-types', STARTER_ROOM_TYPES],
-    ['furniture-tiers', STARTER_FURNITURE_TIERS],
-  ] as const) {
-    for (const term of terms) {
-      const found = await payload.find({
-        collection,
-        where: { slug: { equals: term.slug } },
-        limit: 1,
-      })
-
-      const doc =
-        found.docs[0] ?? (await payload.create({ collection, data: { ...term } }))
-      ids.set(`${collection}:${term.slug}`, doc.id)
-    }
-  }
-
-  return {
-    roomType: (slug: string) => ids.get(`room-types:${slug}`)!,
-    tier: (slug: string) => ids.get(`furniture-tiers:${slug}`)!,
-  }
 }
 
 async function seed() {

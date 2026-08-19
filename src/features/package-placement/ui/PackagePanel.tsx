@@ -306,9 +306,30 @@ function SectionBody({
                 tone="cream"
                 radius="card"
                 elevation="none"
-                className="flex items-center justify-between gap-2 py-1 pr-1 pl-3"
+                className={cn(
+                  'flex items-center justify-between gap-2 py-1 pr-1 pl-1',
+                  vm.selectedInstanceId === placedItem.instanceId && 'ring-1 ring-primary',
+                )}
               >
-                <span className="truncate text-sm">{placedItem.pkg?.title ?? 'Package'}</span>
+                {/* The way into a piece the pointer can no longer reach — one
+                    pushed under a desk is behind it from every angle. Selecting
+                    raises the floating toolbar, which is drawn over the scene,
+                    so it can still be turned and removed from there.
+
+                    And the panel gets out of the way, because on a phone it is
+                    a sheet over the scene: the toolbar it just raised would be
+                    behind the very list that raised it. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    vm.onSelectPackage(placedItem.instanceId)
+                    useConfiguratorSession.getState().setPanelCollapsed(true)
+                  }}
+                  aria-pressed={vm.selectedInstanceId === placedItem.instanceId}
+                  className="min-w-0 flex-1 truncate rounded-full px-2 py-2 text-left text-sm transition-colors hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {placedItem.pkg?.title ?? 'Package'}
+                </button>
                 <button
                   type="button"
                   onClick={() => vm.onRemovePackage(placedItem.instanceId)}

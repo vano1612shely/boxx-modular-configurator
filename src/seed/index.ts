@@ -10,6 +10,7 @@ import {
   buildConferenceCorePackage,
   buildDemoBuilding,
   buildOfficeCorePackage,
+  buildTaskChairPackage,
 } from './lib/build-demo-assets'
 
 async function createModelFromBuffer(payload: Payload, title: string, name: string, data: Buffer) {
@@ -95,6 +96,12 @@ async function seed() {
     'package-conference-core.glb',
     await buildConferenceCorePackage(),
   )
+  const taskChairModel = await createModelFromBuffer(
+    payload,
+    'Task Chair package',
+    'package-task-chair.glb',
+    await buildTaskChairPackage(),
+  )
 
   await payload.create({
     collection: 'furniture-packages',
@@ -125,6 +132,26 @@ async function seed() {
       // is what puts it under "More furniture" rather than at the top.
       compatibleRoomTypes: [term.roomType('conference'), term.roomType('office')],
       recommendedFor: [term.roomType('conference')],
+      compatibleLines: [line.id],
+      regions: [region.id],
+    },
+  })
+
+  // One chair, on its own. Collision is between packages, so the chair inside
+  // Office Core can never be pushed under Office Core's own desk — without
+  // something small and separate there is nothing here that can show a chair
+  // going under anything.
+  await payload.create({
+    collection: 'furniture-packages',
+    data: {
+      title: 'Task Chair',
+      tier: term.tier('core'),
+      model: taskChairModel.id,
+      price: 240,
+      description: 'A single task chair, to pull up to a desk or a table.',
+      footprint: { width: 0.5, depth: 0.5 },
+      compatibleRoomTypes: [term.roomType('office'), term.roomType('conference')],
+      recommendedFor: [term.roomType('office')],
       compatibleLines: [line.id],
       regions: [region.id],
     },

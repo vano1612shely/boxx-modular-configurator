@@ -336,7 +336,7 @@ as an unknown reference does, so the serial ids cannot be counted through from o
 | **Media → Models** | Upload `.glb`/self-contained `.gltf`. Files are auto-optimized on upload (dedup, prune, weld, WebP textures ≤2048px, meshopt compression) and metadata (triangles, bbox, sizes) is recorded. |
 | **Catalog → Building Lines** | Product lines + sizing rules (restroom thresholds, max units) and regions. |
 | **Catalog → Building Models** | One entry per size. The **Scene Editor** tab is the visual setup: default camera & limits ("Set default camera from view"), hidden-mesh patterns (roof/ceiling), wall auto-hide pattern, drawing room zones on the floor, per-room camera presets, default furniture placements (click-to-place). |
-| **Catalog → Furniture Packages** | Package + model, price, footprint (used for fit/collision checks), compatible room types / building lines / regions. |
+| **Catalog → Furniture Packages** | Package + model, price, footprint (the floor rectangle used for fitting into a room; what a piece may be pushed up against is measured from the model itself), compatible room types / building lines / regions. |
 | **Sales → Quotes** | Submitted quote requests with the full configuration JSON, each with its order reference and a link to the 3D view of it. |
 | **Sales → Integration Settings** | Webhook URL + headers, postMessage toggle and target origin, and what happens after a request is sent: redirect URL, or the wording on our own thank-you page. |
 
@@ -362,5 +362,17 @@ Models are used as-is after automatic optimization; prepare them once before upl
   (`use<Slice>Model` hooks); shared control-flow primitives in `src/shared/ui/control-flow`.
 - Rules engine: `src/entities/building/lib/rules-engine.ts` (pure, unit-tested).
 - Placement geometry (fit/collision/clamping): `src/features/package-placement/lib/placement-geometry.ts` (unit-tested).
+- Two packages are in each other's way only if all three of these are true, in order:
+  their upright bounding boxes overlap, their footprint rectangles overlap, and — once
+  both models have loaded — the models themselves share space. The third question is what
+  lets a chair be pushed under a desk: `src/entities/furniture-package/lib/measured-shapes.ts`
+  drops a vertical line through each cell of a grid over the package's footprint and pairs
+  the surfaces it crosses into runs of solid, so the air between a desk's legs is air.
+  Written as a conjunction beginning with the old rule, so a shape can only ever *allow*
+  more — nothing placeable before is refused now. **A model built as one solid block from
+  the floor up has nothing to slide under**; the demo desk and conference table are a top
+  on four legs for exactly this reason.
+- Adding by the "+" button still places by footprint alone, deliberately — see the comment
+  at `addToSection` in `src/features/package-placement/model/use-package-placement-model.ts`.
 - Models load lazily: the building glb loads on entry; a furniture package glb loads only
   when the customer adds it.

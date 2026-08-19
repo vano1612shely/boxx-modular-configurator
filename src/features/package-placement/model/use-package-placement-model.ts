@@ -71,6 +71,8 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   const placed = useConfiguration((s) => s.placed)
   const addPackage = useConfiguration((s) => s.addPackage)
   const removePackage = useConfiguration((s) => s.removePackage)
+  const selectPackage = useConfiguration((s) => s.selectPackage)
+  const selectedInstanceId = useConfiguration((s) => s.selectedInstanceId)
 
   const focusedRoom = useMemo<Room | null>(
     () => building.rooms.find((room) => room.key === focusedRoomKey) ?? null,
@@ -194,6 +196,18 @@ export function usePackagePlacementModel({ building, packages }: Args) {
       p.pkg ? [{ x: p.x, z: p.z, rotationYDeg: p.rotationYDeg, footprint: p.pkg.footprint }] : [],
     )
 
+    // No measured shapes here, on purpose: the "+" button places by footprint
+    // even though dragging by hand now goes by what the model really fills.
+    //
+    // The search below is complete because a rectangle can always be pushed
+    // back until it touches two things, so every pose that works is in the list
+    // it tries. Shapes break that argument — a chair tucked under a desk touches
+    // nothing on the way in, so no candidate the search generates would ever
+    // find it — and `middleOfTheGap` would then slide it straight back out from
+    // under the desk, because the corridor it measures is made of rectangles.
+    // Making the search shape-aware means rebuilding both, to put a chair under
+    // a desk in a room where the visitor has not asked for one there.
+    //
     // Tried the way it faces first, then turned. A long package in a narrow
     // kitchen goes in sideways or not at all, and asking only for the way it
     // happens to face made a piece that plainly fits impossible to add — the
@@ -224,6 +238,16 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     placedInFocusedRoom,
     onAddPackage: addToSection,
     onRemovePackage: removePackage,
+    /**
+     * Picking a piece from the list rather than out of the scene.
+     *
+     * Which the list is now the only reliable way to do for some of them: a
+     * chair pushed under a desk is behind the desk from every angle the camera
+     * offers, and the pointer answers with whatever is in front. Without this
+     * the only thing the visitor could still do to a tucked chair is delete it.
+     */
+    selectedInstanceId,
+    onSelectPackage: selectPackage,
   }
 }
 

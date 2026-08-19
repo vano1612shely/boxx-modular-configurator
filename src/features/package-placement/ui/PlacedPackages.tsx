@@ -41,8 +41,10 @@ import { useConfiguration, type PlacedPackage } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import {
   footprintOf,
+  shapeOf,
   useCentredPackage,
   type FurniturePackageEntity,
+  type PackageShape,
 } from '@/entities/furniture-package'
 import { cn } from '@/shared/lib'
 import { HIGHLIGHT } from '@/shared/three/scene-tokens'
@@ -68,6 +70,8 @@ type Obstacle = {
   z: number
   rotationYDeg: number
   footprint: FurniturePackageEntity['footprint']
+  /** What the model really fills, once measured. Null until its glb arrives. */
+  shape: PackageShape | null
 }
 
 /**
@@ -92,6 +96,7 @@ function obstaclesByRoom(
       z: p.z,
       rotationYDeg: p.rotationYDeg,
       footprint: footprintOf(p.packageId, pkg.footprint),
+      shape: shapeOf(p.packageId),
     })
     rooms.set(p.roomKey, room)
   }
@@ -116,6 +121,7 @@ function obstaclesFor(
               z: p.z,
               rotationYDeg: p.rotationYDeg,
               footprint: footprintOf(p.packageId, pkg.footprint),
+              shape: shapeOf(p.packageId),
             },
           ]
         : []
@@ -429,6 +435,9 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   }
 
   const footprint = footprintOf(pkg.id, pkg.footprint)
+  // Measured by this very component's own model load, so by the time anything
+  // here can be turned it is there.
+  const shape = shapeOf(pkg.id)
 
   // Where the panels drawn over the scene leave room, read when the bar appears
   // and when the frame changes shape — never per frame, since each read is a
@@ -494,7 +503,7 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
     // not fit was allowed and the table ended up outside the building.
     if (!poseInsideRegion(clamped.x, clamped.z, detented, footprint, turnFloor)) return null
 
-    return collidesWithAny({ ...clamped, rotationYDeg: detented, footprint }, obstacles)
+    return collidesWithAny({ ...clamped, rotationYDeg: detented, footprint, shape }, obstacles)
       ? null
       : { ...clamped, rotationYDeg: detented }
   }
@@ -533,7 +542,12 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   // Not the next quarter but the next one it fits at. A desk that only lies
   // along the room has two positions rather than four, and a button that
   // refused to move it between them read as a broken button.
-  const nextQuarter = nextFittingQuarter(placement.rotationYDeg, fitsAt)
+  //
+  // Only asked for the piece that is actually picked up. It costs three trial
+  // poses against every neighbour in the room, and it used to be asked in the
+  // render body of every piece of furniture on the storey — for a button only
+  // one of them can be showing.
+  const nextQuarter = isSelected ? nextFittingQuarter(placement.rotationYDeg, fitsAt) : null
   const canTurn = isSelected && !isDragging && nextQuarter !== null
 
   // Neither group carries a `position` or `rotation` prop — see the layout
@@ -720,6 +734,8 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
   // out of — and rebuilding it per pointer move classified every zone edge
   // twice for an answer that was already known.
   const dragFloorRef = useRef<{ instanceId: string; region: Region } | null>(null)
+  // And what it has to get past, for the same reason.
+  const obstaclesRef = useRef<{ instanceId: string; list: Obstacle[] } | null>(null)
 
   const endDrag = () => {
     const state = useConfiguration.getState()
@@ -733,6 +749,11 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
     lastValidRef.current = null
     freeRotationRef.current = null
     dragFloorRef.current = null
+    // Cleared with the rest, and it has to be: it is keyed on the piece being
+    // dragged, so picking the same one up a second time would otherwise be
+    // judged against the room as it stood during the first drag — including the
+    // piece's own old position, which it would then refuse to be moved back to.
+    obstaclesRef.current = null
     useConfiguratorSession.getState().setInteractionLock(false)
     setSceneCursor('default')
   }
@@ -779,11 +800,25 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
       dragFloorRef.current.region,
     )
 
-    const obstacles = obstaclesFor(state.placed, packages, placement.roomKey, placement.instanceId)
+    // Built once for the whole drag rather than per pointer move: it takes the
+    // building's entire placement list apart to make it, and nothing can move
+    // while a piece is in the air — `placed` is only written on the way down.
+    if (obstaclesRef.current?.instanceId !== dragging) {
+      obstaclesRef.current = {
+        instanceId: dragging,
+        list: obstaclesFor(state.placed, packages, placement.roomKey, placement.instanceId),
+      }
+    }
 
     const valid = !collidesWithAny(
-      { x: snapped.x, z: snapped.z, rotationYDeg: snapped.rotationYDeg, footprint },
-      obstacles,
+      {
+        x: snapped.x,
+        z: snapped.z,
+        rotationYDeg: snapped.rotationYDeg,
+        footprint,
+        shape: shapeOf(pkg.id),
+      },
+      obstaclesRef.current.list,
     )
 
     if (valid) {

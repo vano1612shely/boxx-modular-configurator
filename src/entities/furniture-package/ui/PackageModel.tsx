@@ -6,6 +6,7 @@ import { Box3, Vector3, type Group } from 'three'
 import { useModel } from '@/shared/three/use-model'
 
 import { setMeasuredFootprint } from '../lib/measured-footprints'
+import { hasShape, linkPackageShape, measureShape, setMeasuredShape } from '../lib/measured-shapes'
 import type { FurniturePackageEntity } from '../model/types'
 
 export type CentredPackage = {
@@ -41,10 +42,21 @@ export function useCentredPackage(pkg: FurniturePackageEntity): CentredPackage {
     clone.position.x -= centre.x
     clone.position.z -= centre.z
 
-    setMeasuredFootprint(pkg.id, { width: size.x, depth: size.z })
+    const footprint = { width: size.x, depth: size.z }
+    setMeasuredFootprint(pkg.id, footprint)
+
+    // Measured after the recentring, so the grid is already in the frame the
+    // placement maths works in — and only once per model, not once per piece of
+    // furniture standing in the room, which is how often this runs.
+    if (hasShape(pkg.modelUrl)) {
+      linkPackageShape(pkg.id, pkg.modelUrl)
+    } else {
+      clone.updateMatrixWorld(true)
+      setMeasuredShape(pkg.id, pkg.modelUrl, measureShape(clone, footprint))
+    }
 
     return { object: clone, height: size.y }
-  }, [scene, pkg.id])
+  }, [scene, pkg.id, pkg.modelUrl])
 }
 
 /** The package and nothing else — no handles, no outline, no pointer surface. */

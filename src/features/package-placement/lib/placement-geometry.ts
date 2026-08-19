@@ -7,7 +7,7 @@ import {
   type Region,
 } from '@/entities/building'
 import type { PlacedPackage } from '@/entities/configuration'
-import type { PackageFootprint } from '@/entities/furniture-package'
+import { shapesCollide, type PackageFootprint, type PackageShape } from '@/entities/furniture-package'
 
 export type HalfExtents = { halfW: number; halfD: number }
 
@@ -24,13 +24,100 @@ export function rotatedHalfExtents(footprint: PackageFootprint, rotationYDeg: nu
 
 type PlacedWithFootprint = Pick<PlacedPackage, 'x' | 'z' | 'rotationYDeg'> & {
   footprint: PackageFootprint
+  /**
+   * What the model really fills, once it has been measured off the glb.
+   *
+   * Absent or null on everything that has not loaded yet, and on every caller
+   * that has no model to measure — auto-placement, the tests below. Those get
+   * the footprint rule, unchanged.
+   */
+  shape?: PackageShape | null
 }
 
 /** AABB overlap test on rotated-footprint extents (conservative for rotated boxes). */
-export function overlaps(a: PlacedWithFootprint, b: PlacedWithFootprint): boolean {
+export function overlapsExtents(a: PlacedWithFootprint, b: PlacedWithFootprint): boolean {
   const ea = rotatedHalfExtents(a.footprint, a.rotationYDeg)
   const eb = rotatedHalfExtents(b.footprint, b.rotationYDeg)
   return Math.abs(a.x - b.x) < ea.halfW + eb.halfW && Math.abs(a.z - b.z) < ea.halfD + eb.halfD
+}
+
+/** Half-extents of a footprint along its own axes, and the axes themselves. */
+function rectAxes(item: PlacedWithFootprint) {
+  const rad = (item.rotationYDeg * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+
+  return {
+    hw: item.footprint.width / 2,
+    hd: item.footprint.depth / 2,
+    // The rectangle's own two directions in world space, from the same Y
+    // rotation the meshes use.
+    ax: { x: cos, z: -sin },
+    az: { x: sin, z: cos },
+  }
+}
+
+/**
+ * Whether the two footprint rectangles themselves overlap.
+ *
+ * The extents test above circumscribes a turned rectangle with an upright one:
+ * a 0.45 m chair at 37° is treated as a 0.64 m square. That is fine as a first
+ * pass and hopeless as a verdict — it is most of a chair's width of phantom
+ * bulk, and the angle slider hands out every angle there is. Four axes are
+ * enough; both boxes are extruded along the same vertical, so the pairs of
+ * cross products a full 3D test would add are all degenerate.
+ *
+ * At right angles it agrees with the extents test exactly, which is why nothing
+ * that was placed by the old rule moves.
+ */
+export function rectsOverlap(a: PlacedWithFootprint, b: PlacedWithFootprint): boolean {
+  const ra = rectAxes(a)
+  const rb = rectAxes(b)
+  const dx = b.x - a.x
+  const dz = b.z - a.z
+
+  for (const axis of [ra.ax, ra.az, rb.ax, rb.az]) {
+    const gap = Math.abs(dx * axis.x + dz * axis.z)
+    const reach =
+      Math.abs((ra.ax.x * axis.x + ra.ax.z * axis.z) * ra.hw) +
+      Math.abs((ra.az.x * axis.x + ra.az.z * axis.z) * ra.hd) +
+      Math.abs((rb.ax.x * axis.x + rb.ax.z * axis.z) * rb.hw) +
+      Math.abs((rb.az.x * axis.x + rb.az.z * axis.z) * rb.hd)
+
+    if (gap >= reach) return false
+  }
+
+  return true
+}
+
+/**
+ * Whether two placed packages are in each other's way.
+ *
+ * Three questions, each only asked when the one before it said yes:
+ *
+ *   1. do the upright boxes around them overlap — the rule this app has always
+ *      used, kept first and unchanged;
+ *   2. do the footprint rectangles themselves overlap;
+ *   3. do the models, where both have been measured, actually share any air.
+ *
+ * Written as a conjunction on purpose, because that is the safety property
+ * rather than an implementation detail: whatever the measured shapes say, and
+ * however wrong a measurement might be, this can only ever *allow* more than
+ * the old rule did. Nothing a visitor could place yesterday is refused today.
+ *
+ * Which is the whole point of the third question. A desk is a top on four legs,
+ * and the space under it is space; a chair belongs in it, and until now the
+ * rectangle around the desk said otherwise.
+ */
+export function overlaps(a: PlacedWithFootprint, b: PlacedWithFootprint): boolean {
+  if (!overlapsExtents(a, b)) return false
+  if (!rectsOverlap(a, b)) return false
+  if (!a.shape || !b.shape) return true
+
+  return shapesCollide(
+    { shape: a.shape, x: a.x, z: a.z, rotationYDeg: a.rotationYDeg },
+    { shape: b.shape, x: b.x, z: b.z, rotationYDeg: b.rotationYDeg },
+  )
 }
 
 export function collidesWithAny(

@@ -152,6 +152,49 @@ export async function buildDemoBuilding(): Promise<globalThis.Buffer> {
   return b.toBuffer()
 }
 
+/**
+ * A top on four legs, the way a desk is actually built.
+ *
+ * Not one solid block, which is what these used to be. The space under a desk
+ * is space — the collision test measures what a model really fills, so a
+ * cuboid down to the floor is a desk nothing can ever be pushed under, and
+ * every chair in the demo would stop dead at its edge.
+ */
+function addTable(
+  b: GlbBuilder,
+  group: Node,
+  name: string,
+  size: Vec3,
+  position: Vec3,
+  material: Material,
+) {
+  const [width, height, depth] = size
+  const [x, y, z] = position
+  const TOP = 0.05
+  const LEG = 0.07
+
+  b.addBox({ name: `${name}_Top`, size: [width, TOP, depth], position: [x, y + height - TOP, z], material }, group)
+
+  const insetX = (width - LEG) / 2
+  const insetZ = (depth - LEG) / 2
+  for (const [dx, dz] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ]) {
+    b.addBox(
+      {
+        name: `${name}_Leg`,
+        size: [LEG, height - TOP, LEG],
+        position: [x + dx * insetX, y, z + dz * insetZ],
+        material,
+      },
+      group,
+    )
+  }
+}
+
 /** "Office Core" package: desk + chair + cabinet. Footprint ~2.6m x 2.0m. */
 export async function buildOfficeCorePackage(): Promise<globalThis.Buffer> {
   const b = new GlbBuilder('OfficeCore')
@@ -162,7 +205,7 @@ export async function buildOfficeCorePackage(): Promise<globalThis.Buffer> {
 
   const group = b.addGroup('OfficeCore')
 
-  b.addBox({ name: 'Desk', size: [1.6, 0.75, 0.8], position: [-0.3, 0, -0.4], material: wood }, group)
+  addTable(b, group, 'Desk', [1.6, 0.75, 0.8], [-0.3, 0, -0.4], wood)
   b.addBox({ name: 'Chair_Seat', size: [0.5, 0.45, 0.5], position: [-0.3, 0, 0.45], material: fabric }, group)
   b.addBox({ name: 'Chair_Back', size: [0.5, 0.55, 0.08], position: [-0.3, 0.45, 0.66], material: fabric }, group)
   b.addBox({ name: 'Cabinet', size: [0.45, 1.1, 0.9], position: [0.85, 0, -0.35], material: metal }, group)
@@ -179,13 +222,41 @@ export async function buildConferenceCorePackage(): Promise<globalThis.Buffer> {
 
   const group = b.addGroup('ConferenceCore')
 
-  b.addBox({ name: 'Table', size: [2.4, 0.75, 1.1], position: [0, 0, 0], material: wood }, group)
+  addTable(b, group, 'Table', [2.4, 0.75, 1.1], [0, 0, 0], wood)
 
   const chairXs = [-0.8, 0, 0.8]
   chairXs.forEach((x, i) => {
     b.addBox({ name: `Chair_A${i + 1}`, size: [0.5, 0.45, 0.5], position: [x, 0, 0.95], material: fabric }, group)
     b.addBox({ name: `Chair_B${i + 1}`, size: [0.5, 0.45, 0.5], position: [x, 0, -0.95], material: fabric }, group)
   })
+
+  return b.toBuffer()
+}
+
+/**
+ * "Task Chair": one chair on its own. Footprint 0.5m x 0.5m.
+ *
+ * A package of one, and it earns its place: collision is between packages, so
+ * the chair inside Office Core can never be pushed under Office Core's own
+ * desk. Without something small and separate there is nothing in the demo
+ * catalogue that can demonstrate a chair going under anything.
+ */
+export async function buildTaskChairPackage(): Promise<globalThis.Buffer> {
+  const b = new GlbBuilder('TaskChair')
+
+  const fabric = b.material('ChairFabric', 0x2f3237)
+  const metal = b.material('ChairMetal', 0x8a8f96, 0.4)
+
+  const group = b.addGroup('TaskChair')
+
+  b.addBox({ name: 'Seat', size: [0.46, 0.05, 0.46], position: [0, 0.41, 0], material: fabric }, group)
+  b.addBox({ name: 'Back', size: [0.46, 0.42, 0.06], position: [0, 0.46, 0.2], material: fabric }, group)
+  b.addBox({ name: 'Column', size: [0.07, 0.41, 0.07], position: [0, 0, 0], material: metal }, group)
+
+  // Four arms off the column, each reaching in far enough to meet it — corner
+  // offsets would leave them floating, since nothing else is down there.
+  b.addBox({ name: 'Foot_X', size: [0.42, 0.05, 0.06], position: [0, 0, 0], material: metal }, group)
+  b.addBox({ name: 'Foot_Z', size: [0.06, 0.05, 0.42], position: [0, 0, 0], material: metal }, group)
 
   return b.toBuffer()
 }

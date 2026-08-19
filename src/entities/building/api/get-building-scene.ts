@@ -2,16 +2,18 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
+import { regionClauses, whereAll, type RegionScope } from '@/modules/regions/lib/scope'
+import type { BuildingModel } from '@/payload-types'
+
+// Straight at the modules rather than through the slice barrel, which re-exports
+// this file: a barrel that imports itself is a cycle waiting to bite.
 import {
   mapBuildingScene,
   mapExteriorOption,
-  resolveBuildingSize,
-  type BuildingScene,
   type ExteriorCatalogue,
-} from '@/entities/building'
-import type { BuildingModel } from '@/payload-types'
-
-import { regionClauses, whereAll, type RegionScope } from './regions'
+} from '../lib/map-building'
+import { resolveBuildingSize } from '../lib/rules-engine'
+import type { BuildingScene } from '../model/types'
 
 type Query = {
   /** Building line slug, e.g. "boxxplex". */
@@ -78,6 +80,31 @@ async function sceneFor(payload: Payload, doc: BuildingModel): Promise<BuildingS
   ])
 
   return mapBuildingScene(doc, catalogue, names)
+}
+
+/**
+ * The exact building a saved order was configured against.
+ *
+ * By id rather than by re-running the search below: that search is a sizing
+ * step, and a catalogue which has since grown a size in between would answer it
+ * with a different building than the customer actually chose.
+ *
+ * Deliberately unscoped by region. An order is a record of what was ordered, and
+ * a building that has since stopped being sold somewhere still has to open for
+ * the person who ordered it.
+ */
+export async function getBuildingSceneById(id: number): Promise<BuildingResolution> {
+  const payload = await getPayload({ config })
+
+  const doc = await payload.findByID({
+    collection: 'building-models',
+    id,
+    // mapBuildingScene throws on a relationship that came back as a bare id.
+    depth: 1,
+    disableErrors: true,
+  })
+
+  return doc ? { status: 'ok', scene: await sceneFor(payload, doc) } : { status: 'not-found' }
 }
 
 export async function getBuildingScene(query: Query): Promise<BuildingResolution> {

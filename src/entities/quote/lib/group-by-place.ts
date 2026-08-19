@@ -1,6 +1,17 @@
-import type { Room } from '@/entities/building'
-
 export type PlaceLabel = { key: string; name: string }
+
+/**
+ * As much of a room as a heading needs to know about.
+ *
+ * Structural rather than the building entity's own `Room`: this file sits in
+ * the quote entity, and a quote does not need the building's geometry to say
+ * what its headings are called. A `Room` satisfies it as it stands.
+ */
+type PlaceSource = {
+  key: string
+  name: string
+  zones: ReadonlyArray<{ key: string; name: string }>
+}
 
 export type PlaceGroup<T> = {
   key: string
@@ -16,7 +27,7 @@ export type PlaceGroup<T> = {
  * worth, and a single list headed with both names at once would hide which is
  * which. Undivided rooms are unchanged, which is nearly all of them.
  */
-export function placesOf(rooms: ReadonlyArray<Room>): PlaceLabel[] {
+export function placesOf(rooms: ReadonlyArray<PlaceSource>): PlaceLabel[] {
   return rooms.flatMap((room) =>
     room.zones.length === 0
       ? [{ key: room.key, name: room.name }]

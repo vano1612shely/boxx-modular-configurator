@@ -3,153 +3,13 @@
 import { ArrowLeft, ChevronDown, DoorOpen } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import type { BuildingScene, Room, SummaryFact, Zone } from '@/entities/building'
-import { buildingSummary, roomArea, zoneArea } from '@/entities/building'
+import type { BuildingScene } from '@/entities/building'
+import { buildingSummary, FactsPanel, roomFacts } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { changeSelectionHref, type IntakeAnswers } from '@/features/building-intake'
-import { areaIn, areaUnitLabel, AREA_UNITS, cn, formatArea, type AreaUnit } from '@/shared/lib'
-import { Card, Chip, Eyebrow, FloatingBar, Pill, PillLink, SceneOverlay } from '@/shared/ui/boxx'
-import { For, Show } from '@/shared/ui/control-flow'
-
-/** What a room is for, in words. Falling back to the key, which is at least true. */
-type TypeNames = Record<string, string>
-
-/**
- * The ft²/m² switch, sized to sit on the same line as the figure it converts.
- *
- * Beside the number rather than in a row of its own: it is a property of that
- * one figure, and a panel-wide control implied it governed the whole list.
- */
-function UnitSwitch({
-  unit,
-  onUnit,
-}: {
-  unit: AreaUnit
-  onUnit: (unit: AreaUnit) => void
-}) {
-  return (
-    <span
-      role="group"
-      aria-label="Units"
-      className="inline-flex shrink-0 overflow-hidden rounded-full ring-1 ring-border"
-    >
-      <For each={AREA_UNITS} getKey={(value) => value}>
-        {(value) => (
-          <button
-            type="button"
-            aria-pressed={unit === value}
-            onClick={() => onUnit(value)}
-            className={cn(
-              // Roomier for a finger, tight for a cursor: the two sit side by
-              // side, so the worst a mis-tap can do is pick the other unit.
-              'px-2 py-1 text-[0.625rem] leading-4 transition-colors',
-              'desktop:px-1.5 desktop:py-px',
-              unit === value
-                ? 'bg-ink text-surface'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {areaUnitLabel(value)}
-          </button>
-        )}
-      </For>
-    </span>
-  )
-}
-
-/**
- * The facts panel: open on desktop, behind a chevron on the phone.
- *
- * One tree, switched in CSS. There is no JS breakpoint in this codebase —
- * `isCoarsePointer` reports the pointer, not the width — and mounting two trees
- * for one list would leave the same `<dl>` in the DOM twice.
- */
-function FactsPanel({
-  facts,
-  open,
-  unit,
-  onUnit,
-  className,
-}: {
-  facts: SummaryFact[]
-  open: boolean
-  unit: AreaUnit
-  onUnit: (unit: AreaUnit) => void
-  className?: string
-}) {
-  return (
-    <Card
-      tone="surface"
-      radius="panel"
-      elevation="float"
-      hairline
-      pad="sm"
-      className={cn(
-        'pointer-events-auto w-[min(19rem,100%)]',
-        // Capped and scrollable: the header paints over the view bar — both are
-        // z 20 and the header renders later — so a panel tall enough to reach
-        // the bottom would cover the bar's pickers instead of sliding under.
-        'max-h-[calc(100dvh-13rem)] overflow-y-auto overscroll-contain',
-        'hidden desktop:block',
-        open && 'block',
-        className,
-      )}
-    >
-      <dl className="flex flex-col gap-2">
-        <For each={facts} getKey={(fact) => fact.label}>
-          {(fact) => (
-            <div className="flex items-center justify-between gap-4">
-              <Eyebrow as="dt" className="shrink-0">
-                {fact.label}
-              </Eyebrow>
-              <dd className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-right text-sm font-medium tabular-nums">
-                  {fact.value}
-                </span>
-                <Show when={fact.inUnits}>
-                  <UnitSwitch unit={unit} onUnit={onUnit} />
-                </Show>
-              </dd>
-            </div>
-          )}
-        </For>
-      </dl>
-    </Card>
-  )
-}
-
-/**
- * Name is in the bar beside it, so the panel states what the bar cannot.
- *
- * A zone answers for itself once one is picked. Whole-room facts for a divided
- * room leave the type out: calling a conference-and-kitchen room "Kitchen"
- * because that is what its `roomType` happens to say would be a plain untruth,
- * and the zone list below already says what the halves are.
- */
-function roomFacts(
-  room: Room,
-  zone: Zone | null,
-  unit: AreaUnit,
-  typeNames: TypeNames,
-): SummaryFact[] {
-  const named = (key: string) => typeNames[key] ?? key
-
-  if (zone) {
-    return [
-      { label: 'Type', value: named(zone.roomType) },
-      { label: 'Approx. floor area', value: formatArea(zoneArea(zone, unit), unit), inUnits: true },
-    ]
-  }
-
-  return [
-    ...(room.zones.length > 0
-      ? room.zones.map((each) => ({ label: each.name, value: named(each.roomType) }))
-      : [{ label: 'Type', value: named(room.roomType) }]),
-    // Always present: a room has an outline, so there is always an area to
-    // measure even when nobody has written one down.
-    { label: 'Approx. floor area', value: formatArea(roomArea(room, unit), unit), inUnits: true },
-  ]
-}
+import { areaIn, cn, formatArea, type AreaUnit } from '@/shared/lib'
+import { Chip, FloatingBar, Pill, PillLink, SceneOverlay } from '@/shared/ui/boxx'
+import { Show } from '@/shared/ui/control-flow'
 
 export function ConfiguratorHeader({
   building,
@@ -256,12 +116,7 @@ export function ConfiguratorHeader({
                 {toggle}
               </FloatingBar>
 
-              <FactsPanel
-                facts={facts}
-                open={detailsOpen}
-                unit={unit}
-                onUnit={setAreaUnit}
-              />
+              <FactsPanel facts={facts} open={detailsOpen} unit={unit} onUnit={setAreaUnit} />
             </>
           }
         >

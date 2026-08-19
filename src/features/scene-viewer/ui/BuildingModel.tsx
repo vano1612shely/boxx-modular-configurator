@@ -22,6 +22,8 @@ import { useModel } from '@/shared/three/use-model'
 
 type Props = {
   building: BuildingScene
+  /** True on a saved order: the shell is scenery, not a picker. */
+  readOnly?: boolean
 }
 
 /** Hoisted: a fresh literal would be a new value on every frame. */
@@ -47,7 +49,7 @@ function longestSide(box: Box3): number {
   return Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z)
 }
 
-export function BuildingModel({ building }: Props) {
+export function BuildingModel({ building, readOnly = false }: Props) {
   const scene = useModel(building.modelUrl)
   // Two, not one: with a single storey there is nothing the picker can cut to,
   // and the clipping planes would be six tests a fragment for no cut.
@@ -239,7 +241,9 @@ export function BuildingModel({ building }: Props) {
 
   // Nothing claimed means nothing to answer for, and the model stays out of the
   // pointer's way entirely rather than being raycast on every move for nothing.
-  const interactive = claimedBy.size > 0
+  // A saved order claims nothing either: the click would open a panel that is
+  // not on the page.
+  const interactive = claimedBy.size > 0 && !readOnly
 
   const roofShown = useConfiguratorSession((s) => s.roofShown)
   const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)

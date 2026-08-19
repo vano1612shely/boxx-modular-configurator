@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { regionClauses, whereAll } from './regions'
+import { regionClauses, whereAll } from './scope'
 
 describe('regionClauses', () => {
   it('does not narrow anything when no region was asked for', () => {

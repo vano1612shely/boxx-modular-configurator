@@ -286,6 +286,47 @@ window.addEventListener('message', (event) => {
 
 The payload shape is defined once in `src/entities/quote/model/schema.ts` (Zod).
 
+Then the visitor is sent on. **Integration Settings → After submitting** decides where:
+
+- **Redirect URL empty** — our own thank-you page at `/order/<reference>?submitted=1`. Its heading,
+  its sentence (`{reference}` is filled in) and the label on its button are all editable there.
+- **Redirect URL set** — that address, in the top window. Because a cross-origin parent cannot be
+  navigated from inside the frame, the host page is asked first and can do it properly itself:
+
+```js
+const CONFIGURATOR_ORIGIN = 'https://configurator.example'
+
+window.addEventListener('message', (event) => {
+  // Check the origin first, always. Any page on the internet can post to yours,
+  // and a `location.href` driven by an unchecked message is a redirect — or, with
+  // a `javascript:` URL, script execution — handed to whoever sent it.
+  if (event.origin !== CONFIGURATOR_ORIGIN) return
+  if (event.data?.type !== 'configurator:redirect') return
+
+  const url = new URL(event.data.url)
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return
+
+  window.location.href = url.href
+})
+```
+
+The same check belongs on the `configurator:quote-submitted` listener above.
+
+Without a listener the configurator falls back to `window.top`, then to the frame it is in. The
+confirmation stays on screen underneath with a plain link, so a redirect the browser refuses costs
+one click rather than the whole request.
+
+### Viewing a saved order
+
+Every quote carries a **reference** — twelve random characters, written once and never changed —
+and `/order/<reference>` opens that exact configuration in the 3D view: the same building, the same
+furniture in the same places, the same entrances, with everything that edits the scene taken away.
+The link is the credential, so it can be emailed to a customer; the page never shows contact
+details. The reference and a ready-made link are on each quote in the admin.
+
+A signed-in admin can also open `/order/<quote id>`. Without a Payload session that answers exactly
+as an unknown reference does, so the serial ids cannot be counted through from outside.
+
 ---
 
 ## Admin panel guide
@@ -296,8 +337,8 @@ The payload shape is defined once in `src/entities/quote/model/schema.ts` (Zod).
 | **Catalog → Building Lines** | Product lines + sizing rules (restroom thresholds, max units) and regions. |
 | **Catalog → Building Models** | One entry per size. The **Scene Editor** tab is the visual setup: default camera & limits ("Set default camera from view"), hidden-mesh patterns (roof/ceiling), wall auto-hide pattern, drawing room zones on the floor, per-room camera presets, default furniture placements (click-to-place). |
 | **Catalog → Furniture Packages** | Package + model, price, footprint (used for fit/collision checks), compatible room types / building lines / regions. |
-| **Sales → Quotes** | Submitted quote requests with the full configuration JSON. |
-| **Sales → Integration Settings** | Webhook URL + headers, postMessage toggle and target origin. |
+| **Sales → Quotes** | Submitted quote requests with the full configuration JSON, each with its order reference and a link to the 3D view of it. |
+| **Sales → Integration Settings** | Webhook URL + headers, postMessage toggle and target origin, and what happens after a request is sent: redirect URL, or the wording on our own thank-you page. |
 
 New buildings/packages go live immediately — no rebuild or deploy needed.
 

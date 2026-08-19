@@ -1,19 +1,34 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
 import { selectedVariant, zoneAt } from '@/entities/building'
 import { useConfiguration } from '@/entities/configuration'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
-import { quoteContactSchema, type QuoteConfiguration, type QuoteContact } from '@/entities/quote'
+import {
+  groupByPlace,
+  placeKeyOf,
+  placesOf,
+  quoteContactSchema,
+  type QuoteConfiguration,
+  type QuoteContact,
+} from '@/entities/quote'
+
+import type { SuccessCopy } from '@/modules/shared/order-success'
 
 import { submitQuote } from '../api/submit-quote'
-import { groupByPlace, placeKeyOf, placesOf } from '../lib/group-by-place'
+import { navigateTop } from '../lib/navigate-top'
+import { successTarget, type SuccessTarget } from '../lib/success-target'
+
 
 export type IntegrationOptions = {
   enablePostMessage: boolean
   targetOrigin: string
+  /** Where a finished request goes, or null for our own thank-you page. */
+  successRedirectUrl: string | null
+  success: SuccessCopy
 }
 
 type Args = {
@@ -25,10 +40,17 @@ type Args = {
 type SubmitState =
   | { phase: 'idle' }
   | { phase: 'submitting' }
-  | { phase: 'success'; quoteId: number }
+  | {
+      phase: 'success'
+      quoteId: number
+      reference: string
+      /** Where the visitor is on their way to, so the dialog can offer the link by hand. */
+      target: SuccessTarget
+    }
   | { phase: 'error'; message: string }
 
 export function useQuoteSummaryModel({ building, packages, integration }: Args) {
+  const router = useRouter()
   const placed = useConfiguration((s) => s.placed)
   const exterior = useConfiguration((s) => s.exterior)
   const [submitState, setSubmitState] = useState<SubmitState>({ phase: 'idle' })
@@ -146,6 +168,8 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
       return
     }
 
+    // First, and unchanged: this is the host page's documented contract, and it
+    // has to go out whatever we do about navigating afterwards.
     if (integration.enablePostMessage && window.parent !== window) {
       window.parent.postMessage(
         { type: 'configurator:quote-submitted', quoteId: result.data.quoteId, configuration },
@@ -153,7 +177,32 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
       )
     }
 
-    setSubmitState({ phase: 'success', quoteId: result.data.quoteId })
+    const { quoteId, reference } = result.data
+    const target = successTarget(integration.successRedirectUrl, reference)
+
+    // Set before navigating, not instead of it: the dialog shows the same
+    // confirmation underneath, so a redirect the browser refuses — no user
+    // activation left after the await, a sandboxed frame — leaves the visitor
+    // with the answer and a link rather than with a dialog that did nothing.
+    setSubmitState({ phase: 'success', quoteId, reference, target })
+
+    if (target.kind === 'internal') {
+      // Same origin, so this stays inside the host's iframe, which is right for
+      // a page that is still part of the configurator.
+      router.push(target.href)
+      return
+    }
+
+    // A host page can move itself better than we can move it, so it is asked
+    // first; `navigateTop` is what happens when nobody is listening.
+    if (integration.enablePostMessage && window.parent !== window) {
+      window.parent.postMessage(
+        { type: 'configurator:redirect', url: target.href },
+        integration.targetOrigin || '*',
+      )
+    }
+
+    navigateTop(target.href)
   }
 
   return {

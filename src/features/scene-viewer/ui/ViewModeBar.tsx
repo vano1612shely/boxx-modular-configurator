@@ -35,9 +35,11 @@ function spellOut(text: string, show: boolean) {
 
 type Props = {
   floors: BuildingFloor[]
+  /** True on a saved order, where nothing can be picked up and so nothing is selected. */
+  readOnly?: boolean
 }
 
-export function ViewModeBar({ floors }: Props) {
+export function ViewModeBar({ floors, readOnly = false }: Props) {
   const setViewMode = useConfiguratorSession((s) => s.setViewMode)
   const requestMoveTo = useConfiguratorSession((s) => s.requestMoveTo)
   const rotateView = useConfiguratorSession((s) => s.rotateView)
@@ -180,8 +182,11 @@ export function ViewModeBar({ floors }: Props) {
         {/* Only inside a room. From the building view it walked the camera to
             eye level inside the glb, where the walls it flew through are still
             drawn and stand between the visitor and what they picked. A room
-            already hides its own walls, so there the move works. */}
-        <Show when={isRoomFocused}>
+            already hides its own walls, so there the move works.
+
+            And only where something can be selected: on a saved order nothing
+            ever is, so this would be a button permanently greyed out. */}
+        <Show when={isRoomFocused && !readOnly}>
           <FloatingBar.Divider />
           <Pill
             {...spellOut('Move to selected', false)}

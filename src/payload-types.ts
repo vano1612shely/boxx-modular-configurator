@@ -796,6 +796,10 @@ export interface FurnitureTier {
 export interface Quote {
   id: number;
   title?: string | null;
+  /**
+   * The order number the customer is given. Written once and never changes.
+   */
+  reference?: string | null;
   status?: ('new' | 'forwarded' | 'webhook-failed') | null;
   contact?: {
     name?: string | null;
@@ -1297,6 +1301,7 @@ export interface FurnitureTiersSelect<T extends boolean = true> {
  */
 export interface QuotesSelect<T extends boolean = true> {
   title?: T;
+  reference?: T;
   status?: T;
   contact?:
     | T
@@ -1502,6 +1507,31 @@ export interface IntegrationSetting {
    * Allowed origin for postMessage. Use the host-site origin in production.
    */
   targetOrigin?: string | null;
+  /**
+   * What the visitor sees once a quote request has gone through.
+   */
+  success?: {
+    /**
+     * Send the visitor here after a successful request. Leave empty to show our own thank-you page instead, which is what the wording below is for. A full address, starting with https://.
+     */
+    redirectUrl?: string | null;
+    /**
+     * The heading on our own thank-you page.
+     */
+    title?: string | null;
+    /**
+     * The sentence under it. Write {reference} where the order number should go; anything else in braces is left on screen as typed.
+     */
+    body?: string | null;
+    /**
+     * Offer a button that opens the saved 3D view of the order. Shown on the thank-you page and beside the confirmation in the configurator.
+     */
+    showOrderLink?: boolean | null;
+    /**
+     * The words on that button.
+     */
+    viewOrderLabel?: string | null;
+  };
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -1630,6 +1660,15 @@ export interface IntegrationSettingsSelect<T extends boolean = true> {
       };
   enablePostMessage?: T;
   targetOrigin?: T;
+  success?:
+    | T
+    | {
+        redirectUrl?: T;
+        title?: T;
+        body?: T;
+        showOrderLink?: T;
+        viewOrderLabel?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

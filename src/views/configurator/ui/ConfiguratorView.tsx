@@ -1,17 +1,13 @@
 import { SearchX } from 'lucide-react'
 
+import { getBuildingScene } from '@/entities/building/api'
+import { getPackagesForLine } from '@/entities/furniture-package/api'
 import { changeSelectionHref, IntakeForm } from '@/features/building-intake'
+import { resolveRegionScope } from '@/modules/regions/lib/scope'
+import { getDefaultAreaUnit } from '@/modules/settings/lib/read-settings'
 import { Callout, CenteredPanel } from '@/shared/ui/boxx'
 
-import { getBuildingScene } from '../api/get-building-scene'
-import {
-  getDefaultAreaUnit,
-  getIntakeLines,
-  getIntegrationOptions,
-  getQuizCopy,
-} from '../api/get-catalog'
-import { getPackagesForLine } from '../api/get-packages'
-import { resolveRegionScope } from '../api/regions'
+import { getIntakeLines, getIntegrationOptions, getQuizCopy } from '../api/get-catalog'
 import { ConfiguratorScreen } from './ConfiguratorScreen'
 import { OverCapacityScreen } from './OverCapacityScreen'
 

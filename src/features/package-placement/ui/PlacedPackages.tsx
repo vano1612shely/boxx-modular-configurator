@@ -14,7 +14,6 @@ import {
 } from 'react'
 import {
   BackSide,
-  Box3,
   Color,
   MathUtils,
   Mesh,
@@ -40,7 +39,11 @@ import {
 } from '@/entities/building'
 import { useConfiguration, type PlacedPackage } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
-import type { FurniturePackageEntity } from '@/entities/furniture-package'
+import {
+  footprintOf,
+  useCentredPackage,
+  type FurniturePackageEntity,
+} from '@/entities/furniture-package'
 import { cn } from '@/shared/lib'
 import { HIGHLIGHT } from '@/shared/three/scene-tokens'
 import { FloatingBar, Pill } from '@/shared/ui/boxx'
@@ -52,8 +55,6 @@ import { collidesWithAny } from '../lib/placement-geometry'
 import { nearestFittingAngle, nextFittingQuarter } from '../lib/rotation-fit'
 import { FLOOR_INSETS, toolbarPositioner } from '../lib/toolbar-position'
 import { measureInsets, readChrome, type Insets } from '../lib/scene-insets'
-import { footprintOf, setMeasuredFootprint } from '../lib/measured-footprints'
-import { useModel } from '@/shared/three/use-model'
 
 const ROTATION_TICKS = [-180, -90, 0, 90, 180] as const
 
@@ -306,7 +307,7 @@ function buildOutline(source: Object3D, floorY: number): Outline {
 }
 
 function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: ItemProps) {
-  const scene = useModel(pkg.modelUrl)
+  const { object, height } = useCentredPackage(pkg)
   const groupRef = useRef<Group>(null)
   const rotationRef = useRef<Group>(null)
   const [rotateOpen, setRotateOpen] = useState(false)
@@ -316,23 +317,6 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
   const viewport = useThree((state) => state.size)
 
   const floorY = roomFloorTopY(room)
-
-  const { object, height } = useMemo(() => {
-    const clone = scene.clone(true)
-
-    const bounds = new Box3().setFromObject(clone)
-    const size = bounds.getSize(new Vector3())
-    const centre = bounds.getCenter(new Vector3())
-
-    // Clamping and collision assume a footprint centred on the placement point.
-    // Y is left alone: the model stands on the floor, so its base sits there.
-    clone.position.x -= centre.x
-    clone.position.z -= centre.z
-
-    setMeasuredFootprint(pkg.id, { width: size.x, depth: size.z })
-
-    return { object: clone, height: size.y }
-  }, [scene, pkg.id])
 
   const selectedInstanceId = useConfiguration((s) => s.selectedInstanceId)
   const draggingInstanceId = useConfiguration((s) => s.draggingInstanceId)

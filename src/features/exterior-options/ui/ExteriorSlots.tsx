@@ -47,6 +47,8 @@ type SpotProps = {
   variant: ExteriorVariant
   /** Middle of the building, so the fly-over knows which side is outside. */
   centre: { x: number; z: number } | null
+  /** True on a saved order, where what stands here is a fact rather than a choice. */
+  readOnly: boolean
 }
 
 /**
@@ -58,13 +60,14 @@ type SpotProps = {
  * to appear, a hover is a thing a phone does not have, and a patch of colour
  * over the deck said nothing the name does not.
  */
-function ExteriorSpot({ slot, variant, centre }: SpotProps) {
+function ExteriorSpot({ slot, variant, centre, readOnly }: SpotProps) {
   const openSlot = useConfiguratorSession((s) => s.openExteriorSlot)
   const open = useConfiguratorSession((s) => s.openSlotKey === slot.key)
 
   // One choice is not a choice: the structure is simply part of the building,
-  // and a marker would promise a picker that never opens.
-  const pickable = slot.variants.length > 1
+  // and a marker would promise a picker that never opens. A saved order makes
+  // the same promise for a different reason — the panel is not on the page.
+  const pickable = slot.variants.length > 1 && !readOnly
 
   const look = () => {
     openSlot(slot.key)
@@ -131,7 +134,13 @@ function ExteriorSpot({ slot, variant, centre }: SpotProps) {
  * single room. Previewing a room from above is not the same thing: the building
  * is still on screen for that, and so are its entrances.
  */
-export function ExteriorSlots({ building }: { building: BuildingScene }) {
+export function ExteriorSlots({
+  building,
+  readOnly = false,
+}: {
+  building: BuildingScene
+  readOnly?: boolean
+}) {
   const selection = useConfiguration((s) => s.exterior)
   const insideRoom = useConfiguratorSession((s) => s.focusedRoomKey !== null)
   const bounds = useConfiguratorSession((s) => s.buildingBounds)
@@ -150,7 +159,9 @@ export function ExteriorSlots({ building }: { building: BuildingScene }) {
         const variant = selectedVariant(slot, selection)
         if (!variant) return null
 
-        return <ExteriorSpot slot={slot} variant={variant} centre={centre} />
+        return (
+          <ExteriorSpot slot={slot} variant={variant} centre={centre} readOnly={readOnly} />
+        )
       }}
     </For>
   )

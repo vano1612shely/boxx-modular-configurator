@@ -62,6 +62,7 @@ export {
   sortFloors,
 } from './lib/building-floors'
 export { buildingSummary, type SummaryFact } from './lib/building-summary'
+export { roomFacts, type RoomTypeNames } from './lib/room-facts'
 export {
   EYE_LEVEL,
   extentWithoutSite,
@@ -95,6 +96,7 @@ export { resolveRoomVisibility, type RoomVisibility } from './lib/room-visibilit
 export { setTreeOpacity } from './lib/fade'
 export { bearingOf, facesSun, roomSunBearing, sunHeading, sunRay } from './lib/sun-patch'
 export { preloadRoomTextures, useSurfaceTextures } from './lib/use-surface-textures'
+export { FactsPanel, type FactsPanelProps } from './ui/FactsPanel'
 export { preloadOpeningModels } from './ui/OpeningModel'
 export { fitRoofToBuilding, type RoofPlacement } from './lib/roof-placement'
 export { RoofModel } from './ui/RoofModel'

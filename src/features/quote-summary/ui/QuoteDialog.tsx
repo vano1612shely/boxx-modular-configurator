@@ -5,7 +5,17 @@ import { useState } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
 import type { FurniturePackageEntity } from '@/entities/furniture-package'
-import { Callout, Card, Eyebrow, Field, OVERLAY_Z, Pill, SceneOverlay } from '@/shared/ui/boxx'
+import { fillTokens } from '@/modules/shared/quiz-copy'
+import {
+  Callout,
+  Card,
+  Eyebrow,
+  Field,
+  OVERLAY_Z,
+  Pill,
+  PillLink,
+  SceneOverlay,
+} from '@/shared/ui/boxx'
 import { For, Match, Show, Switch } from '@/shared/ui/control-flow'
 
 import { useQuoteSummaryModel, type IntegrationOptions } from '../model/use-quote-summary-model'
@@ -73,15 +83,45 @@ export function QuoteDialog({ building, packages, integration }: Props) {
             </div>
 
             <Switch>
-              <Match when={vm.submitState.phase === 'success'}>
-                <Callout
-                  tone="success"
-                  align="center"
-                  icon={<CircleCheck />}
-                  title="Your quote request has been sent."
-                >
-                  The team will get back to you shortly.
-                </Callout>
+              <Match when={vm.submitState.phase === 'success' && vm.submitState}>
+                {(state) => (
+                  <Callout
+                    tone="success"
+                    align="center"
+                    icon={<CircleCheck />}
+                    title={integration.success.title}
+                    action={
+                      <>
+                        {/* The 3D view of what was just ordered. Opened in its
+                            own tab: the visitor may still be mid-redirect. */}
+                        <Show when={integration.success.showOrderLink ? state.reference : null}>
+                          {(reference) => (
+                            <PillLink
+                              href={`/order/${encodeURIComponent(reference)}`}
+                              variant="primary"
+                              target="_blank"
+                              rel="noopener"
+                            >
+                              {integration.success.viewOrderLabel}
+                            </PillLink>
+                          )}
+                        </Show>
+                        {/* A real anchor, because an automatic redirect can be
+                            refused — the activation from the press was spent
+                            waiting on the server. One click beats a dead end. */}
+                        <Show when={state.target.kind === 'external' ? state.target.href : null}>
+                          {(href) => (
+                            <PillLink href={href} variant="secondary" target="_top" rel="noopener">
+                              Continue
+                            </PillLink>
+                          )}
+                        </Show>
+                      </>
+                    }
+                  >
+                    {fillTokens(integration.success.body, { reference: state.reference })}
+                  </Callout>
+                )}
               </Match>
               <Match when={vm.submitState.phase !== 'success'}>
                 <div className="flex flex-col gap-card">

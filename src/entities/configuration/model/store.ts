@@ -4,6 +4,19 @@ import { uniqueId } from '@/shared/lib'
 
 import type { DragPose, PlacedPackage } from './types'
 
+/**
+ * A configuration whole: a building, its furniture and its exterior picks.
+ *
+ * `buildingId` is nullable because this is used in both directions — to open a
+ * saved order, and to put back whatever the store held before one was opened,
+ * which may be nothing at all.
+ */
+export type ConfigurationSnapshot = {
+  buildingId: number | null
+  placed: PlacedPackage[]
+  exterior: Record<string, string>
+}
+
 type ConfigurationState = {
   /**
    * The building everything below was chosen for, or null before one is open.
@@ -43,6 +56,8 @@ type ConfigurationState = {
   dragValid: boolean
   /** Opens a building, emptying a configuration that belonged to another one. */
   adoptBuilding: (buildingId: number) => void
+  /** Opens a configuration that was saved earlier, whole. */
+  hydrate: (snapshot: ConfigurationSnapshot) => void
   setExteriorVariant: (slotKey: string, variantKey: string) => void
   addPackage: (placement: Omit<PlacedPackage, 'instanceId'>) => string
   removePackage: (instanceId: string) => void
@@ -84,6 +99,30 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
             dragValid: true,
           },
     ),
+
+  /**
+   * One write rather than a loop of `addPackage`.
+   *
+   * That action mints an id per piece and leaves the last one selected, which
+   * on a page that cannot be edited would draw an outline and a toolbar around
+   * a piece nobody picked. It also names the building outright, so the guard in
+   * `adoptBuilding` cannot mistake a saved order for the session in progress.
+   *
+   * Unguarded, unlike `adoptBuilding`: this is how the order view both opens a
+   * saved configuration and puts back the one it displaced, and putting a
+   * configuration back into the building it already belonged to is exactly the
+   * case a guard on `buildingId` would refuse.
+   */
+  hydrate: ({ buildingId, placed, exterior }) =>
+    set({
+      buildingId,
+      placed,
+      exterior,
+      selectedInstanceId: null,
+      draggingInstanceId: null,
+      dragPose: null,
+      dragValid: true,
+    }),
 
   setExteriorVariant: (slotKey, variantKey) =>
     set((state) => ({ exterior: { ...state.exterior, [slotKey]: variantKey } })),

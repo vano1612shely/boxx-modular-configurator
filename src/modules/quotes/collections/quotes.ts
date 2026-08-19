@@ -1,19 +1,34 @@
 import type { CollectionConfig } from 'payload'
 
+import { isOrderReference, newOrderReference } from '../../shared/order-reference'
+
 export const Quotes: CollectionConfig = {
   slug: 'quotes',
   admin: {
     group: 'Sales',
     useAsTitle: 'title',
-    defaultColumns: ['title', 'status', 'createdAt'],
+    defaultColumns: ['title', 'reference', 'status', 'createdAt'],
     description: 'Quote requests submitted from the configurator.',
   },
   hooks: {
-    // `useAsTitle` cannot reach into a group.
+    // `useAsTitle` cannot reach into a group, and the reference has to exist
+    // before the row does — it is the address the customer is given.
     beforeChange: [
-      ({ data }) => ({
+      ({ data, originalDoc, operation }) => ({
         ...data,
         title: data?.contact?.name || data?.contact?.email || 'Quote request',
+        // Minted here and taken from nowhere else. Never from the request: the
+        // collection is open to anonymous creates, and the reference is the only
+        // thing guarding an order, so a caller must not be able to choose it.
+        // Never carried over on a create either — Payload's Duplicate copies the
+        // row's fields, and two orders answering to one link is worse than the
+        // duplicate having its own. On an update the existing one is kept, so a
+        // link already sent out goes on working; a row whose reference is
+        // missing or malformed gets a fresh one rather than staying unreachable.
+        reference:
+          operation === 'update' && isOrderReference(originalDoc?.reference ?? '')
+            ? originalDoc.reference
+            : newOrderReference(),
       }),
     ],
   },
@@ -28,6 +43,30 @@ export const Quotes: CollectionConfig = {
       name: 'title',
       type: 'text',
       admin: { hidden: true },
+    },
+    {
+      // Indexed because every customer visit to /order/<reference> looks the
+      // row up by it, and unique because the whole point is that one reference
+      // means one order.
+      name: 'reference',
+      type: 'text',
+      unique: true,
+      index: true,
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description: 'The order number the customer is given. Written once and never changes.',
+      },
+    },
+    {
+      name: 'orderLink',
+      type: 'ui',
+      admin: {
+        position: 'sidebar',
+        components: {
+          Field: '/modules/quotes/admin/OrderLinkField#OrderLinkField',
+        },
+      },
     },
     {
       name: 'status',

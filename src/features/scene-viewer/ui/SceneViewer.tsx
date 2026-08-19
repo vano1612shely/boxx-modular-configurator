@@ -38,10 +38,20 @@ import { ZoneFloors } from './ZoneFloors'
 
 type Props = {
   building: BuildingScene
+  /**
+   * True where the building is being looked at rather than configured.
+   *
+   * A prop, deliberately, and never a flag in a store: the stores here are
+   * module-level singletons that outlive a page, so a read-only order left on
+   * one would follow the visitor back into the configurator and disable the
+   * product. Everything this turns off is an *edit* affordance — orbiting,
+   * entering a room, picking a storey and switching units all stay.
+   */
+  readOnly?: boolean
   children?: ReactNode
 }
 
-export function SceneViewer({ building, children }: Props) {
+export function SceneViewer({ building, readOnly = false, children }: Props) {
   // Read once: a device does not grow a mouse mid-session, and re-reading it
   // per render would churn the Canvas props.
   const [coarse] = useState(isCoarsePointer)
@@ -153,7 +163,7 @@ export function SceneViewer({ building, children }: Props) {
         </Show>
 
         <Suspense fallback={null}>
-          <BuildingModel building={building} />
+          <BuildingModel building={building} readOnly={readOnly} />
           {/* Hidden, never unmounted: drei builds two render targets, a
               geometry and three materials in a memo with no cleanup, so every
               remount orphaned a set. A storey is also cut out mid-air, and a
@@ -217,7 +227,7 @@ export function SceneViewer({ building, children }: Props) {
       </Canvas>
 
       <ZoneBar room={vm.focusedRoom} />
-      <ViewModeBar floors={building.floors} />
+      <ViewModeBar floors={building.floors} readOnly={readOnly} />
 
       {/* `settling` is true for only two frames, so the veil cannot fade in. */}
       <div

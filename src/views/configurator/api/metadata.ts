@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 
-import { getPageMeta } from './get-catalog'
+import { getPageMeta } from '@/modules/settings/lib/read-settings'
 
 /**
  * The page's own tags, its Open Graph pair and its icon, from the admin.

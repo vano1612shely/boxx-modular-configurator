@@ -1,4 +1,4 @@
-import type { PackageFootprint } from '@/entities/furniture-package'
+import type { PackageFootprint } from '../model/types'
 
 // Measured from loaded glb bounding boxes, in metres; overrides the admin estimate.
 const measured = new Map<number, PackageFootprint>()

@@ -116,3 +116,80 @@ describe('dragging a piece', () => {
     expect(config().dragPose).toBeNull()
   })
 })
+
+describe('opening a saved order', () => {
+  const SAVED = {
+    buildingId: 8,
+    placed: [
+      { instanceId: 'order-0', packageId: 1, roomKey: 'office-1', x: 1, z: 2, rotationYDeg: 90 },
+    ],
+    exterior: { 'entrance-1': 'ramp' },
+  }
+
+  it('replaces whatever was there rather than adding to it', () => {
+    config().adoptBuilding(9)
+    place()
+    config().setExteriorVariant('entrance-1', 'steps')
+
+    config().hydrate(SAVED)
+
+    expect(config().buildingId).toBe(8)
+    expect(config().placed).toEqual(SAVED.placed)
+    expect(config().exterior).toEqual({ 'entrance-1': 'ramp' })
+  })
+
+  // On a page that cannot be edited, a selection would draw an outline and a
+  // toolbar around a piece nobody picked.
+  it('leaves nothing selected and nothing in the air', () => {
+    config().hydrate(SAVED)
+
+    expect(config()).toMatchObject({
+      selectedInstanceId: null,
+      draggingInstanceId: null,
+      dragPose: null,
+      dragValid: true,
+    })
+  })
+
+  /**
+   * The complaint this guards against: furnish a building, send the request,
+   * follow the link on the thank-you page into the 3D view of the order, press
+   * Back — and find the building empty.
+   *
+   * The order page and the configurator share this store, and /order is a
+   * client-side navigation away from /configurator, so a visitor can be looking
+   * at a saved order with a session still in progress underneath. Emptying the
+   * store on the way out is what loses it; the order is laid over what was
+   * there and lifted off again instead.
+   */
+  it('gives back the configuration it was laid over', () => {
+    config().adoptBuilding(9)
+    const instanceId = place()
+    config().setExteriorVariant('entrance-1', 'steps')
+
+    const displaced = {
+      buildingId: config().buildingId,
+      placed: config().placed,
+      exterior: config().exterior,
+    }
+
+    config().hydrate(SAVED)
+    config().hydrate(displaced)
+
+    expect(config().buildingId).toBe(9)
+    expect(config().placed.map((p) => p.instanceId)).toEqual([instanceId])
+    expect(config().exterior).toEqual({ 'entrance-1': 'steps' })
+  })
+
+  // Nothing configured yet is a configuration too, and putting it back must not
+  // leave the order's building behind for the configurator's guard to find.
+  it('gives back an empty store as empty, with no building open', () => {
+    const displaced = { buildingId: null, placed: [], exterior: {} }
+
+    config().hydrate(SAVED)
+    config().hydrate(displaced)
+
+    expect(config().buildingId).toBeNull()
+    expect(config().placed).toEqual([])
+  })
+})

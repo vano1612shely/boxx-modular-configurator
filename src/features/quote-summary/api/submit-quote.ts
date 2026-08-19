@@ -7,7 +7,12 @@ import config from '@payload-config'
 import { quoteRequestSchema } from '@/entities/quote'
 import { err, ok, type Result } from '@/shared/lib'
 
-type SubmitOutcome = { quoteId: number; forwarded: boolean }
+type SubmitOutcome = {
+  quoteId: number
+  /** The order's own address, which is what the customer is given. */
+  reference: string
+  forwarded: boolean
+}
 
 export async function submitQuote(input: unknown): Promise<Result<SubmitOutcome>> {
   const parsed = quoteRequestSchema.safeParse(input)
@@ -57,7 +62,10 @@ export async function submitQuote(input: unknown): Promise<Result<SubmitOutcome>
       })
     }
 
-    return ok({ quoteId: quote.id, forwarded })
+    // Written by the collection's own beforeChange hook, so it is there on a
+    // create. Defaulted anyway rather than asserted: an empty one only costs
+    // the link to the 3D view, and a thrown page would cost the whole request.
+    return ok({ quoteId: quote.id, reference: quote.reference ?? '', forwarded })
   } catch {
     return err('Could not submit the quote request. Please try again later.')
   }

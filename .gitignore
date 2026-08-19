@@ -55,3 +55,11 @@ node_modules/
 
 # Machine-specific: permissions and paths, not shared between checkouts.
 /.claude/settings.local.json
+
+# graphify knowledge graph — derived from the source, rebuilt by the hooks.
+# manifest.json records absolute paths, so none of this is portable.
+#
+# Unanchored: the tool leaves a cache beside whatever it walks, so these turn up
+# under src/ and deeper as well. Anchored at the root, 26 of them under
+# src/.graphify/cache/ were staged and nearly went out with a release.
+.graphify/

@@ -2,13 +2,13 @@ import 'dotenv/config'
 
 import { getPayload, type Payload } from 'payload'
 
-import config from '../src/payload.config'
+import config from '../payload.config'
 import {
   buildConferenceCorePackage,
   buildOfficeCorePackage,
   buildTaskChairPackage,
-} from '../src/seed/lib/build-demo-assets'
-import { ensureCatalogueTerms } from '../src/modules/shared/catalogue-terms'
+} from './lib/build-demo-assets'
+import { ensureCatalogueTerms } from '../modules/shared/catalogue-terms'
 
 /**
  * Brings the demo furniture up to date with the builders, on a database that has

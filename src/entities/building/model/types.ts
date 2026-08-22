@@ -127,6 +127,16 @@ export type Room = {
   key: string
   name: string
   roomType: RoomType
+  /**
+   * Drawn, marked and framed like a room; furnished like nothing at all.
+   *
+   * Its own flag rather than a reading of `roomType`, because room types are
+   * catalogue rows an admin can rename or delete, and they already answer a
+   * different question — which furniture fits. A restroom's fittings are part
+   * of the building's own model, so there is nothing to offer and nothing to
+   * put anywhere; all it wants is to be looked at closely.
+   */
+  isRestroom: boolean
   /** Authored floor area. Either half null means "work that unit out". */
   areaSqFt: number | null
   areaSqM: number | null

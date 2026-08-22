@@ -236,6 +236,10 @@ export function useSceneEditorModel() {
           // Whatever the catalogue lists first, since there is no longer a
           // kind of room the code knows to prefer. The picker is right there.
           roomType: roomTypes[0]?.id ?? 0,
+          // Written out rather than left to the column default: Payload rewrites
+          // an array row wholesale on save, so a key that is never sent is a key
+          // that can quietly go missing.
+          isRestroom: false,
           floorPolygon: rectifyPolygon(drawingPoints.map((p) => ({ x: p.x, z: p.z }))).map(
             (p, i, all) => ({ ...p, side: autoAssignSides(all)[i] }),
           ),
@@ -290,6 +294,10 @@ export function useSceneEditorModel() {
     if (selectedRoomIndex === null) return
     const room = draft?.rooms?.[selectedRoomIndex]
     if (!room) return
+    // Zones give parts of a floor their own use and their own furniture, and
+    // nothing is furnished in a restroom. Refused here as well as in the panel,
+    // because a mode outlives the render that started it.
+    if (room.isRestroom === true) return
 
     const existing = roomZones(room.zones)
     const result = cutPolygon(cutTarget(room), path)
@@ -673,6 +681,7 @@ export function useSceneEditorModel() {
     if (mode === 'cut-zone') {
       const room = selectedRoomIndex === null ? null : draft?.rooms?.[selectedRoomIndex]
       if (!room) return
+      if (room.isRestroom === true) return
 
       const outline = cutTarget(room)
       // Aiming at a wall with a mouse lands near it rather than on it, so a
@@ -1043,6 +1052,15 @@ export function useSceneEditorModel() {
     },
 
     onSetMode: (next: EditorMode) => {
+      // A room that cannot be divided must not be able to enter the mode that
+      // divides it, however the mode came to be asked for.
+      if (
+        next === 'cut-zone' &&
+        selectedRoomIndex !== null &&
+        draft?.rooms?.[selectedRoomIndex]?.isRestroom === true
+      ) {
+        return
+      }
       setMode(next)
       setDrawingPoints([])
       setCutPoints([])

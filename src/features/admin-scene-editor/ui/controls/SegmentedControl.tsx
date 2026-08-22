@@ -8,6 +8,8 @@ export type SegmentOption<T extends string> = {
   value: T
   label: string
   title?: string
+  /** Shown but refused. `title` is where the reason goes. */
+  disabled?: boolean
 }
 
 type Props<T extends string> = {
@@ -32,8 +34,12 @@ export function SegmentedControl<T extends string>({
             <button
               type="button"
               aria-pressed={option.value === value}
+              disabled={option.disabled}
               title={option.title}
-              style={segmentItem(option.value === value)}
+              style={{
+                ...segmentItem(option.value === value),
+                ...(option.disabled ? { opacity: 0.45, cursor: 'not-allowed' } : null),
+              }}
               onClick={() => onChange(option.value)}
             >
               {option.label}

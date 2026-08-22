@@ -402,6 +402,10 @@ export interface BuildingModel {
         name: string;
         roomType: number | RoomType;
         /**
+         * A restroom is drawn and framed like a room — it gets its outline, its marker and its own camera — but nothing is furnished in it and it cannot be divided into zones. Set it in the Scene Editor, on the room itself.
+         */
+        isRestroom?: boolean | null;
+        /**
          * Floor area in ft². Empty means it is worked out from the outline below — fill it in only when you have a better figure than the trace.
          */
         areaSqFt?: number | null;
@@ -1147,6 +1151,7 @@ export interface BuildingModelsSelect<T extends boolean = true> {
         key?: T;
         name?: T;
         roomType?: T;
+        isRestroom?: T;
         areaSqFt?: T;
         areaSqM?: T;
         floorPolygon?:

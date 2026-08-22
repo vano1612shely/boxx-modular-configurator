@@ -89,7 +89,7 @@ type ConfiguratorSessionState = {
    * a room, or on the way out to a different building.
    */
   panelCollapsed: boolean
-  focusRoom: (key: string) => void
+  focusRoom: (key: string, zoneKey?: string | null) => void
   openExteriorSlot: (key: string | null) => void
   exitRoomFocus: () => void
   setInteractionLock: (locked: boolean) => void
@@ -148,13 +148,19 @@ export const useConfiguratorSession = create<ConfiguratorSessionState>((set) => 
   areaUnitOverride: null,
   panelCollapsed: false,
   setPanelCollapsed: (panelCollapsed) => set({ panelCollapsed }),
-  // Entering lands on the whole room, never on one of its halves: what is in
-  // the room is the first thing to see, and picking a half is a step after.
-  focusRoom: (key) =>
+  // Entering lands on whatever was pressed to get here — the whole of an
+  // undivided room, or the named half of a divided one, which is the only
+  // thing a divided room offers a way in through.
+  //
+  // Defaulted rather than required: leaving it out means the whole room, and
+  // it still has to be written, because the zone a visitor was last in belongs
+  // to the room they were last in and would otherwise follow them into a room
+  // that has never heard of it.
+  focusRoom: (key, zoneKey = null) =>
     set((s) => ({
       focusedRoomKey: key,
       previewRoomKey: null,
-      activeZoneKey: null,
+      activeZoneKey: zoneKey,
       moveToTarget: null,
       viewMode: 'dollhouse',
       pickedView: 'dollhouse',

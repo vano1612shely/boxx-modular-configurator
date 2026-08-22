@@ -405,6 +405,10 @@ export function mapRoom(room: RoomDoc): Room {
     name: room.name,
     // Populated at depth 1; an id on its own cannot be resolved to a key here.
     roomType: roomTypeSlug(room.roomType) ?? UNTYPED,
+    // Absent on every room drawn before the flag existed, and null on any row
+    // Payload rewrote without it. Only a tick makes a restroom — the other way
+    // round would be a room that quietly refused furniture.
+    isRestroom: room.isRestroom === true,
     // Zero is a figure someone typed; only an empty field means "work it out".
     areaSqFt: typeof room.areaSqFt === 'number' ? room.areaSqFt : null,
     areaSqM: typeof room.areaSqM === 'number' ? room.areaSqM : null,

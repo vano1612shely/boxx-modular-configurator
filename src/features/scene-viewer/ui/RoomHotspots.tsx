@@ -1,36 +1,52 @@
 'use client'
 
 import { Html } from '@react-three/drei'
-import { Plus } from 'lucide-react'
+import { Plus, Toilet } from 'lucide-react'
 
-import type { Room } from '@/entities/building'
-import { polygonCentroid, roomFloorTopY } from '@/entities/building'
+import { roomFloorTopY } from '@/entities/building'
 import { cn } from '@/shared/lib'
 import { Chip } from '@/shared/ui/boxx'
 import { For } from '@/shared/ui/control-flow'
 
+import type { RoomMarker } from '../lib/room-markers'
+
 type Props = {
-  rooms: Room[]
+  markers: RoomMarker[]
   /** The room being looked at, or null while the whole building is. */
   focusedKey: string | null
-  onFocusRoom: (key: string) => void
+  onOpenMarker: (marker: RoomMarker) => void
 }
 
-/** Head height over the room, so the marker reads as belonging to it. */
-function anchorOf(room: Room): [number, number, number] {
-  const centroid = polygonCentroid(room.floorPolygon)
-  return [centroid.x, roomFloorTopY(room) + 1.1, centroid.z]
+/** Head height over the floor it stands for, so it reads as belonging to it. */
+function anchorOf(marker: RoomMarker): [number, number, number] {
+  return [marker.at.x, roomFloorTopY(marker.room) + 1.1, marker.at.z]
+}
+
+/**
+ * What a marker promises, said out loud.
+ *
+ * A room's marker promises somewhere to go and furnish; a restroom's promises a
+ * closer look and nothing else; a zone's promises one named half of a room. The
+ * room is named alongside the zone because two rooms may well both have a half
+ * called "Kitchen", and a chip reading "Kitchen" over a plan is the only thing
+ * telling them apart on screen — where they are is the answer, and a screen
+ * reader has no where.
+ */
+function labelOf(marker: RoomMarker): string {
+  if (marker.entry === 'preview') return `Look at ${marker.name}`
+  if (marker.zone) return `Enter ${marker.zone.name} in ${marker.room.name}`
+  return `Enter ${marker.name}`
 }
 
 // Hidden in CSS rather than unmounted: every drei <Html> runs a full
 // scene.updateMatrixWorld() and spins up its own React root when it mounts, so
 // unmounting these on room entry made leaving one cost a traversal per room.
-export function RoomHotspots({ rooms, focusedKey, onFocusRoom }: Props) {
+export function RoomHotspots({ markers, focusedKey, onOpenMarker }: Props) {
   return (
-    <For each={rooms} getKey={(room) => room.key}>
-      {(room) => (
+    <For each={markers} getKey={(marker) => marker.key}>
+      {(marker) => (
         <Html
-          position={anchorOf(room)}
+          position={anchorOf(marker)}
           center
           zIndexRange={[10, 0]}
           // Only the marker itself is clickable, never the box drei wraps it
@@ -50,16 +66,19 @@ export function RoomHotspots({ rooms, focusedKey, onFocusRoom }: Props) {
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation()
-                onFocusRoom(room.key)
+                onOpenMarker(marker)
               }}
+              aria-label={labelOf(marker)}
               className="group pointer-events-auto flex items-center justify-center rounded-full p-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <Chip
                 tone="glass"
-                icon={<Plus />}
+                // The plus is the whole promise of furnishing, and on a restroom
+                // it would be the most misleading thing on the screen.
+                icon={marker.entry === 'preview' ? <Toilet /> : <Plus />}
                 className="shadow-md transition-transform group-hover:scale-105"
               >
-                {room.name}
+                {marker.name}
               </Chip>
             </button>
           </div>

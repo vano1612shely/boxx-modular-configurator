@@ -35,6 +35,8 @@ export function RoomPanel({ vm }: PanelProps) {
   if (roomIndex === null || !room) return null
 
   const openingCount = roomOpenings(room.openings).length
+  // Zones live in a json column, so the draft types them as unknown.
+  const hasZones = Array.isArray(room.zones) && room.zones.length > 0
 
   return (
     <>
@@ -68,6 +70,27 @@ export function RoomPanel({ vm }: PanelProps) {
           </div>
         </div>
 
+        {/* Directly above the Divide tool it takes away, so cause and effect are
+            next to each other. Refused while the room has zones rather than
+            silently throwing them out: somebody typed their names, their types
+            and their areas, and the room may well be named after them. */}
+        <SegmentedControl
+          label="Use"
+          value={room.isRestroom ? 'restroom' : 'room'}
+          options={[
+            { value: 'room', label: 'Room', title: 'Furnished by the visitor' },
+            {
+              value: 'restroom',
+              label: 'Restroom',
+              title: hasZones
+                ? 'Undivide the room first — see Zones below'
+                : 'Gets its outline, its marker and its own camera. Nothing is furnished in it, and it cannot be divided.',
+              disabled: hasZones,
+            },
+          ]}
+          onChange={(value) => vm.onUpdateRoom(roomIndex, { isRestroom: value === 'restroom' })}
+        />
+
         <Toolbar
           hint={MODE_HINTS[vm.mode]}
           tools={[
@@ -92,12 +115,19 @@ export function RoomPanel({ vm }: PanelProps) {
                 vm.onSetMode('place-opening')
               },
             },
-            {
-              label: '✂ Divide',
-              title: 'Split this floor into zones with their own use',
-              active: vm.mode === 'cut-zone',
-              onSelect: () => vm.onSetMode('cut-zone'),
-            },
+            // Zones give parts of one floor their own use and their own
+            // furniture, and nothing is furnished in a restroom — so there is
+            // nothing for a cut to mean here.
+            ...(room.isRestroom
+              ? []
+              : [
+                  {
+                    label: '✂ Divide',
+                    title: 'Split this floor into zones with their own use',
+                    active: vm.mode === 'cut-zone',
+                    onSelect: () => vm.onSetMode('cut-zone'),
+                  },
+                ]),
           ]}
         />
 

@@ -68,6 +68,21 @@ describe('room focus', () => {
     session().exitRoomFocus()
     expect(session()).toMatchObject({ focusedRoomKey: null, viewMode: 'top' })
   })
+
+  // A divided room has no single way in: each half has its own marker in the
+  // building view, and pressing one is a statement about which half.
+  it('lands on the half that was pressed', () => {
+    session().focusRoom('room-1', 'zone-2')
+    expect(session()).toMatchObject({ focusedRoomKey: 'room-1', activeZoneKey: 'zone-2' })
+  })
+
+  // The half belongs to the room it was cut from. Carried into the next room it
+  // would name nothing there, and the panel filters its catalogue by it.
+  it('lands on the whole of a room entered without one', () => {
+    session().focusRoom('room-1', 'zone-2')
+    session().focusRoom('room-2')
+    expect(session()).toMatchObject({ focusedRoomKey: 'room-2', activeZoneKey: null })
+  })
 })
 
 describe('the view the bar names', () => {

@@ -26,6 +26,7 @@ function room(
     key: 'r',
     name: 'R',
     roomType: 'office',
+    isRestroom: false,
     areaSqFt: null,
     areaSqM: null,
     floorPolygon: polygon,

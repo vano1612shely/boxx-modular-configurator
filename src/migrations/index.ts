@@ -17,6 +17,7 @@ import * as migration_20260816_163500_stretch_exterior_parts from './20260816_16
 import * as migration_20260816_225837_one_model_per_exterior_option from './20260816_225837_one_model_per_exterior_option';
 import * as migration_20260817_233000_room_types_and_tiers_as_collections from './20260817_233000_room_types_and_tiers_as_collections';
 import * as migration_20260819_130500_add_order_reference_and_success_copy from './20260819_130500_add_order_reference_and_success_copy';
+import * as migration_20260820_100500_add_room_restroom_flag from './20260820_100500_add_room_restroom_flag';
 
 export const migrations = [
   {
@@ -113,5 +114,10 @@ export const migrations = [
     up: migration_20260819_130500_add_order_reference_and_success_copy.up,
     down: migration_20260819_130500_add_order_reference_and_success_copy.down,
     name: '20260819_130500_add_order_reference_and_success_copy',
+  },
+  {
+    up: migration_20260820_100500_add_room_restroom_flag.up,
+    down: migration_20260820_100500_add_room_restroom_flag.down,
+    name: '20260820_100500_add_room_restroom_flag',
   },
 ];

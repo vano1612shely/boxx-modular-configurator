@@ -41,6 +41,7 @@ function room(zones: Zone[]): Room {
     key: 'r',
     name: 'Room',
     roomType: 'office',
+    isRestroom: false,
     areaSqFt: null,
     areaSqM: null,
     floorPolygon: strip(0, 12).map((p) => ({ ...p, side: 'w1' as const })),

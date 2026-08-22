@@ -6,6 +6,8 @@ import type { BuildingScene, Room } from '@/entities/building'
 import { findFloor, roomsOnFloor } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 
+import { roomMarkers, type RoomMarker } from '../lib/room-markers'
+
 export function useSceneViewerModel(building: BuildingScene) {
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
   const focusRoom = useConfiguratorSession((s) => s.focusRoom)
@@ -39,17 +41,28 @@ export function useSceneViewerModel(building: BuildingScene) {
     [building.rooms, building.floors, selectedFloorKey],
   )
 
+  // One per place worth going to, which is one per zone in a divided room.
+  const markers = useMemo(() => roomMarkers(visibleRooms), [visibleRooms])
+
   return {
     building,
     rooms: building.rooms,
     visibleRooms,
+    markers,
     focusedRoom,
     isRoomFocused: focusedRoom !== null,
     previewedRoom,
     selectedFloor,
     interactionLock,
     activeZoneKey,
-    onFocusRoom: focusRoom,
+    // Takes the marker rather than a key, because what pressing one does is
+    // decided when the marker is built — and this is the only call `focusRoom`
+    // has in the app, which is what keeps a restroom out of `focusedRoomKey`
+    // without any of the things that key drives having to know about restrooms.
+    onOpenMarker: (marker: RoomMarker) =>
+      marker.entry === 'focus'
+        ? focusRoom(marker.room.key, marker.zone?.key ?? null)
+        : previewRoom(marker.room.key),
     onPreviewRoom: previewRoom,
     onExitRoomFocus: exitRoomFocus,
     // Picking the half you are already in steps back out to the whole room, so

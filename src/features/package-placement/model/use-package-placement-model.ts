@@ -74,10 +74,15 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   const selectPackage = useConfiguration((s) => s.selectPackage)
   const selectedInstanceId = useConfiguration((s) => s.selectedInstanceId)
 
-  const focusedRoom = useMemo<Room | null>(
-    () => building.rooms.find((room) => room.key === focusedRoomKey) ?? null,
-    [building.rooms, focusedRoomKey],
-  )
+  const focusedRoom = useMemo<Room | null>(() => {
+    const room = building.rooms.find((r) => r.key === focusedRoomKey) ?? null
+    // A restroom cannot reach this key through the app at all — its marker
+    // brings the camera close rather than going in. The second lock is here
+    // because this is the door itself: the catalogue, what is on offer, the
+    // model preloads, the "+" and the panel are every one of them derived from
+    // this single value being something rather than nothing.
+    return room?.isRestroom ? null : room
+  }, [building.rooms, focusedRoomKey])
 
   const activeZone = useMemo<Zone | null>(
     () => focusedRoom?.zones.find((zone) => zone.key === activeZoneKey) ?? null,

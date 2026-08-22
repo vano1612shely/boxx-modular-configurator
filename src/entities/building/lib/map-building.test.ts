@@ -239,3 +239,44 @@ describe('mapBuildingScene — zones', () => {
     expect(room.zones).toEqual([])
   })
 })
+
+describe('mapBuildingScene — the restroom flag', () => {
+  const roomOf = (overrides: Partial<RoomDoc> = {}) =>
+    mapBuildingScene(doc([legacyRoom(overrides)])).rooms[0]
+
+  // The direction the default has to fail in: a room that quietly refused
+  // furniture would be a bug report, where an unmarked restroom is a tick away.
+  it('takes a room drawn before the flag existed for an ordinary room', () => {
+    expect(roomOf().isRestroom).toBe(false)
+  })
+
+  it('takes a null column for an ordinary room too', () => {
+    expect(roomOf({ isRestroom: null } as Partial<RoomDoc>).isRestroom).toBe(false)
+  })
+
+  it('makes a restroom of an explicit tick', () => {
+    expect(roomOf({ isRestroom: true } as Partial<RoomDoc>).isRestroom).toBe(true)
+  })
+
+  /**
+   * Do not "simplify" this by emptying a restroom's zones in the mapper.
+   *
+   * It looks like a free tidy — nothing furnishable can be in one, so why carry
+   * them — and it breaks saved orders. A quote line stored against a zone whose
+   * room has since been flagged would find no place to belong to, and
+   * `groupByPlace` heads an orphan with its raw key: a customer's order would
+   * read "office-3/z-2" where it used to read "Kitchen". Zones are refused
+   * where they are written, in the editor, not where the record is read.
+   */
+  it('keeps the zones a restroom was drawn with', () => {
+    const zones = [
+      { key: 'z-1', name: 'A', roomType: 'office', polygon: [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 4 }] },
+      { key: 'z-2', name: 'B', roomType: 'office', polygon: [{ x: 3, z: 0 }, { x: 6, z: 0 }, { x: 6, z: 4 }] },
+    ]
+
+    const room = roomOf({ isRestroom: true, zones } as Partial<RoomDoc>)
+
+    expect(room.isRestroom).toBe(true)
+    expect(room.zones).toHaveLength(2)
+  })
+})

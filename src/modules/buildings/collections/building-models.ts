@@ -364,6 +364,17 @@ export const BuildingModels: CollectionConfig = {
                   ],
                 },
                 {
+                  name: 'isRestroom',
+                  type: 'checkbox',
+                  defaultValue: false,
+                  admin: {
+                    description:
+                      'A restroom is drawn and framed like a room — it gets its outline, its ' +
+                      'marker and its own camera — but nothing is furnished in it and it cannot ' +
+                      'be divided into zones. Set it in the Scene Editor, on the room itself.',
+                  },
+                },
+                {
                   type: 'row',
                   fields: [
                     {

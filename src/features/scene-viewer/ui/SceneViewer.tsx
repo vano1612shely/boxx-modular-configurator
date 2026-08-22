@@ -213,9 +213,9 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
           />
         </Show>
         <RoomHotspots
-          rooms={vm.visibleRooms}
+          markers={vm.markers}
           focusedKey={vm.focusedRoom?.key ?? null}
-          onFocusRoom={vm.onFocusRoom}
+          onOpenMarker={vm.onOpenMarker}
         />
         <CameraRig
           building={building}

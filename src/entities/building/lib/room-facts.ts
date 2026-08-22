@@ -33,9 +33,14 @@ export function roomFacts(
   }
 
   return [
-    ...(room.zones.length > 0
-      ? room.zones.map((each) => ({ label: each.name, value: named(each.roomType) }))
-      : [{ label: 'Type', value: named(room.roomType) }]),
+    // A restroom's catalogue type is required by the schema and answers a
+    // question nobody asked of it — which furniture fits somewhere nothing is
+    // furnished. Whichever row an admin happened to pick stays unsaid.
+    ...(room.isRestroom
+      ? [{ label: 'Type', value: 'Restroom' }]
+      : room.zones.length > 0
+        ? room.zones.map((each) => ({ label: each.name, value: named(each.roomType) }))
+        : [{ label: 'Type', value: named(room.roomType) }]),
     // Always present: a room has an outline, so there is always an area to
     // measure even when nobody has written one down.
     { label: 'Approx. floor area', value: formatArea(roomArea(room, unit), unit), inUnits: true },

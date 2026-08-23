@@ -2,16 +2,10 @@
 
 import { useThree } from '@react-three/fiber'
 import type CameraControlsImpl from 'camera-controls'
-import { useEffect, useMemo } from 'react'
-import {
-  Box3,
-  MathUtils,
-  PMREMGenerator,
-  Vector3,
-  type Object3D,
-  type PerspectiveCamera,
-} from 'three'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { useEffect } from 'react'
+import { Box3, MathUtils, Vector3, type Object3D, type PerspectiveCamera } from 'three'
+
+import { roomEnvironment } from './room-environment'
 
 // drei caches parsed glbs by URL and shares the scene, which the viewers mutate.
 // The fragment forces a separate parse without a second request.
@@ -22,20 +16,13 @@ export function previewUrl(url: string): string {
 export function ModelStage() {
   const gl = useThree((state) => state.gl)
 
-  const environment = useMemo(() => {
-    const generator = new PMREMGenerator(gl)
-    const room = new RoomEnvironment()
-    const target = generator.fromScene(room, 0.04)
-    room.dispose()
-    generator.dispose()
-    return target
-  }, [gl])
-
-  useEffect(() => () => environment.dispose(), [environment])
-
   return (
     <>
-      <primitive object={environment.texture} attach="environment" />
+      {/* Cached per renderer and never disposed — see `roomEnvironment`. This
+          used to build its own and give it back in a cleanup, which leaves the
+          scene holding a deleted texture the moment React re-runs the effect
+          without re-running the memo. */}
+      <primitive object={roomEnvironment(gl)} attach="environment" />
       <hemisphereLight intensity={0.5} color="#dbe9ff" groundColor="#b3a894" />
       <directionalLight position={[6, 10, 4]} color="#ffe9c8" intensity={1.6} />
       <directionalLight position={[-6, 4, -6]} color="#dbe9ff" intensity={0.4} />

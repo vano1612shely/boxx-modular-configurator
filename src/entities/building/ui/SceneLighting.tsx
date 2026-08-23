@@ -4,17 +4,16 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   CanvasTexture,
-  PMREMGenerator,
   SRGBColorSpace,
-  Vector3,
   type DirectionalLight,
   type SpotLight as ThreeSpotLight,
 } from 'three'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
+import { roomEnvironment } from '@/shared/three/room-environment'
 import { For, Show } from '@/shared/ui/control-flow'
 
 import { roomFeatureSide, roomFocusTarget } from '../lib/room-framing'
+import { sunPlacement } from '../lib/sun-placement'
 import { planOpeningPlacements, type OpeningPlacement } from '../lib/room-shell'
 import {
   facesSun,
@@ -34,15 +33,8 @@ type Props = {
   exposure?: number
 }
 
-const SUN_DIRECTION = new Vector3(0.45, 0.85, 0.4).normalize()
-
 /** Hoisted: a fresh array literal would be re-applied on every render. */
 const SHADOW_MAP = [2048, 2048] as [number, number]
-
-/** Widest half-extent the shadow camera is allowed to cover, in meters. */
-const MAX_SHADOW_EXTENT = 24
-
-const FALLBACK_RADIUS = 20
 
 const SUNLIGHT = '#ffe9c8'
 const SKYLIGHT = '#dbe9ff'
@@ -50,21 +42,11 @@ const GROUND_BOUNCE = '#b3a894'
 
 // The glb's `metalness: 1` materials render black without an environment map.
 // Strength is set once on the Canvas, as `scene={{ environmentIntensity }}`.
+// Cached per renderer and never disposed — see `roomEnvironment` for why.
 function ImageBasedLight() {
   const gl = useThree((state) => state.gl)
 
-  const environment = useMemo(() => {
-    const generator = new PMREMGenerator(gl)
-    const room = new RoomEnvironment()
-    const target = generator.fromScene(room, 0.04)
-    room.dispose()
-    generator.dispose()
-    return target
-  }, [gl])
-
-  useEffect(() => () => environment.dispose(), [environment])
-
-  return <primitive object={environment.texture} attach="environment" />
+  return <primitive object={roomEnvironment(gl)} attach="environment" />
 }
 
 function Sun({
@@ -78,42 +60,42 @@ function Sun({
 }) {
   const light = useRef<DirectionalLight>(null)
 
+  const placement = useMemo(() => sunPlacement(bounds), [bounds])
+
+  /**
+   * Re-asserted after every render, not once when the bounds arrive.
+   *
+   * The target and the shadow frustum are objects the light owns, and nothing
+   * about them is a prop R3F would put back. Written once, they are lost the
+   * first time anything rebuilds the light, and a sun whose target sits where
+   * the sun does has no direction at all. This runs on the handful of renders
+   * this rig ever has, which is not a cost worth being clever about.
+   */
   useEffect(() => {
     const sun = light.current
     if (!sun) return
 
-    const centre = new Vector3()
-    let radius = FALLBACK_RADIUS
-
-    if (bounds) {
-      const [minX, minY, minZ] = bounds.min
-      const [maxX, maxY, maxZ] = bounds.max
-      centre.set((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2)
-      radius = Math.max(Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) / 2, 1)
-    }
-
-    sun.position.copy(centre).addScaledVector(SUN_DIRECTION, radius * 3)
-    sun.target.position.copy(centre)
-    // The target is not in the scene graph, so nothing else will update it.
+    // Not in the scene graph, so nothing else will ever update it.
+    sun.target.position.set(...placement.target)
     sun.target.updateMatrixWorld()
 
-    // three's default shadow frustum is a 10 m box at the world origin.
     const camera = sun.shadow.camera
-    const extent = Math.min(radius * 1.25, MAX_SHADOW_EXTENT)
-    camera.left = -extent
-    camera.right = extent
-    camera.top = extent
-    camera.bottom = -extent
+    camera.left = -placement.extent
+    camera.right = placement.extent
+    camera.top = placement.extent
+    camera.bottom = -placement.extent
     camera.near = 0.5
-    camera.far = radius * 8
+    camera.far = placement.far
     camera.updateProjectionMatrix()
-  }, [bounds])
+  })
 
   return (
     <directionalLight
       ref={light}
-      // No `position` prop: a fresh array literal counts as a changed prop
-      // every render, so R3F would keep undoing the fit above.
+      // A prop, so R3F owns it and puts it back on every update it makes. It
+      // was set imperatively once, for fear of a fresh array literal counting
+      // as a change on every render — which a memoised one does not.
+      position={placement.position}
       color={SUNLIGHT}
       intensity={intensity}
       castShadow={casting}

@@ -1,0 +1,125 @@
+<h1><span class="h1__number">Chapter 10</span>Users</h1>
+
+<p class="lede">
+  Users are the accounts that can sign in to the admin. The collection is short —
+  an email address and a password — but it is the only thing standing between the
+  catalogue and anyone who finds the login page.
+</p>
+
+<div class="where">
+  <span class="where__label">Where</span>
+  <code>/admin/collections/users</code> · System → Users
+</div>
+
+<h2>Everyone has full access</h2>
+
+<div class="warn">
+  <span class="note__label">There are no roles or permissions</span>
+  <p>
+    Anyone who can sign in can edit, create and delete <em>everything</em> — the whole
+    catalogue, every building, every customer request, and the other user accounts
+    including yours. There is no read-only account and no way to restrict someone to
+    one collection. Give an account only to people who should have all of that.
+  </p>
+</div>
+
+<h2>Fields</h2>
+
+<table>
+  <caption>User</caption>
+  <thead>
+    <tr><th>Field</th><th>What to put in it</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Email<span class="req">Required</span></td>
+      <td>
+        The address they sign in with, and where a password reset is sent. It
+        identifies the account, so use a real mailbox the person controls.
+      </td>
+    </tr>
+    <tr>
+      <td>Password<span class="req">Required</span></td>
+      <td>
+        Set when the account is created, and shown only then. It is stored
+        scrambled and cannot be read back — if it is forgotten, it is reset, never
+        looked up.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<figure>
+  <img src="img/10-users-list.png" alt="The Users list">
+  <figcaption>
+    <b>Figure 10.1</b> — The Users list. Every row here can do everything.
+  </figcaption>
+</figure>
+
+<h2>Adding someone</h2>
+
+<ol class="steps">
+  <li>Go to System → <span class="ui">Users</span> and select <span class="ui">Create New</span>.</li>
+  <li>Enter their <span class="ui">Email</span>.</li>
+  <li>Enter a <span class="ui">Password</span> and confirm it.</li>
+  <li>Select <span class="ui">Save</span>.</li>
+  <li>
+    Tell them the address and password through something other than email, and ask
+    them to change it once they are in.
+  </li>
+</ol>
+
+<figure>
+  <img src="img/10-user-create.png" alt="Creating a user, with the email and password fields marked">
+  <figcaption>
+    <b>Figure 10.2</b> — A new user.
+    <b>1</b> Email. <b>2</b> Password and its confirmation.
+  </figcaption>
+</figure>
+
+<h2>Changing your own password</h2>
+
+<ol class="steps">
+  <li>Open the account menu at the top right and choose <span class="ui">Account</span>, or go to <code>/admin/account</code>.</li>
+  <li>Select <span class="ui">Change Password</span>.</li>
+  <li>Enter the new password twice and select <span class="ui">Save</span>.</li>
+</ol>
+
+<p>
+  Someone who cannot sign in at all uses <span class="ui">Forgot password?</span> on
+  the login screen; a reset link goes to the address on the account. Failing that,
+  another administrator can open their record and set a new password directly.
+</p>
+
+<h2>Removing someone</h2>
+
+<ol class="steps">
+  <li>Open their record from the list.</li>
+  <li>Open the <span class="ui">⋯</span> menu beside <span class="ui">Save</span> and choose <span class="ui">Delete</span>.</li>
+  <li>Confirm.</li>
+</ol>
+
+<p>
+  Do this the day someone stops needing access. Their sign-in stops working at once;
+  nothing they created is affected.
+</p>
+
+<div class="warn">
+  <span class="note__label">Do not delete the last account</span>
+  <p>
+    Nothing stops you from deleting every user, including your own — and with no
+    accounts left, nobody can sign in to create one. Always keep at least one working
+    account you have the password for, and delete your own only from a second one.
+  </p>
+</div>
+
+<h2 class="no-break">What the customer sees</h2>
+
+<div class="visitor">
+  <span class="note__label">In the configurator</span>
+  <p>
+    Nothing. Users are staff accounts for the admin only. Customers never sign in —
+    they reach the configurator, build something, and send a request with their
+    contact details in it.
+  </p>
+</div>

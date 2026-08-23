@@ -1,0 +1,225 @@
+<h1><span class="h1__number">Chapter 2</span>Regions</h1>
+
+<p class="lede">
+  Regions are the markets you sell in. They exist so that one configurator can serve
+  several territories and show each of them only what is actually available there.
+</p>
+
+<div class="where">
+  <span class="where__label">Where</span>
+  <code>/admin/collections/regions</code> · Catalog → Regions
+</div>
+
+<h2>What regions are for</h2>
+
+<p>
+  A region is a label you attach to the things you sell. Three collections carry a
+  <span class="ui">Regions</span> field: <strong>Product Lines</strong>,
+  <strong>Building Models</strong> and <strong>Furniture Packages</strong>. When a
+  customer arrives with a region attached to their visit, they are shown only the
+  records tagged for it.
+</p>
+
+<p>
+  This is the mechanism behind sentences like "the classroom range is North America
+  only" or "that furniture supplier does not ship to Europe". You do not need
+  regions at all if you sell one catalogue everywhere — leave the collection empty
+  and everything is offered to everyone.
+</p>
+
+<h2>Fields</h2>
+
+<table>
+  <caption>Region</caption>
+  <thead>
+    <tr><th>Field</th><th>What to put in it</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Name<span class="req">Required</span></td>
+      <td>
+        The region as a person would say it — <em>United States</em>, <em>Canada</em>,
+        <em>Europe</em>. This is what identifies the region everywhere else in the
+        admin, so make it unambiguous.
+      </td>
+    </tr>
+    <tr>
+      <td>Code<span class="req">Required</span></td>
+      <td>
+        A short code used in web addresses and in links from your main website —
+        <code>us</code>, <code>ca</code>, <code>eu</code>. It must be unique across all
+        regions. Capitalisation does not matter when a visitor arrives:
+        <code>US</code> and <code>us</code> reach the same region.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<figure>
+  <img src="img/02-regions-list.png" alt="The Regions list view">
+  <figcaption>
+    <b>Figure 2.1</b> — The Regions list, showing name, code and when each was last
+    changed.
+  </figcaption>
+</figure>
+
+<h2>Creating a region</h2>
+
+<ol class="steps">
+  <li>Go to Catalog → <span class="ui">Regions</span>.</li>
+  <li>Select <span class="ui">Create New</span>.</li>
+  <li>Enter the <span class="ui">Name</span>, for example <em>United States</em>.</li>
+  <li>
+    Enter the <span class="ui">Code</span>, for example <code>us</code>. Keep it short
+    and lower-case; it will appear in URLs.
+  </li>
+  <li>Select <span class="ui">Save</span>.</li>
+</ol>
+
+<figure>
+  <img src="img/02-region-edit.png" alt="A region open for editing, with the Name and Code fields marked">
+  <figcaption>
+    <b>Figure 2.2</b> — A region open for editing. <b>1</b> Name. <b>2</b> Code.
+    <b>3</b> Save.
+  </figcaption>
+</figure>
+
+<p>
+  A new region starts out attached to nothing. To put it to work, open the product
+  lines, building models or furniture packages you sell there and add it to their
+  <span class="ui">Regions</span> field.
+</p>
+
+<h2>Editing a region</h2>
+
+<p>
+  Open the region from the list, change what you need, and save. Renaming is safe:
+  everything that points at this region points at the record, not at its text, so a
+  rename updates everywhere at once.
+</p>
+
+<div class="warn">
+  <span class="note__label">Changing the code breaks existing links</span>
+  <p>
+    The code appears in the addresses your main website uses to open the
+    configurator. If a page on your site links to
+    <code>/configurator?region=us</code> and you change the code to
+    <code>usa</code>, that link no longer matches a region — and visitors arriving
+    through it will be shown a reduced catalogue, not an error. Change a code only
+    if you can update the links that use it at the same time.
+  </p>
+</div>
+
+<h2>Deleting a region</h2>
+
+<p>
+  Open the region, use the <span class="ui">⋯</span> menu beside
+  <span class="ui">Save</span>, and choose <span class="ui">Delete</span>.
+</p>
+
+<p>
+  Deleting a region does not delete anything sold in it. What happens is that every
+  product line, building model and furniture package loses that region from its list.
+  A record left with an empty list is then treated as available <em>everywhere</em> —
+  which is the opposite of what you probably want. Before deleting a region, check
+  what is tagged with it, and give those records the right replacement region first.
+</p>
+
+<h2 class="no-break">What the customer sees</h2>
+
+<div class="visitor">
+  <span class="note__label">In the configurator</span>
+  <p>
+    Regions are never shown to the customer. There is no country picker — the region
+    is decided by the address they arrive on, and it silently narrows what they are
+    offered.
+  </p>
+</div>
+
+<p>
+  A visit is tied to a region by adding <code>region=</code> to the configurator
+  address:
+</p>
+
+<ul class="plain">
+  <li><code>/configurator</code> — no region. The customer sees the entire catalogue.</li>
+  <li><code>/configurator?region=us</code> — the United States catalogue.</li>
+</ul>
+
+<p>
+  Once set, the region follows the customer through the whole session, including
+  when they go back to change their answers. In practice you set this once, on the
+  links from your regional websites, and never think about it again.
+</p>
+
+<h3>The three rules</h3>
+
+<p>
+  How a record behaves depends on what is in its <span class="ui">Regions</span>
+  field and on what the visitor arrived with.
+</p>
+
+<table>
+  <caption>What gets shown</caption>
+  <thead>
+    <tr><th>Situation</th><th>Result</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Record has no regions</td>
+      <td>
+        Shown to everyone, in every region. An empty list means "sold everywhere",
+        not "sold nowhere" — this is what keeps a catalogue that never used regions
+        fully visible.
+      </td>
+    </tr>
+    <tr>
+      <td>Record lists the visitor's region</td>
+      <td>Shown.</td>
+    </tr>
+    <tr>
+      <td>Record lists other regions only</td>
+      <td>Hidden.</td>
+    </tr>
+    <tr>
+      <td>Visitor's code matches no region</td>
+      <td>
+        Only records with no regions at all are shown. A code you cannot identify is
+        treated as a stranger rather than as a guest: showing a region-locked product
+        to an unknown market is exactly what this field exists to prevent.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <span class="note__label">Building models follow their line</span>
+  <p>
+    A building model does not usually carry regions of its own — it inherits
+    availability from its product line. If the BOXXPlex line is not sold in Europe,
+    none of its sizes are, even for someone who has a direct link to one. Set regions
+    on models only when a particular size is restricted while the rest of the range
+    is not.
+  </p>
+</div>
+
+<h3>Worked example</h3>
+
+<p>
+  You sell two ranges. BOXXPlex offices go everywhere; EDUPlex classrooms are North
+  America only. Set it up like this:
+</p>
+
+<ol class="steps">
+  <li>Create two regions: <em>United States</em> / <code>us</code> and <em>Europe</em> / <code>eu</code>.</li>
+  <li>Open the BOXXPlex product line and leave its <span class="ui">Regions</span> field empty — it is sold everywhere.</li>
+  <li>Open the EDUPlex product line and add <em>United States</em> to its <span class="ui">Regions</span> field.</li>
+  <li>Link your US website to <code>/configurator?region=us</code> and your European site to <code>/configurator?region=eu</code>.</li>
+</ol>
+
+<p>
+  A visitor from the European link is offered BOXXPlex only. A visitor from the US
+  link is offered both. A visitor who reaches <code>/configurator</code> with no
+  region at all is also offered both — so if that is not acceptable, make sure every
+  public link carries a region.
+</p>

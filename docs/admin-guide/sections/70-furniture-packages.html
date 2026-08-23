@@ -1,0 +1,268 @@
+<h1><span class="h1__number">Chapter 8</span>Furniture Packages</h1>
+
+<p class="lede">
+  A furniture package is a set of furniture that customers place as one piece — a
+  desk with its chair and pedestal, a conference table with seating around it. This
+  is the largest collection in the catalogue and the one you will edit most.
+</p>
+
+<div class="where">
+  <span class="where__label">Where</span>
+  <code>/admin/collections/furniture-packages</code> · Catalog → Furniture Packages
+</div>
+
+<h2>A package is placed whole</h2>
+
+<p>
+  Customers never position individual chairs. They pick a package, it drops into the
+  free space in the room, and they nudge or turn the whole group. That is why a
+  package is one 3D model containing everything in it, and why the space it occupies
+  matters — covered under Footprint below.
+</p>
+
+<h2>Fields</h2>
+
+<table>
+  <caption>Furniture Package — what it is</caption>
+  <thead>
+    <tr><th>Field</th><th>What to put in it</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Title<span class="req">Required</span></td>
+      <td>The name on the card — <em>Office Core</em>, <em>Conference Plus</em>.</td>
+    </tr>
+    <tr>
+      <td>Tier</td>
+      <td>The grade badge on the card. Optional; see Chapter 7.</td>
+    </tr>
+    <tr>
+      <td>Model<span class="req">Required</span></td>
+      <td>
+        The 3D model, from Media → 3D Models. It must contain the whole group,
+        arranged as it should appear.
+      </td>
+    </tr>
+    <tr>
+      <td>Preview</td>
+      <td>
+        Not a field to fill in — a live 3D view of the chosen model, so you can check
+        you picked the right one without leaving the page.
+      </td>
+    </tr>
+    <tr>
+      <td>Thumbnail</td>
+      <td>
+        The card picture, from Images. Left empty, the configurator renders a view of
+        the model itself. That works, but a photograph on a plain background sells
+        better and loads faster.
+      </td>
+    </tr>
+    <tr>
+      <td>Price</td>
+      <td>In US dollars. Shown on the card and totalled in the customer's request.</td>
+    </tr>
+    <tr>
+      <td>Description</td>
+      <td>A sentence about what is in the package.</td>
+    </tr>
+  </tbody>
+</table>
+
+<figure>
+  <img src="img/08-package-edit.png" alt="A furniture package open for editing, with the main fields marked">
+  <figcaption>
+    <b>Figure 8.1</b> — A furniture package.
+    <b>1</b> Title and Tier. <b>2</b> Model, with its live preview below.
+    <b>3</b> Thumbnail, Price and Description.
+  </figcaption>
+</figure>
+
+<h2>Footprint — the space it takes up</h2>
+
+<p>
+  The footprint is the floor rectangle the package occupies, in metres. The
+  configurator uses it to decide whether the package fits in a room and to keep two
+  packages from standing in the same place.
+</p>
+
+<div class="note">
+  <span class="note__label">Measured for you</span>
+  <p>
+    Width and depth are measured from the 3D model every time you save, so in normal
+    use you leave both boxes empty and never think about them.
+  </p>
+</div>
+
+<p>
+  Fill them in only when the measured rectangle is wrong for your purposes:
+</p>
+
+<ul class="plain">
+  <li>
+    <strong>Smaller</strong> — when the model has an overhang that does not really
+    block the floor, and the automatic measurement makes the package refuse to fit
+    rooms it would sit in fine.
+  </li>
+  <li>
+    <strong>Larger</strong> — when the piece needs clearance around it to be usable,
+    such as room to pull a chair out.
+  </li>
+</ul>
+
+<h2>Where the package is offered</h2>
+
+<p>
+  Four fields decide who is shown this package. The first three are filters that must
+  all pass; the fourth only changes the order.
+</p>
+
+<table>
+  <caption>Furniture Package — where it appears</caption>
+  <thead>
+    <tr><th>Field</th><th>Effect</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Compatible lines</td>
+      <td>
+        Which product lines this package is sold with. <strong>Empty means every
+        line.</strong>
+      </td>
+    </tr>
+    <tr>
+      <td>Regions</td>
+      <td>
+        Which markets it is sold in. <strong>Empty means everywhere.</strong> Works
+        exactly as described in Chapter 2.
+      </td>
+    </tr>
+    <tr>
+      <td>Compatible room types</td>
+      <td>
+        Which kinds of room may hold it. <strong>Empty means every room.</strong> This
+        is the one that decides whether the package appears in the panel at all when a
+        customer opens a room.
+      </td>
+    </tr>
+    <tr>
+      <td>Recommended for</td>
+      <td>
+        Room types where it should be offered <em>first</em>. In those rooms it is
+        listed under a "Recommended" heading above everything else. It does not change
+        where the package can go — only the order it is presented in.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <span class="note__label">Empty means everywhere, not nowhere</span>
+  <p>
+    All three filters treat an empty list as "no restriction". A brand-new package
+    with nothing filled in is offered in every room of every line in every region.
+    That is convenient for a universal item like a waste bin, and a trap for anything
+    specific — a kitchen unit with no room types set will be offered in the
+    restrooms.
+  </p>
+</div>
+
+<div class="note">
+  <span class="note__label">Recommended without compatible is ignored</span>
+  <p>
+    Recommending a package for a room type it is not compatible with does nothing: it
+    is not offered in that room at all, so there is no list for it to lead. If you
+    add a type to <span class="ui">Recommended for</span>, add it to
+    <span class="ui">Compatible room types</span> too — unless that field is empty,
+    which already allows every room.
+  </p>
+</div>
+
+<h2>Creating a furniture package</h2>
+
+<ol class="steps">
+  <li>Upload the 3D model under Media → <span class="ui">3D Models</span> if it is not there yet, and a photograph under <span class="ui">Images</span> if you have one.</li>
+  <li>Go to Catalog → <span class="ui">Furniture Packages</span> and select <span class="ui">Create New</span>.</li>
+  <li>Enter the <span class="ui">Title</span> and choose a <span class="ui">Tier</span>.</li>
+  <li>Choose the <span class="ui">Model</span>, and check the preview that appears below it.</li>
+  <li>Choose a <span class="ui">Thumbnail</span>, and enter the <span class="ui">Price</span> and <span class="ui">Description</span>.</li>
+  <li>Leave <span class="ui">Footprint</span> empty — it is measured on save.</li>
+  <li>
+    Set <span class="ui">Compatible room types</span>. Do this deliberately, even
+    when the answer is "everywhere" — an empty list has consequences.
+  </li>
+  <li>Set <span class="ui">Recommended for</span>, <span class="ui">Compatible lines</span> and <span class="ui">Regions</span> if the package is restricted.</li>
+  <li>Select <span class="ui">Save</span>.</li>
+  <li>Open <code>/configurator</code>, enter a room of the right type, and check the package appears and can be added.</li>
+</ol>
+
+<h2>Editing and deleting</h2>
+
+<p>
+  Editing is ordinary. Remember that the footprint is re-measured on every save, so
+  if you have deliberately overridden it, your values stay only as long as you leave
+  them in the boxes.
+</p>
+
+<div class="warn">
+  <span class="note__label">Deleting affects requests already sent</span>
+  <p>
+    A customer's request records which packages they placed. Delete a package and the
+    old requests can no longer show what it was. Consider narrowing its
+    <span class="ui">Regions</span> or <span class="ui">Compatible lines</span> to
+    take it out of circulation instead, and delete it only once you no longer need to
+    read the requests that mention it.
+  </p>
+</div>
+
+<h2 class="no-break">What the customer sees</h2>
+
+<div class="visitor">
+  <span class="note__label">In the configurator</span>
+  <p>
+    Furniture appears only inside a room. When a customer steps into one, a panel
+    opens listing what may go there — filtered by that room's type, and by the line
+    and region of the building they are looking at.
+  </p>
+</div>
+
+<figure>
+  <img src="img/08-package-visitor.png" alt="The furniture panel inside a room, showing the recommended group and package cards">
+  <figcaption>
+    <b>Figure 8.2</b> — The furniture panel inside a room. The header names the room
+    and counts what is on offer for it. <span class="ui">Recommended for this
+    room</span> holds the packages that list this room type under
+    <span class="ui">Recommended for</span>; <span class="ui">More furniture</span>
+    holds the rest. Each card carries the package's picture, title, price, and its
+    tier as a badge in the corner.
+  </figcaption>
+</figure>
+
+<p>
+  The list is in two parts: <span class="ui">Recommended for this room</span> first,
+  then <span class="ui">More furniture</span>. If nothing is recommended for the room
+  type, both headings disappear and the list is simply one block — a heading over
+  everything would say no more than no heading at all.
+</p>
+
+<p>
+  Selecting a card adds the package to the room — dropped into the middle of the free
+  floor, turned sideways automatically if that is the only way it fits. The customer
+  can then move it, turn it, or remove it.
+</p>
+
+<div class="note">
+  <span class="note__label">"Too large for this room"</span>
+  <p>
+    A package whose footprint cannot fit the free floor is still listed, but greyed
+    out and marked as too large rather than hidden. Customers can see it exists and
+    understand why they cannot have it — which is more useful than a short list with
+    no explanation. If a package you expect to be usable shows this, its footprint is
+    the first thing to check.
+  </p>
+</div>
+
+<p>
+  Everything placed is totalled in the request the customer sends, package by package
+  with its price, grouped by the room it was put in.
+</p>

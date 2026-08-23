@@ -1,0 +1,93 @@
+<h1><span class="h1__number">Chapter 7</span>Furniture Tiers</h1>
+
+<p class="lede">
+  A tier is the grade a furniture package is offered at — Core, Plus, whatever your
+  range calls them. It is a label and nothing more, but it is the label customers use
+  to compare two packages at a glance.
+</p>
+
+<div class="where">
+  <span class="where__label">Where</span>
+  <code>/admin/collections/furniture-tiers</code> · Catalog → Furniture Tiers
+</div>
+
+<h2>What a tier does</h2>
+
+<p>
+  Exactly one thing: it prints a small badge on the package card. Nothing in the
+  configurator behaves differently because of a tier — it does not affect price,
+  availability, or where a package may go. That makes tiers the safest records in
+  the admin to add, rename or reorganise.
+</p>
+
+<p>
+  A furniture package does not have to have one. Left empty, its card simply carries
+  no badge.
+</p>
+
+<figure>
+  <img src="img/07-tiers-list.png" alt="The Furniture Tiers list">
+  <figcaption>
+    <b>Figure 7.1</b> — The Furniture Tiers list.
+  </figcaption>
+</figure>
+
+<h2>Fields</h2>
+
+<table>
+  <caption>Furniture Tier</caption>
+  <thead>
+    <tr><th>Field</th><th>What to put in it</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Name<span class="req">Required</span></td>
+      <td>
+        The grade as customers read it — <em>Core</em>, <em>Plus</em>,
+        <em>Premium</em>. This is the badge text, so keep it to one short word.
+      </td>
+    </tr>
+    <tr>
+      <td>Slug<span class="req">Required</span></td>
+      <td>
+        The stable key, for example <code>core</code>. Must be unique. Nothing is
+        matched on it today, but it is what keeps a renamed tier the same tier.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Creating, editing and deleting</h2>
+
+<ol class="steps">
+  <li>Go to Catalog → <span class="ui">Furniture Tiers</span> and select <span class="ui">Create New</span>.</li>
+  <li>Enter the <span class="ui">Name</span> and a lower-case <span class="ui">Slug</span>.</li>
+  <li>Select <span class="ui">Save</span>.</li>
+  <li>Open the furniture packages that belong to the grade and set their <span class="ui">Tier</span> field.</li>
+</ol>
+
+<p>
+  Renaming a tier changes the badge on every package carrying it, at once — this is
+  the ordinary way to rename a grade across the range.
+</p>
+
+<p>
+  Deleting one leaves the packages that carried it without a badge. Nothing else
+  breaks and nothing disappears from the configurator; the cards simply lose that
+  line. Still worth checking which packages are affected, so the range does not end
+  up half-graded by accident.
+</p>
+
+<h2 class="no-break">What the customer sees</h2>
+
+<div class="visitor">
+  <span class="note__label">In the configurator</span>
+  <p>
+    A small badge in the corner of the furniture card, inside a room. That is all.
+  </p>
+</div>
+
+<p>
+  The badge names the grade only — it deliberately does not repeat the kind of room,
+  because the panel the card sits in already says which room it is offering for.
+</p>

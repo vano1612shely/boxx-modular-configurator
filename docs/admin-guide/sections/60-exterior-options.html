@@ -1,0 +1,169 @@
+<h1><span class="h1__number">Chapter 6</span>Exterior Options</h1>
+
+<p class="lede">
+  An exterior option is one thing that can stand at an entrance — a deck, a set of
+  stairs, a ramp, or a combination of them. Customers choose between these when they
+  work round the outside of a building.
+</p>
+
+<div class="where">
+  <span class="where__label">Where</span>
+  <code>/admin/collections/exterior-options</code> · Catalog → Exterior Options
+</div>
+
+<h2>What belongs here, and what does not</h2>
+
+<p>
+  This collection is a <strong>catalogue</strong>: what the thing is called, what it
+  looks like, what it costs. It says nothing about where it stands.
+</p>
+
+<p>
+  Position cannot live here, because the same ramp meets the ground differently on
+  every building. Where an option sits is set per building, in the Scene Editor,
+  against the entrance it belongs to. So the work splits in two:
+</p>
+
+<ul class="plain">
+  <li><strong>Here</strong> — create the option once. Title, model, price, picture.</li>
+  <li>
+    <strong>In a building</strong> — mark an entrance, offer some of these options at
+    it, and drag each into place. Covered with Building Models.
+  </li>
+</ul>
+
+<div class="note">
+  <span class="note__label">One option, one model</span>
+  <p>
+    Each option carries exactly one 3D model. A deck, and a deck with a ramp, are two
+    separate options — which is also how a customer reads them: two cards, two
+    prices. Do not try to express a variation inside one record.
+  </p>
+</div>
+
+<h2>Fields</h2>
+
+<table>
+  <caption>Exterior Option</caption>
+  <thead>
+    <tr><th>Field</th><th>What to put in it</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Title<span class="req">Required</span></td>
+      <td>
+        What the customer reads on the card — <em>Deck with stairs</em>,
+        <em>Deck, stairs and ramp</em>. Be specific: the title is how someone tells
+        two similar options apart.
+      </td>
+    </tr>
+    <tr>
+      <td>Model<span class="req">Required</span></td>
+      <td>
+        The 3D model placed at the entrance when this option is chosen. Pick one from
+        3D Models; upload it there first if it is not in the list (Chapter 9).
+      </td>
+    </tr>
+    <tr>
+      <td>Price</td>
+      <td>
+        In US dollars. Left blank, the option is offered with no price shown — which
+        is the right choice for something included as standard.
+      </td>
+    </tr>
+    <tr>
+      <td>Thumbnail</td>
+      <td>
+        A picture for the card, from Images. Left empty, the card shows an
+        automatically rendered view of the model instead — usable, but a photograph
+        sells better.
+      </td>
+    </tr>
+    <tr>
+      <td>Description</td>
+      <td>
+        A sentence or two under the title on the card. This one <em>is</em> shown to
+        customers.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<figure>
+  <img src="img/06-exterior-option-create.png" alt="A new exterior option, with each field marked">
+  <figcaption>
+    <b>Figure 6.1</b> — A new exterior option.
+    <b>1</b> Title. <b>2</b> Model. <b>3</b> Price and Thumbnail.
+    <b>4</b> Description.
+  </figcaption>
+</figure>
+
+<h2>Creating an exterior option</h2>
+
+<ol class="steps">
+  <li>Make sure the 3D model exists under Media → <span class="ui">3D Models</span>. If not, upload it first.</li>
+  <li>Go to Catalog → <span class="ui">Exterior Options</span> and select <span class="ui">Create New</span>.</li>
+  <li>Enter the <span class="ui">Title</span>.</li>
+  <li>Choose the <span class="ui">Model</span>.</li>
+  <li>Enter a <span class="ui">Price</span>, or leave it blank for an option with no price.</li>
+  <li>Choose a <span class="ui">Thumbnail</span>, and write a <span class="ui">Description</span>.</li>
+  <li>Select <span class="ui">Save</span>.</li>
+  <li>
+    Open the buildings that should offer it, and add it to an entrance in the Scene
+    Editor. <strong>Until you do this, nobody can see it</strong> — creating the
+    option does not put it in front of anyone.
+  </li>
+</ol>
+
+<h2>Editing and deleting</h2>
+
+<p>
+  Editing is ordinary: open, change, save. Price and description changes reach
+  customers on their next page load.
+</p>
+
+<div class="warn">
+  <span class="note__label">Changing the model moves what is already placed</span>
+  <p>
+    Buildings position an option by dragging <em>its model</em> into place at an
+    entrance. Swap the model for a different one and that positioning stays, so a
+    replacement of a different size or shape can end up floating or sunk into the
+    ground. After changing a model, check each building that offers the option.
+  </p>
+</div>
+
+<div class="warn">
+  <span class="note__label">Deleting leaves an empty choice behind</span>
+  <p>
+    Buildings point at this record from their entrances. Delete it and those
+    entrances are left with a choice that resolves to nothing. Before deleting, open
+    the buildings that offer the option and remove it from their entrances first.
+  </p>
+</div>
+
+<h2 class="no-break">What the customer sees</h2>
+
+<div class="visitor">
+  <span class="note__label">In the configurator</span>
+  <p>
+    Standing outside the building, the customer sees a marker at each entrance that
+    has options. Selecting it opens a panel of cards — one per option offered there —
+    and choosing a card puts that model on the building immediately.
+  </p>
+</div>
+
+<p>
+  Each card shows the title, the thumbnail, the price if there is one, and the
+  description. The choice is remembered for the session and appears in the request
+  the customer sends you, under its own heading with its price, so the entrances
+  they picked reach you along with the furniture.
+</p>
+
+<div class="note">
+  <span class="note__label">The same option in several buildings</span>
+  <p>
+    One record can be offered by any number of buildings, each positioning it to suit
+    itself. Price and description are edited once, here, and change everywhere at
+    once — which is the reason to reuse an option rather than duplicate it.
+  </p>
+</div>

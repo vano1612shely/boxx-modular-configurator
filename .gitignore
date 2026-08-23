@@ -63,3 +63,6 @@ node_modules/
 # under src/ and deeper as well. Anchored at the root, 26 of them under
 # src/.graphify/cache/ were staged and nearly went out with a release.
 .graphify/
+
+# Chrome profile the admin-guide preview writes beside its build output.
+/docs/admin-guide/.build/

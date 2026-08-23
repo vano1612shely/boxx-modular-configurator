@@ -123,7 +123,7 @@ export function ExteriorSpotPanel({ vm }: PanelProps) {
         </p>
       </div>
 
-      <div style={{ padding: 12 }}>
+      <div style={{ ...s.scroll, padding: 12 }}>
         <div style={chip}>Choices</div>
         <Show when={variants.length < 2}>
           <p style={{ ...s.hint, marginTop: 4 }}>

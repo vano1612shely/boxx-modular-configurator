@@ -3,10 +3,13 @@
 import { useGLTF } from '@react-three/drei'
 import { useEffect, useMemo } from 'react'
 
-import type { BuildingScene, Room, RoomType, Zone } from '@/entities/building'
+import type { BuildingScene, FittedSet, Room, RoomType, Zone } from '@/entities/building'
 import {
   acceptingFloor,
+  fittedSetOf,
+  fittedSetsIn,
   footprintFitsRegion,
+  partsCentre,
   polygonCentroid,
   reachableFloor,
   zoneAccepts,
@@ -37,6 +40,19 @@ export type OfferGroups = {
 export type PlacedItem = PlacedPackage & { pkg: FurniturePackageEntity | null }
 
 /**
+ * An arrangement this piece of floor offers, and whether it is the one standing.
+ *
+ * The set is the building's half of it — what stands where — and the package is
+ * the catalogue's half: the name, the price, the picture. Neither is any use
+ * without the other, so an offer is only made when both are there.
+ */
+export type FittedOffer = {
+  set: FittedSet
+  pkg: FurniturePackageEntity
+  standing: boolean
+}
+
+/**
  * One list of furniture, for one piece of floor.
  *
  * An undivided room has exactly one, and everything downstream renders the way
@@ -51,6 +67,8 @@ export type FloorSection = {
   zone: Zone | null
   offers: PackageOffer[]
   groups: OfferGroups
+  /** Arrangements this floor offers. Empty in every room nobody has fitted out. */
+  fitted: FittedOffer[]
   placed: PlacedItem[]
 }
 
@@ -117,6 +135,11 @@ export function usePackagePlacementModel({ building, packages }: Args) {
 
     const offersFor = (accepts: (types: RoomType[]) => boolean): PackageOffer[] =>
       packages
+        // A fitted package is offered by the building, below, and never by room
+        // type: it exists only where somebody has arranged it. One with no model
+        // at all has nothing to carry in and is nobody's mistake to discover in
+        // the scene — it is simply not on offer.
+        .filter((pkg) => !pkg.fitted && pkg.modelUrl !== null)
         .filter((pkg) => accepts(pkg.compatibleRoomTypes))
         .map((pkg) => ({
           pkg,
@@ -150,6 +173,20 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     })
   }, [focusedRoom, packages])
 
+  /**
+   * The arrangement standing in the focused room, or null.
+   *
+   * Recognised rather than flagged: a placement is fitted exactly when the room
+   * it stands in offers an arrangement for its package, which is the same test
+   * the renderer and a reopened order use. One at a time, because adding a
+   * second replaces the first — a room has one kitchen.
+   */
+  const standingFitted = useMemo<PlacedItem | null>(() => {
+    const room = focusedRoom
+    if (!room) return null
+    return placedInFocusedRoom.find((item) => fittedSetOf(room, item.packageId) !== null) ?? null
+  }, [focusedRoom, placedInFocusedRoom])
+
   /** Which of them to show, and what is standing in each. Cheap, so it may follow a drag. */
   const sections = useMemo<FloorSection[]>(() => {
     const room = focusedRoom
@@ -161,23 +198,54 @@ export function usePackagePlacementModel({ building, packages }: Args) {
 
     return shown.map((section) => ({
       ...section,
+      // Both halves have to be there: the building says what stands where, the
+      // catalogue says what it is called and what it costs. A set naming a
+      // package that was deleted, or one whose package has since stopped being
+      // fitted, is quietly not offered rather than offered as a blank.
+      fitted: fittedSetsIn(room, section.zone).flatMap((set) => {
+        const pkg = packagesById.get(set.packageId)
+        if (!pkg || !pkg.fitted) return []
+        return [{ set, pkg, standing: standingFitted?.packageId === set.packageId }]
+      }),
       placed: section.zone
         ? placedInFocusedRoom.filter(
             (item) => zoneAt(room, item.x, item.z)?.key === section.zone?.key,
           )
         : placedInFocusedRoom,
     }))
-  }, [catalogue, focusedRoom, activeZone, placedInFocusedRoom])
+  }, [catalogue, focusedRoom, activeZone, placedInFocusedRoom, packagesById, standingFitted])
 
   // From the catalogue, not from `sections`: this feeds the preloader, and each
   // preload walks suspend-react's whole global cache. It must not churn.
   const offers = useMemo(() => catalogue.flatMap((section) => section.offers), [catalogue])
 
+  /**
+   * Every model the room's arrangements are made of.
+   *
+   * Warmed with the catalogue rather than on the press, because an arrangement
+   * is a dozen files at once: pressed cold, the visitor watches a kitchen
+   * arrive one appliance at a time.
+   */
+  const fittedModels = useMemo(() => {
+    const room = focusedRoom
+    if (!room) return [] as string[]
+    return [
+      ...new Set(
+        room.fittedSets.flatMap((set) =>
+          set.parts.flatMap((part) => (part.source === 'model' && part.modelUrl ? [part.modelUrl] : [])),
+        ),
+      ),
+    ]
+  }, [focusedRoom])
+
   useEffect(() => {
     for (const offer of offers) {
-      useGLTF.preload(offer.pkg.modelUrl, false, true)
+      if (offer.pkg.modelUrl) useGLTF.preload(offer.pkg.modelUrl, false, true)
     }
-  }, [offers])
+    for (const url of fittedModels) {
+      useGLTF.preload(url, false, true)
+    }
+  }, [offers, fittedModels])
 
   /**
    * Drops a package into the piece of floor it was asked for.
@@ -231,15 +299,50 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     return false
   }
 
+  /**
+   * Puts an arrangement in the room, taking out whichever one was there.
+   *
+   * A room has one kitchen, so this is a swap rather than an add: pressing a
+   * second arrangement means "that one instead", and asking the visitor to
+   * delete the first one first would be asking them to do the obvious thing by
+   * hand. Pressing the one already standing does nothing — the tile says so.
+   *
+   * What it leaves behind is an ordinary placement, at the middle of the parts.
+   * Everything downstream of that — the collision tests, the quote, the saved
+   * order, the read-only replay — treats it as furniture, which is what it is.
+   */
+  const putFitted = (set: FittedSet): boolean => {
+    const room = focusedRoom
+    if (!room) return false
+    if (standingFitted?.packageId === set.packageId) return false
+
+    if (standingFitted) removePackage(standingFitted.instanceId)
+
+    const centre = partsCentre(set.parts)
+    addPackage({
+      packageId: set.packageId,
+      roomKey: room.key,
+      x: centre.x,
+      z: centre.z,
+      rotationYDeg: 0,
+      pinned: true,
+    })
+    return true
+  }
+
   return {
     focusedRoom,
     activeZone,
     isPanelOpen: focusedRoom !== null,
+    standingFitted,
+    onPutFitted: putFitted,
     /** True while a divided room is shown whole, which is what grows accordions. */
     isSplit: sections.length > 1,
     sections,
     offers,
-    isEmpty: sections.every((section) => section.offers.length === 0),
+    isEmpty: sections.every(
+      (section) => section.offers.length === 0 && section.fitted.length === 0,
+    ),
     placedInFocusedRoom,
     onAddPackage: addToSection,
     onRemovePackage: removePackage,

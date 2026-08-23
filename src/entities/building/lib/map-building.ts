@@ -15,12 +15,14 @@ import type {
   ExteriorPlacement,
   ExteriorSlot,
   ExteriorVariant,
+  FittedSet,
   OpeningFit,
   OpeningKind,
   OpeningModelStyle,
   Point2,
   RoofConfig,
   RoomOpening,
+  RoomPart,
   RoomShellConfig,
   RoomVertex,
   Room,
@@ -276,6 +278,73 @@ export function roomOpenings(value: unknown): RoomOpening[] {
   return openings
 }
 
+/**
+ * The built-ins JSON column — keep only records that describe a real object.
+ *
+ * A record is kept when its own source can still answer for it: a node needs a
+ * path, a model needs a url. Anything else is a half-written row from an editor
+ * session that went wrong, and drawing nothing is better than drawing a
+ * mystery at the origin.
+ */
+export function roomParts(value: unknown): RoomPart[] {
+  if (!Array.isArray(value)) return []
+
+  const parts: RoomPart[] = []
+  for (const entry of value) {
+    const part = entry as Partial<RoomPart> | null
+    if (!part || typeof part.key !== 'string' || !part.key) continue
+
+    const source = part.source === 'node' ? 'node' : 'model'
+    const nodePath = typeof part.nodePath === 'string' && part.nodePath ? part.nodePath : null
+    const modelUrl = typeof part.modelUrl === 'string' && part.modelUrl ? part.modelUrl : null
+    if (source === 'node' ? nodePath === null : modelUrl === null) continue
+
+    parts.push({
+      key: part.key,
+      source,
+      nodePath,
+      modelUrl,
+      position: toTuple(
+        { x: part.position?.[0], y: part.position?.[1], z: part.position?.[2] },
+        [0, 0, 0],
+      ),
+      yawDeg: numberOr(part.yawDeg, 0),
+      // A zero or a negative would collapse the model to a point, which reads
+      // as "the fitting is missing" rather than as the mistake it is.
+      scale: numberOr(part.scale, 1) > 0 ? numberOr(part.scale, 1) : 1,
+    })
+  }
+
+  return parts
+}
+
+/**
+ * The fitted-sets JSON column.
+ *
+ * A set with no parts is dropped: it would put a tile in the panel that costs
+ * money and puts nothing in the room. The package id is kept as written and
+ * resolved against the catalogue by whoever needs the name and the price — a
+ * set naming a package that has since been deleted simply stops being offered,
+ * which is what happens to any other placement of it.
+ */
+export function roomFittedSets(value: unknown): FittedSet[] {
+  if (!Array.isArray(value)) return []
+
+  const sets: FittedSet[] = []
+  for (const entry of value) {
+    const set = entry as Partial<FittedSet> | null
+    if (!set || typeof set.key !== 'string' || !set.key) continue
+    if (typeof set.packageId !== 'number' || !Number.isFinite(set.packageId)) continue
+
+    const parts = roomParts(set.parts)
+    if (parts.length === 0) continue
+
+    sets.push({ key: set.key, packageId: set.packageId, parts })
+  }
+
+  return sets
+}
+
 /** The zones JSON column — keep only records that describe a real piece of floor. */
 export function roomZones(value: unknown): Zone[] {
   if (!Array.isArray(value)) return []
@@ -414,6 +483,8 @@ export function mapRoom(room: RoomDoc): Room {
     areaSqM: typeof room.areaSqM === 'number' ? room.areaSqM : null,
     floorPolygon,
     zones: roomZones((room as { zones?: unknown }).zones),
+    builtIns: roomParts((room as { builtIns?: unknown }).builtIns),
+    fittedSets: roomFittedSets((room as { fittedSets?: unknown }).fittedSets),
     shell: roomShell(room, floorPolygon),
     openings: roomOpenings(room.openings),
     surfaces: roomSurfaces(room),

@@ -280,3 +280,85 @@ describe('mapBuildingScene — the restroom flag', () => {
     expect(room.zones).toHaveLength(2)
   })
 })
+
+describe('mapBuildingScene — fittings', () => {
+  const roomOf = (overrides: Partial<RoomDoc> = {}) =>
+    mapBuildingScene(doc([legacyRoom(overrides)])).rooms[0]
+
+  const modelPart = (key: string) => ({
+    key,
+    source: 'model',
+    modelUrl: '/fridge.glb',
+    position: [1, 0.9, 2],
+    yawDeg: 90,
+    scale: 1,
+  })
+
+  it('takes a room drawn before fittings existed for a room with none', () => {
+    const room = roomOf()
+    expect(room.builtIns).toEqual([])
+    expect(room.fittedSets).toEqual([])
+  })
+
+  it('reads a built-in of the building and one from the library', () => {
+    const room = roomOf({
+      builtIns: [{ key: 'p-1', source: 'node', nodePath: '47/0' }, modelPart('p-2')],
+    } as Partial<RoomDoc>)
+
+    expect(room.builtIns).toHaveLength(2)
+    expect(room.builtIns[0]).toMatchObject({ source: 'node', nodePath: '47/0', scale: 1 })
+    expect(room.builtIns[1]).toMatchObject({ source: 'model', position: [1, 0.9, 2], yawDeg: 90 })
+  })
+
+  // Half-written rows are what an editor session that went wrong leaves behind,
+  // and drawing nothing beats drawing a mystery at the building's origin.
+  it('drops a part whose own source cannot answer for it', () => {
+    const room = roomOf({
+      builtIns: [
+        { key: 'p-1', source: 'node' },
+        { key: 'p-2', source: 'model' },
+        { source: 'model', modelUrl: '/x.glb' },
+        modelPart('p-4'),
+      ],
+    } as Partial<RoomDoc>)
+
+    expect(room.builtIns.map((part) => part.key)).toEqual(['p-4'])
+  })
+
+  // A zero scale would collapse the model to a point, which reads on screen as
+  // "the fitting is missing" rather than as the mistake it is.
+  it('refuses a scale that would make a fitting invisible', () => {
+    const room = roomOf({
+      builtIns: [{ ...modelPart('p-1'), scale: 0 }, { ...modelPart('p-2'), scale: -2 }],
+    } as Partial<RoomDoc>)
+
+    expect(room.builtIns.map((part) => part.scale)).toEqual([1, 1])
+  })
+
+  it('reads an arrangement and what it is made of', () => {
+    const room = roomOf({
+      fittedSets: [{ key: 's-1', packageId: 12, parts: [modelPart('p-1'), modelPart('p-2')] }],
+    } as Partial<RoomDoc>)
+
+    expect(room.fittedSets).toHaveLength(1)
+    expect(room.fittedSets[0]).toMatchObject({ key: 's-1', packageId: 12 })
+    expect(room.fittedSets[0].parts).toHaveLength(2)
+  })
+
+  /**
+   * An empty arrangement is one an admin started and has not filled in. Offered,
+   * it would put a tile on the panel that takes the visitor's money and puts
+   * nothing in the room. The editor keeps it; the scene does not.
+   */
+  it('does not offer an arrangement with nothing in it', () => {
+    const room = roomOf({
+      fittedSets: [
+        { key: 's-1', packageId: 12, parts: [] },
+        { key: 's-2', parts: [modelPart('p-1')] },
+        { key: 's-3', packageId: 13, parts: [modelPart('p-2')] },
+      ],
+    } as Partial<RoomDoc>)
+
+    expect(room.fittedSets.map((set) => set.key)).toEqual(['s-3'])
+  })
+})

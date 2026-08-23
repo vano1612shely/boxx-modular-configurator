@@ -46,6 +46,8 @@ function room(zones: Zone[]): Room {
     areaSqM: null,
     floorPolygon: strip(0, 12).map((p) => ({ ...p, side: 'w1' as const })),
     zones,
+    builtIns: [],
+    fittedSets: [],
     shell: {
       floorY: 0,
       wallHeight: 2.5,

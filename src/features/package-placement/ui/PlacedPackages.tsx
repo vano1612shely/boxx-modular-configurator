@@ -27,13 +27,16 @@ import {
   type Object3D,
 } from 'three'
 
-import type { BuildingScene, Room } from '@/entities/building'
+import type { BuildingScene, Room, RoomPart } from '@/entities/building'
 import {
   clampPoseToRegion,
+  fittedSetOf,
+  partGeometryKey,
   poseInsideRegion,
   progressiveEdgeSnapRegion,
   reachableFloor,
   type Region,
+  RoomParts,
   roomFloorTopY,
   roomsOnFloor,
 } from '@/entities/building'
@@ -53,7 +56,9 @@ import { For, Show } from '@/shared/ui/control-flow'
 import { setSceneCursor } from '@/shared/ui/scene-cursor'
 
 import { framePose } from '../lib/drag-pose'
+import { partObstacleOf, partObstaclesVersion } from '../lib/part-obstacles'
 import { collidesWithAny } from '../lib/placement-geometry'
+import { PartMeasurements } from './PartMeasurements'
 import { nearestFittingAngle, nextFittingQuarter } from '../lib/rotation-fit'
 import { FLOOR_INSETS, toolbarPositioner } from '../lib/toolbar-position'
 import { measureInsets, readChrome, type Insets } from '../lib/scene-insets'
@@ -75,6 +80,55 @@ type Obstacle = {
 }
 
 /**
+ * What a list of fittings fills, for the ones that have been measured.
+ *
+ * An unmeasured fitting is left out rather than guessed at. It stops nothing
+ * for the handful of frames before its model lands, which is the failure that
+ * lets a visitor put a chair somewhere odd — the other one refuses poses that
+ * are perfectly legal, which is the failure they report as a bug.
+ */
+function fittingObstacles(
+  parts: ReadonlyArray<RoomPart>,
+  buildingModelUrl: string,
+): Obstacle[] {
+  return parts.flatMap((part) => {
+    const measured = partObstacleOf(partGeometryKey(part, buildingModelUrl))
+    return measured ? [measured] : []
+  })
+}
+
+/**
+ * What one placement fills: a package, or the whole arrangement it stands for.
+ *
+ * A fitted placement is one row in the configuration and a dozen things on the
+ * floor, and a chair has to be stopped by each of them rather than by a
+ * rectangle around the lot — the gap between the fridge and the counter is
+ * exactly where somebody will try to put a bin.
+ */
+function placementObstacles(
+  placement: PlacedPackage,
+  packagesById: Map<number, FurniturePackageEntity>,
+  room: Room | undefined,
+  buildingModelUrl: string,
+): Obstacle[] {
+  const set = room ? fittedSetOf(room, placement.packageId) : null
+  if (set) return fittingObstacles(set.parts, buildingModelUrl)
+
+  const pkg = packagesById.get(placement.packageId)
+  if (!pkg) return []
+
+  return [
+    {
+      x: placement.x,
+      z: placement.z,
+      rotationYDeg: placement.rotationYDeg,
+      footprint: footprintOf(placement.packageId, pkg.footprint),
+      shape: shapeOf(placement.packageId),
+    },
+  ]
+}
+
+/**
  * Obstacles grouped by room, built once per list render.
  *
  * Asking each item to scan the whole placement array for its neighbours made
@@ -83,22 +137,28 @@ type Obstacle = {
 function obstaclesByRoom(
   placed: PlacedPackage[],
   packagesById: Map<number, FurniturePackageEntity>,
+  roomsByKey: Map<string, Room>,
+  buildingModelUrl: string,
 ): Map<string, Array<Obstacle & { instanceId: string }>> {
   const rooms = new Map<string, Array<Obstacle & { instanceId: string }>>()
 
   for (const p of placed) {
-    const pkg = packagesById.get(p.packageId)
-    if (!pkg) continue
+    const found = placementObstacles(p, packagesById, roomsByKey.get(p.roomKey), buildingModelUrl)
+    if (found.length === 0) continue
     const room = rooms.get(p.roomKey) ?? []
-    room.push({
-      instanceId: p.instanceId,
-      x: p.x,
-      z: p.z,
-      rotationYDeg: p.rotationYDeg,
-      footprint: footprintOf(p.packageId, pkg.footprint),
-      shape: shapeOf(p.packageId),
-    })
+    for (const obstacle of found) room.push({ ...obstacle, instanceId: p.instanceId })
     rooms.set(p.roomKey, room)
+  }
+
+  // The counter a room came with stops a chair exactly as a bought fridge does.
+  // Under an id no placement can have, so nothing excludes itself from it.
+  for (const [roomKey, list] of rooms) {
+    for (const fixture of fittingObstacles(
+      roomsByKey.get(roomKey)?.builtIns ?? [],
+      buildingModelUrl,
+    )) {
+      list.push({ ...fixture, instanceId: `built-in:${roomKey}` })
+    }
   }
 
   return rooms
@@ -107,25 +167,19 @@ function obstaclesByRoom(
 function obstaclesFor(
   placed: PlacedPackage[],
   packagesById: Map<number, FurniturePackageEntity>,
+  roomsByKey: Map<string, Room>,
+  buildingModelUrl: string,
   roomKey: string,
   excludeInstanceId: string,
 ): Obstacle[] {
-  return placed
-    .filter((p) => p.instanceId !== excludeInstanceId && p.roomKey === roomKey)
-    .flatMap((p) => {
-      const pkg = packagesById.get(p.packageId)
-      return pkg
-        ? [
-            {
-              x: p.x,
-              z: p.z,
-              rotationYDeg: p.rotationYDeg,
-              footprint: footprintOf(p.packageId, pkg.footprint),
-              shape: shapeOf(p.packageId),
-            },
-          ]
-        : []
-    })
+  return [
+    ...placed
+      .filter((p) => p.instanceId !== excludeInstanceId && p.roomKey === roomKey)
+      .flatMap((p) =>
+        placementObstacles(p, packagesById, roomsByKey.get(roomKey), buildingModelUrl),
+      ),
+    ...fittingObstacles(roomsByKey.get(roomKey)?.builtIns ?? [], buildingModelUrl),
+  ]
 }
 
 // Grab point on the floor relative to the model origin. Measured on the first
@@ -148,10 +202,27 @@ export function PlacedPackages({ building, packages }: Props) {
       new Set(roomsOnFloor(building.rooms, building.floors, selectedFloorKey).map((r) => r.key)),
     [building.rooms, building.floors, selectedFloorKey],
   )
-  const neighbours = useMemo(() => obstaclesByRoom(placed, packagesById), [placed, packagesById])
+  const neighbours = useMemo(
+    () => obstaclesByRoom(placed, packagesById, roomsByKey, building.modelUrl),
+    [placed, packagesById, roomsByKey, building.modelUrl],
+  )
+
+  /**
+   * Everything standing still in the room the visitor is in.
+   *
+   * Measured, not drawn — the room draws its own built-ins and the list above
+   * draws the arrangement. Only the focused room: measuring every fitting in
+   * the building would read a dozen models nobody is anywhere near.
+   */
+  const fittingsHere = useMemo(() => {
+    const room = focusedRoomKey ? roomsByKey.get(focusedRoomKey) : null
+    if (!room) return []
+    return [...room.builtIns, ...room.fittedSets.flatMap((set) => set.parts)]
+  }, [focusedRoomKey, roomsByKey])
 
   return (
     <>
+      <PartMeasurements parts={fittingsHere} buildingModelUrl={building.modelUrl} />
       <For each={placed} getKey={(p) => p.instanceId}>
         {(placement) => {
           const pkg = packagesById.get(placement.packageId)
@@ -161,6 +232,23 @@ export function PlacedPackages({ building, packages }: Props) {
           if (focusedRoomKey && placement.roomKey !== focusedRoomKey) return null
           if (!focusedRoomKey && !roomsOnView.has(placement.roomKey)) return null
 
+          // An arrangement the building holds rather than a package carried in.
+          // Recognised from the room, not from a flag on the placement, so a
+          // saved order reopened months later draws it from the same answer.
+          const set = fittedSetOf(room, placement.packageId)
+          if (set) {
+            return (
+              <RoomParts
+                parts={set.parts}
+                buildingModelUrl={building.modelUrl}
+                floorY={roomFloorTopY(room)}
+              />
+            )
+          }
+
+          const modelUrl = pkg.modelUrl
+          if (!modelUrl) return null
+
           return (
             <Suspense
               fallback={
@@ -169,7 +257,7 @@ export function PlacedPackages({ building, packages }: Props) {
             >
               <PlacedPackageItem
                 placement={placement}
-                pkg={pkg}
+                pkg={{ ...pkg, modelUrl }}
                 room={room}
                 grabOffsetRef={grabOffsetRef}
                 obstacles={(neighbours.get(placement.roomKey) ?? []).filter(
@@ -220,7 +308,8 @@ function PlacementGhost({ placement, pkg, floorY = 0 }: GhostProps) {
 
 type ItemProps = {
   placement: PlacedPackage
-  pkg: FurniturePackageEntity
+  /** Narrowed: a package with no model of its own is drawn from the room instead. */
+  pkg: FurniturePackageEntity & { modelUrl: string }
   room: Room
   grabOffsetRef: MutableRefObject<GrabOffset>
   obstacles: Obstacle[]
@@ -735,7 +824,15 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
   // twice for an answer that was already known.
   const dragFloorRef = useRef<{ instanceId: string; region: Region } | null>(null)
   // And what it has to get past, for the same reason.
-  const obstaclesRef = useRef<{ instanceId: string; list: Obstacle[] } | null>(null)
+  const obstaclesRef = useRef<{
+    instanceId: string
+    measurements: number
+    list: Obstacle[]
+  } | null>(null)
+  const roomsByKey = useMemo(
+    () => new Map(building.rooms.map((room) => [room.key, room])),
+    [building.rooms],
+  )
 
   const endDrag = () => {
     const state = useConfiguration.getState()
@@ -803,10 +900,27 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
     // Built once for the whole drag rather than per pointer move: it takes the
     // building's entire placement list apart to make it, and nothing can move
     // while a piece is in the air — `placed` is only written on the way down.
-    if (obstaclesRef.current?.instanceId !== dragging) {
+    //
+    // Except for one thing that is not a move: a fitting finishing its
+    // measurement. Held against the version rather than rebuilt every frame, so
+    // a kitchen that lands mid-drag is picked up on the next frame and nothing
+    // is rebuilt on any of the frames after that.
+    const measurements = partObstaclesVersion()
+    if (
+      obstaclesRef.current?.instanceId !== dragging ||
+      obstaclesRef.current.measurements !== measurements
+    ) {
       obstaclesRef.current = {
         instanceId: dragging,
-        list: obstaclesFor(state.placed, packages, placement.roomKey, placement.instanceId),
+        measurements,
+        list: obstaclesFor(
+          state.placed,
+          packages,
+          roomsByKey,
+          building.modelUrl,
+          placement.roomKey,
+          placement.instanceId,
+        ),
       }
     }
 

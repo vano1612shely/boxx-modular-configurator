@@ -10,12 +10,19 @@ function slugs(value: unknown): string[] {
   return value.map(roomTypeSlug).filter((slug): slug is string => slug !== null)
 }
 
-function modelUrl(value: number | Model): string {
-  const url = typeof value === 'number' ? null : assetUrl(value)
-  if (!url) {
+/**
+ * The package's own model, or null when it has none.
+ *
+ * A bare id rather than a document means the caller fetched at depth 0, which
+ * is a mistake worth shouting about — but an empty field is not: a fitted
+ * package is arranged on the room and has nothing of its own to draw.
+ */
+function modelUrl(value: number | Model | null | undefined): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'number') {
     throw new Error('Expected populated furniture package model — fetch with depth >= 1.')
   }
-  return url
+  return assetUrl(value)
 }
 
 function thumbnailUrl(value: number | Image | null | undefined): string | null {
@@ -31,6 +38,7 @@ export function mapFurniturePackage(doc: FurniturePackage): FurniturePackageEnti
     // off the card, so "Core" beats "core".
     tier: typeof doc.tier === 'object' && doc.tier ? doc.tier.name : null,
     modelUrl: modelUrl(doc.model),
+    fitted: doc.fitted === true,
     thumbnailUrl: thumbnailUrl(doc.thumbnail),
     price: doc.price ?? null,
     description: doc.description ?? null,

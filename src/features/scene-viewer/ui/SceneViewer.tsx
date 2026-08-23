@@ -13,14 +13,16 @@ import {
   preloadOpeningModels,
   preloadRoomTextures,
   RoofModel,
+  RoomParts,
   RoomShell,
   SceneLighting,
+  roomFloorTopY,
   type BuildingScene,
 } from '@/entities/building'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { cn, isCoarsePointer } from '@/shared/lib'
 import { SCENE_BACKGROUND } from '@/shared/three/scene-tokens'
-import { Show } from '@/shared/ui/control-flow'
+import { For, Show } from '@/shared/ui/control-flow'
 import { bindSceneCursor, setSceneCursor } from '@/shared/ui/scene-cursor'
 
 import { useRoomTransition } from '../model/use-room-transition'
@@ -87,7 +89,12 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
         .join(';'),
     [placed],
   )
-  const shadowTrigger = `${vm.focusedRoom?.key ?? ''}|${vm.selectedFloor?.key ?? ''}|${roofShown}|${bounds ? 1 : 0}|${poses}`
+  // `transition.staged` as well as the focused room: everything generated for a
+  // room — its shell and its fittings — mounts two frames after the focus is
+  // written, and the map is only armed for two frames from a change of this
+  // string. Without the staged key the counter goes into a room with no shadow
+  // under it until something unrelated re-arms the map.
+  const shadowTrigger = `${vm.focusedRoom?.key ?? ''}|${transition.staged?.key ?? ''}|${vm.selectedFloor?.key ?? ''}|${roofShown}|${bounds ? 1 : 0}|${poses}`
 
   // In an effect, not the render body: each preload walks suspend-react's whole
   // global cache comparing key arrays, and these assets never change.
@@ -193,6 +200,15 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
                     is the one whose shell is up, so the tints cannot outlive it
                     on the way out. */}
                 <Show when={vm.focusedRoom?.key === room.key}>
+                  {/* The same gate, and for a sharper reason: a built-in copied
+                      out of the building model is drawn a second time the frame
+                      the building itself comes back, and `staged` lingers two
+                      frames past that. */}
+                  <RoomParts
+                    parts={room.builtIns}
+                    buildingModelUrl={building.modelUrl}
+                    floorY={roomFloorTopY(room)}
+                  />
                   <ZoneFloors
                     room={room}
                     activeZoneKey={vm.activeZoneKey}
@@ -203,6 +219,24 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
             )}
           </Show>
         </Suspense>
+        {/* Built-ins that came from the library, in the overview.
+            Node-sourced ones are deliberately left out: those ARE the building
+            model, which is on screen here, and drawing a copy over it would put
+            two counters in the same place. A library model is not on screen
+            unless this draws it, and a plan missing a room's counter is a plan
+            that disagrees with the room. */}
+        <Show when={!vm.isRoomFocused}>
+          <For each={vm.visibleRooms} getKey={(room) => room.key}>
+            {(room) => (
+              <RoomParts
+                parts={room.builtIns.filter((part) => part.source === 'model')}
+                buildingModelUrl={building.modelUrl}
+                floorY={roomFloorTopY(room)}
+              />
+            )}
+          </For>
+        </Show>
+
         {/* Only outside a room: in one, the floor under the visitor belongs to
             the generated shell and clicking it means nothing. */}
         <Show when={!vm.isRoomFocused}>

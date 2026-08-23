@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, Info, Plus, Sofa, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Info, Plus, Replace, Sofa, Trash2 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
 import type { BuildingScene } from '@/entities/building'
@@ -13,6 +13,7 @@ import { For, Show } from '@/shared/ui/control-flow'
 import { ModelThumbnailFactory, useModelThumbnail } from '../lib/model-thumbnails'
 import {
   usePackagePlacementModel,
+  type FittedOffer,
   type FloorSection,
   type PackageOffer,
   type PackagePlacementVm,
@@ -69,7 +70,9 @@ export function PackagePanel({ building, packages }: Props) {
           tying that to room focus meant tearing a GPU context down and standing
           a new one up — with a fresh environment map — on every room the
           visitor entered or left. */}
-      <ModelThumbnailFactory urls={vm.offers.map((offer) => offer.pkg.modelUrl)} />
+      <ModelThumbnailFactory
+        urls={vm.offers.flatMap((offer) => (offer.pkg.modelUrl ? [offer.pkg.modelUrl] : []))}
+      />
 
       <Show when={vm.isPanelOpen}>
         <Show when={expanded}>
@@ -270,17 +273,25 @@ function SectionBody({
 }) {
   const zoneKey = section.zone?.key ?? null
   const where = section.zone ? section.name : 'this room'
+  /** Whether the first block has anything to head, of either kind. */
+  const leads = section.groups.recommended.length > 0 || section.fitted.length > 0
 
   return (
     <>
       {/* Two blocks only when there is something in the first: a catalogue with
           nothing named for this room would otherwise grow a heading that says
-          the same as no heading at all. */}
-      <Show when={section.groups.recommended.length > 0}>
+          the same as no heading at all. An arrangement counts as something —
+          it is offered for this room as much as a recommended chair is. */}
+      <Show when={leads}>
         <Eyebrow as="h3" className="mb-card">
           Recommended for {where}
         </Eyebrow>
-        <OfferGrid offers={section.groups.recommended} onAdd={(offer) => onAdd(offer, zoneKey)} />
+        <OfferGrid
+          offers={section.groups.recommended}
+          fitted={section.fitted}
+          onAdd={(offer) => onAdd(offer, zoneKey)}
+          onPutFitted={(entry) => vm.onPutFitted(entry.set)}
+        />
         <Show when={section.groups.other.length > 0}>
           <Eyebrow as="h3" className="mt-block mb-card">
             More furniture
@@ -291,7 +302,7 @@ function SectionBody({
       <OfferGrid
         offers={section.groups.other}
         onAdd={(offer) => onAdd(offer, zoneKey)}
-        empty={section.groups.recommended.length === 0}
+        empty={!leads}
       />
 
       <Show when={section.placed.length > 0}>
@@ -319,17 +330,32 @@ function SectionBody({
                     And the panel gets out of the way, because on a phone it is
                     a sheet over the scene: the toolbar it just raised would be
                     behind the very list that raised it. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    vm.onSelectPackage(placedItem.instanceId)
-                    useConfiguratorSession.getState().setPanelCollapsed(true)
-                  }}
-                  aria-pressed={vm.selectedInstanceId === placedItem.instanceId}
-                  className="min-w-0 flex-1 truncate rounded-full px-2 py-2 text-left text-sm transition-colors hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-ring"
+                {/* A fitted arrangement is a label, not a button: selecting it
+                    raises a toolbar offering to turn and move it, and it is the
+                    one thing that does neither. No badge saying so — it is
+                    furniture standing in the room like the rest of the list,
+                    and naming the mechanism would be talking about ourselves.
+                    Removing it is the same button as for a chair. */}
+                <Show
+                  when={!placedItem.pinned}
+                  fallback={
+                    <span className="min-w-0 flex-1 truncate px-2 py-2 text-sm">
+                      {placedItem.pkg?.title ?? 'Package'}
+                    </span>
+                  }
                 >
-                  {placedItem.pkg?.title ?? 'Package'}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      vm.onSelectPackage(placedItem.instanceId)
+                      useConfiguratorSession.getState().setPanelCollapsed(true)
+                    }}
+                    aria-pressed={vm.selectedInstanceId === placedItem.instanceId}
+                    className="min-w-0 flex-1 truncate rounded-full px-2 py-2 text-left text-sm transition-colors hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {placedItem.pkg?.title ?? 'Package'}
+                  </button>
+                </Show>
                 <button
                   type="button"
                   onClick={() => vm.onRemovePackage(placedItem.instanceId)}
@@ -350,29 +376,91 @@ function SectionBody({
 /** `empty` says this grid is the one that has to speak up when there is nothing. */
 function OfferGrid({
   offers,
+  fitted = [],
   onAdd,
+  onPutFitted,
   empty = false,
 }: {
   offers: PackageOffer[]
+  /** Arrangements, shown among the rest — they are furniture, not a category. */
+  fitted?: FittedOffer[]
   onAdd: (offer: PackageOffer) => void
+  onPutFitted?: (fitted: FittedOffer) => void
   empty?: boolean
 }) {
-  if (offers.length === 0 && !empty) return null
+  if (offers.length === 0 && fitted.length === 0 && !empty) return null
 
   return (
     <div className="grid grid-cols-2 gap-card">
+      {/* First in the grid, not in a grid of their own: a kitchen is the
+          largest thing in the room and the one the rest is furnished around,
+          but it is still something the visitor picks off the same shelf. */}
+      <For each={fitted} getKey={(entry) => entry.set.key}>
+        {(entry) => <FittedTile fitted={entry} onPut={() => onPutFitted?.(entry)} />}
+      </For>
       <For
         each={offers}
         getKey={(offer) => offer.pkg.id}
         fallback={
-          <Callout tone="notice" align="center" className="col-span-full p-4">
-            Nothing available for this kind of room yet.
-          </Callout>
+          fitted.length > 0 ? null : (
+            <Callout tone="notice" align="center" className="col-span-full p-4">
+              Nothing available for this kind of room yet.
+            </Callout>
+          )
         }
       >
         {(offer) => <OfferTile offer={offer} onAdd={() => onAdd(offer)} />}
       </For>
     </div>
+  )
+}
+
+/**
+ * One arrangement on offer, and what pressing it does.
+ *
+ * The ordinary tile with three differences and nothing else, because for the
+ * visitor this is furniture. It never fails to fit — there is no fit test to
+ * fail, the building already decided where it goes. Its action is a swap once
+ * something else is standing, because a room has one kitchen and asking someone
+ * to delete the old one first would be asking them to do the obvious by hand.
+ * And the one already standing says so and does nothing.
+ */
+function FittedTile({ fitted, onPut }: { fitted: FittedOffer; onPut: () => void }) {
+  const { pkg, standing } = fitted
+  // Its own model is the picture of the whole arrangement, when there is one.
+  // A kitchen usually has an admin photograph instead, which is better.
+  const rendered = useModelThumbnail(pkg.modelUrl ?? null)
+
+  return (
+    <MediaTile
+      src={pkg.thumbnailUrl ?? rendered}
+      fit={pkg.thumbnailUrl ? 'cover' : 'contain'}
+      plate="cream"
+      title={pkg.title}
+      meta={pkg.price === null ? null : `$${pkg.price.toLocaleString('en-US')}`}
+      badge={
+        standing ? (
+          <Chip tone="success" size="xs">
+            In the room
+          </Chip>
+        ) : pkg.tier === null ? null : (
+          <Chip tone="glass" size="xs">
+            {pkg.tier}
+          </Chip>
+        )
+      }
+      // Pressing the one already standing is a no-op rather than a refusal: the
+      // tile is not disabled, because dimming the arrangement the visitor has
+      // chosen would read as "unavailable" — the opposite of what is true.
+      onSelect={onPut}
+      action={{
+        icon: standing ? <Check size={20} /> : <Replace size={20} />,
+        label: standing
+          ? `${pkg.title} is already fitted here`
+          : `Fit ${pkg.title} in the room`,
+        onClick: onPut,
+      }}
+    />
   )
 }
 

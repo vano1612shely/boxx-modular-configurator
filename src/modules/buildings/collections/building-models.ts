@@ -433,6 +433,22 @@ export const BuildingModels: CollectionConfig = {
                   },
                 },
                 {
+                  name: 'builtIns',
+                  type: 'json',
+                  admin: {
+                    description:
+                      'Fittings that are simply in this room — a kitchen counter, a sink. Either a piece of the building model itself, named by path, or a model from the library placed by hand. Entering a room hides the building model, so anything of the building that should still be seen from inside belongs here. Arranged in the Scene Editor. Nothing here is sold.',
+                  },
+                },
+                {
+                  name: 'fittedSets',
+                  type: 'json',
+                  admin: {
+                    description:
+                      'Arrangements this room offers — a kitchen of several appliances, each where the admin put it. The visitor picks one from the furniture panel like anything else, but cannot move it: only swap it for another or take it out. What each is called and what it costs comes from the furniture package it names. Arranged in the Scene Editor.',
+                  },
+                },
+                {
                   name: 'shell',
                   type: 'group',
                   admin: {

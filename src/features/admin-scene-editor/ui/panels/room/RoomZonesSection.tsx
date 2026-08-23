@@ -178,7 +178,12 @@ export function RoomZonesSection({ vm, room }: { vm: SceneEditorVm; room: RoomDo
             >
               <div style={s.row}>
                 <input
-                  style={{ ...s.input, flex: 1 }}
+                  // Empty is allowed while it is being retyped, and shown as
+                  // what it is: the save is refused over it, not filled in for
+                  // you. Filling it in was what made the field impossible to
+                  // clear — every keystroke fought a key going back in.
+                  style={{ ...s.input, flex: 1, ...(zone.name.trim() ? null : s.inputInvalid) }}
+                  placeholder="Name this zone"
                   value={zone.name}
                   onChange={(event) => vm.onUpdateZone(zone.key, { name: event.target.value })}
                 />

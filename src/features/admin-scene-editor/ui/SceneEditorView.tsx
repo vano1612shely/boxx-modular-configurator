@@ -5,6 +5,7 @@ import { Gate } from '@/shared/ui/control-flow'
 import { useSceneEditorModel } from '../model/use-scene-editor-model'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorSidebar } from './EditorSidebar'
+import { EditorViewportBar } from './EditorViewportBar'
 
 export function SceneEditorView() {
   const vm = useSceneEditorModel()
@@ -33,6 +34,7 @@ export function SceneEditorView() {
       >
         <div style={{ flex: 1, position: 'relative' }}>
           <EditorCanvas vm={vm} />
+          <EditorViewportBar vm={vm} />
         </div>
         <EditorSidebar vm={vm} />
       </Gate>

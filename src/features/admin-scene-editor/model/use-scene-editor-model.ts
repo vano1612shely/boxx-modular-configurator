@@ -1,7 +1,7 @@
 'use client'
 
 import { useDocumentInfo } from '@payloadcms/ui'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   onOutline,
@@ -15,7 +15,9 @@ import {
   zoneNamesJoined,
   reanchorOpenings,
   rectifyPolygon,
+  polygonCentroid,
   roomOpenings,
+  roomParts,
   roomVertices,
   roomZones,
   zoneNodePaths,
@@ -29,6 +31,7 @@ import {
   type RoomVertex,
   type SunDirection,
   type Extent,
+  type RoomPart,
   type Vec3Tuple,
   type TexturedSurface,
   type WallSide,
@@ -47,15 +50,41 @@ import {
   type BlockScope,
   type EditorBox,
 } from '../lib/blocks'
+import { draftSets, freeKeyIn } from '../lib/fittings-draft'
+import { findProblems } from '../lib/problems'
+import { draftZones } from '../lib/zones-draft'
 import type { PlaneBounds } from '../lib/floor-plane'
 import { useExteriorCatalogue, type ExteriorOptionRef } from './use-exterior-catalogue'
 import { useRoomTypes } from './use-room-types'
 import type { BuildingModel, Model } from '@/payload-types'
 
 export type { ExteriorOptionRef }
+export type { EditorProblem } from '../lib/problems'
 
 export type EditorMode =
-  'select' | 'draw-room' | 'block-roof' | 'place-opening' | 'floor-level' | 'cut-zone'
+  | 'select'
+  | 'draw-room'
+  | 'block-roof'
+  | 'place-opening'
+  | 'floor-level'
+  | 'cut-zone'
+  /** Waiting for a click on the building itself, to take that piece into a room. */
+  | 'pick-fitting'
+
+/**
+ * Which list a new fitting goes into, and whose parts the viewport is editing.
+ *
+ * Built-ins and one arrangement at a time, because they are two answers to the
+ * same question — what stands in this room — and showing every arrangement at
+ * once would draw three kitchens on top of each other.
+ */
+export type FittingScope = { kind: 'built-ins' } | { kind: 'set'; key: string }
+
+/** The jobs the building panel does, one tab each. */
+export type BuildingTab = 'rooms' | 'storeys' | 'model' | 'exterior'
+
+/** The same for a room. Built-ins and sets are separate jobs, not one list. */
+export type RoomTab = 'shape' | 'look' | 'built-ins' | 'sets'
 
 export { blockRefKey, defaultYRange, sameBlockRef }
 export type { BlockRef, BlockScope, EditorBox }
@@ -125,6 +154,19 @@ export function useSceneEditorModel() {
   /** Which zone the next cut divides; null means the room itself. */
   const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null)
   const zoneSeq = useRef(1)
+  /** Which of the room's lists is being arranged, and which part the handles are on. */
+  const [fittingScope, setFittingScope] = useState<FittingScope>({ kind: 'built-ins' })
+  const [selectedPartKey, setSelectedPartKey] = useState<string | null>(null)
+  /** Which job each panel is on. Kept across a trip into a room and back out. */
+  const [buildingTab, setBuildingTab] = useState<BuildingTab>('rooms')
+  const [roomTab, setRoomTab] = useState<RoomTab>('shape')
+  /**
+   * The object of the building model under the pointer, while one is being picked.
+   *
+   * Held here rather than in the canvas because the panel says its name: a path
+   * like "47/0" is not something anyone can aim at, and "kitchen_plane" is.
+   */
+  const [hoveredNodePath, setHoveredNodePath] = useState<string | null>(null)
   const [selectedBlocks, setSelectedBlocks] = useState<BlockRef[]>([])
   const selectedBlock = selectedBlocks.length ? selectedBlocks[selectedBlocks.length - 1] : null
   const setSelectedBlock = useCallback((ref: BlockRef | null) => {
@@ -217,6 +259,53 @@ export function useSceneEditorModel() {
     [patchDraft],
   )
 
+  const selectedRoom = selectedRoomIndex === null ? null : (draft?.rooms?.[selectedRoomIndex] ?? null)
+  const roomBuiltIns = roomParts((selectedRoom as { builtIns?: unknown } | null)?.builtIns)
+  const roomSets = draftSets((selectedRoom as { fittedSets?: unknown } | null)?.fittedSets)
+  /** The parts the viewport is arranging: one list at a time, whichever is scoped. */
+  const scopedParts =
+    fittingScope.kind === 'built-ins'
+      ? roomBuiltIns
+      : (roomSets.find((set) => set.key === fittingScope.key)?.parts ?? [])
+
+  /**
+   * Rewrites whichever list is scoped, leaving the other one alone.
+   *
+   * Both lists live in json columns, so the room is read back through the same
+   * tolerant readers the scene uses before being written — a row half-written
+   * by an earlier version of this editor is dropped here rather than carried
+   * forward for ever.
+   */
+  const patchScopedParts = (update: (parts: RoomPart[]) => RoomPart[]) => {
+    if (selectedRoomIndex === null) return
+
+    patchRoom(selectedRoomIndex, (room) => {
+      if (fittingScope.kind === 'built-ins') {
+        return { ...room, builtIns: update(roomParts((room as { builtIns?: unknown }).builtIns)) }
+      }
+
+      return {
+        ...room,
+        fittedSets: draftSets((room as { fittedSets?: unknown }).fittedSets).map((set) =>
+          set.key === fittingScope.key ? { ...set, parts: update(set.parts) } : set,
+        ),
+      }
+    })
+  }
+
+  /** Where a new fitting lands before anybody moves it: the middle of the room. */
+  const roomCentre = (): Point2 => {
+    if (!selectedRoom) return { x: 0, z: 0 }
+    const polygon = roomVertices(selectedRoom)
+    return polygon.length >= 3 ? polygonCentroid(polygon) : { x: 0, z: 0 }
+  }
+
+  const addPart = (part: Omit<RoomPart, 'key'>) => {
+    const key = freeKeyIn(scopedParts, 'part')
+    patchScopedParts((parts) => [...parts, { ...part, key }])
+    setSelectedPartKey(key)
+  }
+
   const snapshotCamera = (): CameraSnapshot | null => cameraGetterRef.current?.() ?? null
 
   const finishRoomDrawing = () => {
@@ -225,14 +314,26 @@ export function useSceneEditorModel() {
     const centroidX = drawingPoints.reduce((s, p) => s + p.x, 0) / drawingPoints.length
     const centroidZ = drawingPoints.reduce((s, p) => s + p.z, 0) / drawingPoints.length
     const nextIndex = draft?.rooms?.length ?? 0
+    /**
+     * A key nothing else has, rather than one counted off the list length.
+     *
+     * Delete a room from the middle and the count hands out a key a later room
+     * already holds — and a room key is the identity of a place. Two rooms
+     * sharing one merge everywhere downstream: the furniture in either is drawn
+     * in the other, both appear under one heading on the quote, and the markers
+     * in the scene fight over one React key. `freeKey` is the same helper the
+     * exterior spots have used all along.
+     */
+    const key = freeKey(draft?.rooms ?? [], 'room')
+    const ordinal = key.slice('room-'.length)
 
     patchDraft((d) => ({
       ...d,
       rooms: [
         ...(d.rooms ?? []),
         {
-          key: `room-${nextIndex + 1}`,
-          name: `Room ${nextIndex + 1}`,
+          key,
+          name: `Room ${ordinal}`,
           // Whatever the catalogue lists first, since there is no longer a
           // kind of room the code knows to prefer. The picker is right there.
           roomType: roomTypes[0]?.id ?? 0,
@@ -723,8 +824,13 @@ export function useSceneEditorModel() {
     }
   }
 
+  /** What is wrong with the building as it stands. The rule lives in `findProblems`. */
+  const problems = useMemo(() => findProblems(draft?.rooms ?? []), [draft])
+
   const save = async () => {
-    if (!id || !draft) return
+    // The button is disabled too; this is the door itself, and a save that
+    // slipped past a blank name would put it in front of a customer.
+    if (!id || !draft || problems.length > 0) return
 
     setSaveState('saving')
 
@@ -1047,8 +1153,117 @@ export function useSceneEditorModel() {
           }),
     dirty,
     saveState,
+    problems,
     onRegisterCameraGetter: (getter: (() => CameraSnapshot | null) | null) => {
       cameraGetterRef.current = getter
+    },
+
+    // ── Panels ───────────────────────────────────────────────────────────────
+    buildingTab,
+    roomTab,
+    onBuildingTab: setBuildingTab,
+    onRoomTab: (tab: RoomTab) => {
+      setRoomTab(tab)
+      // The viewport draws handles for whichever list is being arranged, so the
+      // tab and the scope are one choice made in two places if they can drift.
+      if (tab === 'built-ins') setFittingScope({ kind: 'built-ins' })
+      if (tab !== 'built-ins' && tab !== 'sets') setMode('select')
+    },
+
+    // ── Fittings: what stands still in a room ────────────────────────────────
+    fittingScope,
+    selectedPartKey,
+    hoveredNodePath,
+    hoveredNodeName:
+      hoveredNodePath === null
+        ? null
+        : (modelNodes.find((node) => node.path === hoveredNodePath)?.name ?? hoveredNodePath),
+    onHoverNode: setHoveredNodePath,
+    /** Top face of the selected room's floor — what a fitting's height is measured from. */
+    roomFloorY: typeof selectedRoom?.shell?.floorY === 'number' ? selectedRoom.shell.floorY : 0,
+    builtIns: roomBuiltIns,
+    fittedSets: roomSets,
+    /** The one list being arranged, which is what the viewport draws handles on. */
+    scopedParts,
+    selectedPart: scopedParts.find((part) => part.key === selectedPartKey) ?? null,
+    onScopeFittings: (scope: FittingScope) => {
+      setFittingScope(scope)
+      setSelectedPartKey(null)
+      // Leaving the mode with it: a click meant for the old list would otherwise
+      // drop a piece of building into the new one.
+      setMode('select')
+    },
+    onSelectPart: (key: string | null) => setSelectedPartKey(key),
+    /**
+     * Takes a piece of the building itself into the room.
+     *
+     * No pose of its own — it already stands where the building has it, and the
+     * room copies it out on entry rather than moving it. Which is the whole
+     * reason this is worth having: nobody has to line anything up.
+     */
+    onAddNodeFitting: (nodePath: string) => {
+      addPart({
+        source: 'node',
+        nodePath,
+        modelUrl: null,
+        position: [0, 0, 0],
+        yawDeg: 0,
+        scale: 1,
+      })
+      setMode('select')
+    },
+    onAddModelFitting: (modelUrl: string) => {
+      const centre = roomCentre()
+      addPart({
+        source: 'model',
+        nodePath: null,
+        modelUrl,
+        position: [centre.x, 0, centre.z],
+        yawDeg: 0,
+        scale: 1,
+      })
+    },
+    onMovePart: (key: string, x: number, y: number, z: number) =>
+      patchScopedParts((parts) =>
+        parts.map((part) => (part.key === key ? { ...part, position: [x, y, z] } : part)),
+      ),
+    onSetPartYaw: (key: string, yawDeg: number) =>
+      patchScopedParts((parts) =>
+        parts.map((part) => (part.key === key ? { ...part, yawDeg } : part)),
+      ),
+    onSetPartScale: (key: string, scale: number) =>
+      patchScopedParts((parts) =>
+        parts.map((part) => (part.key === key ? { ...part, scale: scale > 0 ? scale : 1 } : part)),
+      ),
+    onRemovePart: (key: string) => {
+      patchScopedParts((parts) => parts.filter((part) => part.key !== key))
+      setSelectedPartKey((current) => (current === key ? null : current))
+    },
+    onAddFittedSet: (packageId: number) => {
+      if (selectedRoomIndex === null) return
+      const key = freeKeyIn(roomSets, 'set')
+      patchRoom(selectedRoomIndex, (room) => ({
+        ...room,
+        fittedSets: [
+          ...draftSets((room as { fittedSets?: unknown }).fittedSets),
+          { key, packageId, parts: [] },
+        ],
+      }))
+      setFittingScope({ kind: 'set', key })
+      setSelectedPartKey(null)
+    },
+    onRemoveFittedSet: (key: string) => {
+      if (selectedRoomIndex === null) return
+      patchRoom(selectedRoomIndex, (room) => ({
+        ...room,
+        fittedSets: draftSets((room as { fittedSets?: unknown }).fittedSets).filter(
+          (set) => set.key !== key,
+        ),
+      }))
+      if (fittingScope.kind === 'set' && fittingScope.key === key) {
+        setFittingScope({ kind: 'built-ins' })
+        setSelectedPartKey(null)
+      }
     },
 
     onSetMode: (next: EditorMode) => {
@@ -1139,7 +1354,7 @@ export function useSceneEditorModel() {
       setMode('select')
     },
 
-    zones: selectedRoomIndex === null ? [] : roomZones(draft?.rooms?.[selectedRoomIndex]?.zones),
+    zones: selectedRoomIndex === null ? [] : draftZones(draft?.rooms?.[selectedRoomIndex]?.zones),
     selectedZoneKey,
     cutPoints,
     cutError,
@@ -1288,23 +1503,15 @@ export function useSceneEditorModel() {
       }),
     onUpdateRoom: (index: number, update: Partial<DraftRoom>) =>
       patchRoom(index, (room) => ({ ...room, ...update })),
-    onSetRoomCameraFromView: (index: number) => {
-      const snapshot = snapshotCamera()
-      if (snapshot) patchRoom(index, (room) => ({ ...room, cameraPreset: snapshot }))
-    },
     onRemoveRoom: (index: number) => {
       patchDraft((d) => ({ ...d, rooms: (d.rooms ?? []).filter((_, i) => i !== index) }))
       setSelectedRoomIndex(null)
       setSelectedBlock(null)
     },
-    onSetDefaultCameraFromView: () => {
-      const snapshot = snapshotCamera()
-      if (!snapshot) return
-      patchDraft((d) => ({
-        ...d,
-        sceneConfig: { ...d.sceneConfig, camera: { ...d.sceneConfig?.camera, ...snapshot } },
-      }))
-    },
+    // Where a room or the building opens from is no longer authored: the rig
+    // frames whatever is on screen the moment it has bounds to frame, and a
+    // saved pose was being overwritten before anybody saw it. What is left here
+    // is the part the rig still reads — how near and how wide it may go.
     onSetCameraLimits: (
       limits: Partial<{
         minDistance: number

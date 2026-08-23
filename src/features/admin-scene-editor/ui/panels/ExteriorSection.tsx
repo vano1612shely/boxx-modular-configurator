@@ -14,7 +14,7 @@ import { button, s, tone } from '../editor-styles'
  */
 export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
   return (
-    <>
+    <div style={s.tabBody}>
       <p style={s.hint}>
         Places outside the building where the visitor picks between a deck, stairs and a ramp. Leave
         this empty and the building is shown exactly as it is, with no panel.
@@ -68,6 +68,6 @@ export function ExteriorSection({ vm }: { vm: SceneEditorVm }) {
           A new spot lands wherever the view is centred, so frame the door first.
         </p>
       </Show>
-    </>
+    </div>
   )
 }

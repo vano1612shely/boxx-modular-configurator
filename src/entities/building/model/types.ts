@@ -123,6 +123,49 @@ export type Zone = {
   polygon: Point2[]
 }
 
+/**
+ * One object standing in a room, where the admin put it.
+ *
+ * Two sources, because a fitting can already exist or not. `node` names a piece
+ * of the building's own model by path — the kitchen counter modelled into the
+ * glb, which entering the room would otherwise hide along with everything else
+ * — and it carries no pose of its own, because it already has one. `model` is a
+ * file from the library, and the pose below is the whole of where it stands.
+ *
+ * `position` is the middle of its footprint in the building's own XZ, and `y`
+ * is metres above the room's floor rather than an absolute level, so a
+ * microwave sitting on a counter stays on it when the storey is re-levelled.
+ */
+export type RoomPart = {
+  key: string
+  source: 'node' | 'model'
+  /** Child-index path into the building glb. Null unless `source` is 'node'. */
+  nodePath: string | null
+  /** Null unless `source` is 'model'. */
+  modelUrl: string | null
+  position: Vec3Tuple
+  /** Degrees about Y. */
+  yawDeg: number
+  /** Uniform: a fitting is bought at the size it is drawn, not stretched. */
+  scale: number
+}
+
+/**
+ * A kitchen's worth of fittings, arranged for one room and sold as one thing.
+ *
+ * The parts and their poses belong to the room, because "where the fridge
+ * stands" is a fact about this building and no other. Everything the visitor
+ * reads — the name, the price, the picture, the line on the quote — belongs to
+ * the catalogue row this names, which every building shares. A room may offer
+ * several, and the visitor may have one of them at a time.
+ */
+export type FittedSet = {
+  key: string
+  /** Names a row of the furniture catalogue. */
+  packageId: number
+  parts: RoomPart[]
+}
+
 export type Room = {
   key: string
   name: string
@@ -144,6 +187,10 @@ export type Room = {
   floorPolygon: RoomVertex[]
   /** Empty for an undivided room, which is every room until someone cuts one. */
   zones: Zone[]
+  /** Fittings that are simply there — drawn inside the room, sold with nothing. */
+  builtIns: RoomPart[]
+  /** Arrangements this room offers, of which the visitor may have one. */
+  fittedSets: FittedSet[]
   shell: RoomShellConfig
   openings: RoomOpening[]
   surfaces: Record<ShellSurface, SurfaceStyle>

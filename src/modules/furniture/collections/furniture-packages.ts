@@ -26,10 +26,27 @@ export const FurniturePackages: CollectionConfig = {
       admin: { description: 'The grade shown on the package card.' },
     },
     {
+      name: 'fitted',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: {
+        description:
+          'A fitted package is arranged in the building rather than carried in from here — a ' +
+          'kitchen of several appliances, each put where it goes in the Scene Editor, on the ' +
+          'room itself. This row gives it its name, its price and its picture; the room gives ' +
+          'it its contents. The visitor adds and removes it like any other package but cannot ' +
+          'move it. Ticking this on its own offers it nowhere.',
+      },
+    },
+    {
       name: 'model',
       type: 'relationship',
       relationTo: 'models',
-      required: true,
+      admin: {
+        description:
+          'The whole package as one model. Leave empty for a fitted package — its parts are ' +
+          'placed on the room instead. Anything else without one is offered nowhere.',
+      },
     },
     {
       name: 'preview',

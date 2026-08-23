@@ -8,12 +8,14 @@ export type {
   ExteriorPlacement,
   ExteriorSlot,
   ExteriorVariant,
+  FittedSet,
   OpeningFit,
   OpeningKind,
   OpeningModelStyle,
   Point2,
   RoofConfig,
   RoomOpening,
+  RoomPart,
   RoomShellConfig,
   RoomType,
   RoomVertex,
@@ -33,7 +35,9 @@ export {
   mapBuildingScene,
   mapExteriorOption,
   mapRoom,
+  roomFittedSets,
   roomOpenings,
+  roomParts,
   roomVertices,
   roomZones,
   zoneNodePaths,
@@ -52,6 +56,8 @@ export {
   type ExteriorSelection,
 } from './lib/exterior'
 export { roomFloorTopY } from './lib/floor'
+export { fittedSetOf, fittedSetsIn, partGeometryKey, partsCentre } from './lib/fittings'
+export { RoomParts } from './ui/RoomParts'
 export {
   containingFloor,
   findFloor,

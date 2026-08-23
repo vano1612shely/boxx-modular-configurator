@@ -193,3 +193,72 @@ describe('opening a saved order', () => {
     expect(config().placed).toEqual([])
   })
 })
+
+describe('a fitted arrangement', () => {
+  function pin() {
+    return config().addPackage({
+      packageId: 7,
+      roomKey: 'kitchen-1',
+      x: 2,
+      z: 3,
+      rotationYDeg: 0,
+      pinned: true,
+    })
+  }
+
+  const placedAt = (instanceId: string) =>
+    config().placed.find((p) => p.instanceId === instanceId)
+
+  /**
+   * Selection raises a floating toolbar offering to turn and remove the piece.
+   * A kitchen is exactly the thing that does not turn, and landing on it with
+   * the toolbar already up would offer the one action it refuses.
+   */
+  it('is not selected when it is put in', () => {
+    pin()
+    expect(config().selectedInstanceId).toBeNull()
+  })
+
+  it('cannot be moved', () => {
+    const id = pin()
+    config().movePackage(id, 9, 9)
+    expect(placedAt(id)).toMatchObject({ x: 2, z: 3 })
+  })
+
+  it('cannot be turned', () => {
+    const id = pin()
+    config().rotatePackage(id, 90)
+    expect(placedAt(id)?.rotationYDeg).toBe(0)
+  })
+
+  it('cannot be picked up', () => {
+    const id = pin()
+    config().startDrag(id)
+    expect(config().draggingInstanceId).toBeNull()
+  })
+
+  // The panel lists it beside the chairs, and the row is a label rather than a
+  // button. This is the guard behind that, for every other way in.
+  it('cannot be selected', () => {
+    const id = pin()
+    config().selectPackage(id)
+    expect(config().selectedInstanceId).toBeNull()
+  })
+
+  // Not a general refusal: clearing the selection while a kitchen stands has to
+  // keep working, or the scene could never let go of an ordinary piece again.
+  it('does not stop anything else being selected or dropped', () => {
+    pin()
+    const chair = place()
+    expect(config().selectedInstanceId).toBe(chair)
+
+    config().selectPackage(null)
+    expect(config().selectedInstanceId).toBeNull()
+  })
+
+  it('is removed like anything else', () => {
+    const id = pin()
+    config().removePackage(id)
+    expect(config().placed).toHaveLength(0)
+  })
+})

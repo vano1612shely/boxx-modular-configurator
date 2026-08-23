@@ -35,7 +35,9 @@ export const s: Record<string, CSSProperties> = {
   sidebar: {
     width: 340,
     flexShrink: 0,
-    overflowY: 'auto',
+    // The aside itself does not scroll: its head — where you are, what is
+    // selected, which job — has to stay put while the job below it scrolls.
+    overflow: 'hidden',
     background: tone.panel,
     color: tone.text,
     display: 'flex',
@@ -43,9 +45,7 @@ export const s: Record<string, CSSProperties> = {
     fontSize: 13,
   },
   header: {
-    position: 'sticky',
-    top: 0,
-    zIndex: 2,
+    flexShrink: 0,
     padding: '12px 14px',
     display: 'flex',
     flexDirection: 'column',
@@ -111,6 +111,15 @@ export const s: Record<string, CSSProperties> = {
     width: '100%',
     boxSizing: 'border-box',
   },
+  /**
+   * The whole border, not just its colour.
+   *
+   * `input` above sets `border` in shorthand, and a longhand laid over a
+   * shorthand is removed on the render that stops applying it — React says so
+   * out loud, and what is left on screen is the shorthand's own colour on an
+   * element that was meant to have changed.
+   */
+  inputInvalid: { border: `1px solid ${tone.danger}`, background: '#2a1d1f' },
   inputTiny: {
     background: tone.field,
     border: `1px solid ${tone.lineStrong}`,
@@ -161,6 +170,12 @@ export const s: Record<string, CSSProperties> = {
   },
   section: { display: 'flex', flexDirection: 'column', gap: 8 },
   body: { padding: '2px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 },
+  /**
+   * The room a section needs when it sits under a tab rather than inside an
+   * accordion. The accordion was giving every section its padding, and the
+   * sections that came out from under one were left flush against the edge.
+   */
+  tabBody: { padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 },
   accordion: { borderBottom: `1px solid ${tone.line}` },
   accordionHeader: {
     width: '100%',
@@ -189,9 +204,19 @@ export const s: Record<string, CSSProperties> = {
     fontWeight: 500,
     letterSpacing: 0,
   },
+  /** Why the save button is off, immediately above the save button. */
+  problems: {
+    flexShrink: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    padding: '9px 14px',
+    borderTop: `1px solid ${tone.line}`,
+    background: '#2a1d1f',
+  },
+  problem: { margin: 0, fontSize: 11.5, lineHeight: 1.4, color: '#f5b8bd' },
   footer: {
-    position: 'sticky',
-    bottom: 0,
+    flexShrink: 0,
     marginTop: 'auto',
     padding: '10px 14px',
     background: tone.panel,
@@ -199,6 +224,8 @@ export const s: Record<string, CSSProperties> = {
     display: 'flex',
     gap: 6,
   },
+  /** The one part of a panel that scrolls: whatever the active tab is showing. */
+  scroll: { flex: 1, minHeight: 0, overflowY: 'auto' },
   segmentGroup: { display: 'flex', gap: 10, flexWrap: 'wrap' },
   segmentTrack: {
     display: 'inline-flex',

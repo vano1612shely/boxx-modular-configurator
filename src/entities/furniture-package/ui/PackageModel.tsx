@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Box3, Vector3, type Group } from 'three'
+import type { Group } from 'three'
 
+import { centreOnFootprint } from '@/shared/three/centre-model'
 import { useModel } from '@/shared/three/use-model'
 
 import { setMeasuredFootprint } from '../lib/measured-footprints'
@@ -28,21 +29,16 @@ export type CentredPackage = {
  * is what corrects the admin's estimate, and it can only be known once the glb
  * is here.
  */
-export function useCentredPackage(pkg: FurniturePackageEntity): CentredPackage {
+export function useCentredPackage(pkg: FurniturePackageEntity & { modelUrl: string }): CentredPackage {
   const scene = useModel(pkg.modelUrl)
 
   return useMemo(() => {
     const clone = scene.clone(true)
 
-    const bounds = new Box3().setFromObject(clone)
-    const size = bounds.getSize(new Vector3())
-    const centre = bounds.getCenter(new Vector3())
-
     // Y is left alone: the model stands on the floor, so its base sits there.
-    clone.position.x -= centre.x
-    clone.position.z -= centre.z
+    const measured = centreOnFootprint(clone)
 
-    const footprint = { width: size.x, depth: size.z }
+    const footprint = { width: measured.width, depth: measured.depth }
     setMeasuredFootprint(pkg.id, footprint)
 
     // Measured after the recentring, so the grid is already in the frame the
@@ -55,12 +51,12 @@ export function useCentredPackage(pkg: FurniturePackageEntity): CentredPackage {
       setMeasuredShape(pkg.id, pkg.modelUrl, measureShape(clone, footprint))
     }
 
-    return { object: clone, height: size.y }
+    return { object: clone, height: measured.height }
   }, [scene, pkg.id, pkg.modelUrl])
 }
 
 /** The package and nothing else — no handles, no outline, no pointer surface. */
-export function PackageModel({ pkg }: { pkg: FurniturePackageEntity }) {
+export function PackageModel({ pkg }: { pkg: FurniturePackageEntity & { modelUrl: string } }) {
   const { object } = useCentredPackage(pkg)
 
   return <primitive object={object} />

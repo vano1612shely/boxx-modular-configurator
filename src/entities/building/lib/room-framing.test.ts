@@ -31,6 +31,8 @@ function room(
     areaSqM: null,
     floorPolygon: polygon,
     zones: [],
+    builtIns: [],
+    fittedSets: [],
     shell: {
       floorY: overrides.floorY ?? 0,
       wallHeight: overrides.wallHeight ?? 2.5,

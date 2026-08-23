@@ -54,6 +54,7 @@ import { applyOverviewClipping } from '@/shared/three/overview-clipping'
 import { For, Show } from '@/shared/ui/control-flow'
 
 import { defaultYRange, planCutY } from '../lib/blocks'
+import { heightAboveFloor } from '../lib/fittings-draft'
 import { floorPlaneBounds } from '../lib/floor-plane'
 import { bearingDeg, draggedYaw, slotToWorld, worldToSlot } from '../lib/slot-drag'
 
@@ -68,10 +69,10 @@ import {
   type SceneEditorVm,
 } from '../model/use-scene-editor-model'
 
-import { CompassProbe, CompassRose } from './canvas/Compass'
 import { ExteriorSpots } from './canvas/ExteriorSpots'
 import { FloorPlaneGizmo } from './canvas/FloorPlaneGizmo'
 import { RoofModelGizmo } from './canvas/RoofModelGizmo'
+import { RoomFittingsGizmo } from './canvas/RoomFittingsGizmo'
 import { SunMarker } from './canvas/SunMarker'
 import { OpeningGizmo, type OpeningGrip } from './canvas/OpeningGizmo'
 import {
@@ -112,6 +113,18 @@ type DragState =
   | { kind: 'create-block'; startX: number; startZ: number }
   | { kind: 'floor-plane'; cx: number; cz: number }
   | { kind: 'roof-move'; grabDX: number; grabDZ: number; y: number }
+  | { kind: 'fitting-move'; key: string; grabDX: number; grabDZ: number; y: number }
+  | { kind: 'fitting-height'; key: string; cx: number; cz: number; grabDY: number }
+  | {
+      kind: 'fitting-yaw'
+      key: string
+      cx: number
+      cz: number
+      y: number
+      /** Bearing the grip was taken at, and the facing it belonged to. */
+      startBearing: number
+      startYaw: number
+    }
   | { kind: 'roof-height'; cx: number; cz: number; grabDY: number }
   // `held` is the previewed choice's model; false is the spot itself — the same
   // three gestures either way, so they share the state.
@@ -184,6 +197,7 @@ const GRID = 0.05
 function snap(value: number): number {
   return Math.round(value / GRID) * GRID
 }
+
 
 /** The point a click at this spot would actually use. */
 function snapPoint(p: { x: number; z: number }): { x: number; z: number } {
@@ -303,6 +317,75 @@ function BuildingGlb({
     })
     return clones
   }, [selectedPathsKey, resolveAny, modelNodes])
+
+  /**
+   * The object under the pointer, painted over itself while one is being picked.
+   *
+   * Picking a counter out of a building used to be aiming at a grey surface and
+   * hoping: nothing said which object a click would take, and the paths on the
+   * list afterwards — "47/0" — say nothing either. This is the same overlay the
+   * selection uses, in another colour, so hovering and having picked look
+   * related without looking the same.
+   */
+  /** Only while picking: a raycast per pointer move is not worth paying otherwise. */
+  const picking = vm.mode === 'pick-fitting'
+  const hoveredPath = vm.hoveredNodePath
+  const hoverOverlay = useMemo(() => {
+    if (!hoveredPath || vm.selectedNodePaths.includes(hoveredPath)) return null
+
+    const source = resolveAny(hoveredPath)
+    if (!source) return null
+
+    const material = new MeshBasicMaterial({
+      color: '#38bdf8',
+      transparent: true,
+      opacity: 0.4,
+      depthTest: false,
+      toneMapped: false,
+    })
+    const clone = source.clone(true)
+    clone.traverse((object) => {
+      const mesh = object as Mesh
+      if (!mesh.isMesh) return
+      mesh.material = material
+      mesh.renderOrder = 51
+      mesh.raycast = () => {}
+    })
+    clone.matrixAutoUpdate = false
+    clone.matrix.copy(source.matrixWorld)
+    return { clone, material }
+  }, [hoveredPath, vm.selectedNodePaths, resolveAny])
+
+  // The selection overlays above leak their materials; this one does not add to
+  // it — a hover changes far more often than a selection does.
+  useEffect(() => {
+    const material = hoverOverlay?.material
+    return () => material?.dispose()
+  }, [hoverOverlay])
+
+  const onHoverNode = vm.onHoverNode
+
+  const handleHover = useCallback(
+    (event: ThreeEvent<PointerEvent>) => {
+      const root = preparedRef.current
+      if (!root) return
+
+      for (const hit of event.intersections) {
+        if (!isTreeVisible(hit.object)) continue
+        const path = nodePathOf(root, hit.object)
+        if (path !== null) {
+          onHoverNode(path)
+          return
+        }
+      }
+      onHoverNode(null)
+    },
+    [onHoverNode],
+  )
+
+  useEffect(() => {
+    if (!picking) onHoverNode(null)
+  }, [picking, onHoverNode])
 
   useEffect(() => {
     rootRef.current = prepared
@@ -441,8 +524,14 @@ function BuildingGlb({
     }
   }, [vm.hiddenNodePaths, exteriorHidden, resolveAny])
 
-  const ghost = vm.roomMode && vm.ghostModel
-  const hiddenInRoom = vm.roomMode && !vm.ghostModel
+  // Solid while a piece of the building is being picked, whatever the toggle
+  // says. A ghost cannot be aimed at and a hidden model cannot be clicked at
+  // all, so the mode that exists to click the building shows the building —
+  // and puts the toggle back the moment the pick is over.
+  const ghost = vm.roomMode && vm.ghostModel && !picking
+  const hiddenInRoom = vm.roomMode && !vm.ghostModel && !picking
+
+
 
   useEffect(() => {
     const root = preparedRef.current
@@ -469,6 +558,21 @@ function BuildingGlb({
     }
   }, [prepared, ghost, hiddenInRoom])
 
+
+  /**
+   * The ghost, re-asserted every frame rather than swapped on and swapped back.
+   *
+   * It used to be an effect that recorded each material on the way in and put
+   * it back in its cleanup, and a cleanup owns its work only until something
+   * skips it — a re-suspend of the boundary this sits in, a second mount over
+   * the same shared scene, an early return on a ref that had not attached yet.
+   * Skip it once and the building is left pale and see-through for the rest of
+   * the session, with nothing able to put it right but a reload.
+   *
+   * Stating the whole truth every frame cannot get stuck: whatever the model
+   * was left as, the next frame says what it should be. Sixty comparisons of an
+   * object reference per frame is not a cost worth defending against.
+   */
   useFrame(() => {
     const draft = vm.draft
     if (!draft) return
@@ -496,10 +600,17 @@ function BuildingGlb({
 
   return (
     <>
-      <primitive ref={preparedRef} object={prepared} onClick={onPick} />
+      <primitive
+        ref={preparedRef}
+        object={prepared}
+        onClick={onPick}
+        onPointerMove={picking ? handleHover : undefined}
+        onPointerOut={picking ? () => onHoverNode(null) : undefined}
+      />
       <For each={overlays} getKey={(_, i) => i}>
         {(object) => <primitive object={object} />}
       </For>
+      <Show when={hoverOverlay}>{(overlay) => <primitive object={overlay.clone} />}</Show>
     </>
   )
 }
@@ -949,6 +1060,7 @@ function EditorScene({
   const rooms = draft?.rooms ?? []
 
   const openRoom = vm.roomMode ? (rooms[vm.selectedRoomIndex as number] ?? null) : null
+
   const openZone = useMemo(
     () => (openRoom ? mapRoom(openRoom) : null),
     [openRoom],
@@ -1131,6 +1243,58 @@ function EditorScene({
       if (y === null) return
       // patchDraft's 300 ms checkpoint throttle collapses the drag into one undo step.
       vm.onSetFloorLevel(snap(y))
+      return
+    }
+
+    if (drag.kind === 'fitting-move') {
+      const hit = rayAtY(ray, drag.y)
+      if (!hit) return
+      const part = vm.scopedParts.find((p) => p.key === drag.key)
+      if (!part) return
+      // Height untouched: this gesture is across the floor, and a microwave
+      // being slid along a counter must not fall off it.
+      vm.onMovePart(
+        drag.key,
+        snap(hit.x - drag.grabDX),
+        part.position[1],
+        snap(hit.z - drag.grabDZ),
+      )
+      return
+    }
+
+    if (drag.kind === 'fitting-yaw') {
+      const hit = rayAtY(ray, drag.y)
+      if (!hit) return
+      const part = vm.scopedParts.find((p) => p.key === drag.key)
+      if (!part) return
+
+      // Measured from the grip rather than accumulated per move, so a long
+      // gesture cannot drift; `draggedYaw` resolves the wrap against the facing
+      // the fitting is at this instant, so a full turn stays a full turn.
+      vm.onSetPartYaw(
+        drag.key,
+        Math.round(
+          draggedYaw({
+            startYaw: drag.startYaw,
+            startBearing: drag.startBearing,
+            bearing: bearingDeg(hit.x - drag.cx, hit.z - drag.cz),
+            currentYaw: part.yawDeg,
+          }),
+        ),
+      )
+      return
+    }
+
+    if (drag.kind === 'fitting-height') {
+      const worldY = rayAtVertical(ray, drag.cx, drag.cz)
+      if (worldY === null) return
+      const part = vm.scopedParts.find((p) => p.key === drag.key)
+      if (!part) return
+
+      // Absolute, against the offset measured once when the grip was taken.
+      // The frame conversion and the clamp live in `heightAboveFloor`.
+      const above = heightAboveFloor(worldY, drag.grabDY, vm.roomFloorY)
+      vm.onMovePart(drag.key, part.position[0], above, part.position[2])
       return
     }
 
@@ -1436,6 +1600,28 @@ function EditorScene({
     if (vm.mode === 'floor-level') {
       event.stopPropagation()
       vm.onSnapFloorLevel(event.point.y)
+      return
+    }
+
+    // Taking a piece of the building into the room. The only pick that works
+    // with a room selected, and it wants the frontmost thing under the pointer
+    // rather than the cycle below — the admin is pointing at a counter, not
+    // asking to step through everything behind it.
+    if (vm.mode === 'pick-fitting') {
+      if (!vm.roomMode) return
+      event.stopPropagation()
+
+      const root = buildingRootRef.current
+      if (!root) return
+
+      for (const hit of event.intersections) {
+        if (!isTreeVisible(hit.object)) continue
+        const path = nodePathOf(root, hit.object)
+        if (path !== null) {
+          vm.onAddNodeFitting(path)
+          return
+        }
+      }
       return
     }
 
@@ -2074,6 +2260,52 @@ function EditorScene({
         }}
       />
 
+      {/* Only inside a room: fittings are a room's business, and outside one
+          the building's own model already shows whatever it came with. */}
+      <Show when={vm.roomMode}>
+        <RoomFittingsGizmo
+          parts={vm.scopedParts}
+          floorY={vm.roomFloorY}
+          selectedKey={vm.selectedPartKey}
+          register={registerHandle}
+          onSelect={vm.onSelectPart}
+          onStartMove={(key, grabDX, grabDZ, planeY) =>
+            setDrag({ kind: 'fitting-move', key, grabDX, grabDZ, y: planeY })
+          }
+          // The drag plane runs through the grip the pointer actually took, and
+          // the offset from the fitting's own base is measured once — adding a
+          // delta per pointermove lets the error accumulate over a long gesture.
+          onStartHeight={(key, ray, grip) => {
+            const part = vm.scopedParts.find((p) => p.key === key)
+            if (!part) return
+            const worldY = rayAtVertical(ray, grip[0], grip[2])
+            setDrag({
+              kind: 'fitting-height',
+              key,
+              cx: grip[0],
+              cz: grip[2],
+              grabDY: (worldY ?? grip[1]) - (vm.roomFloorY + part.position[1]),
+            })
+          }}
+          onStartYaw={(key, ray, centre) => {
+            const part = vm.scopedParts.find((p) => p.key === key)
+            if (!part) return
+            const hit = rayAtY(ray, centre[1])
+            setDrag({
+              kind: 'fitting-yaw',
+              key,
+              cx: centre[0],
+              cz: centre[2],
+              y: centre[1],
+              startBearing: hit
+                ? bearingDeg(hit.x - centre[0], hit.z - centre[2])
+                : part.yawDeg,
+              startYaw: part.yawDeg,
+            })
+          }}
+        />
+      </Show>
+
       <Show when={vm.roofModelUrl}>
         {(url) => (
           <Suspense fallback={null}>
@@ -2172,12 +2404,6 @@ function EditorScene({
 
 export function EditorCanvas({ vm }: VmProps) {
   const [menu, setMenu] = useState<EditorMenuState>(null)
-  const compassDial = useRef<HTMLDivElement>(null)
-  // Written straight to style: this runs every frame.
-  const onHeading = useCallback((bearingDeg: number) => {
-    const node = compassDial.current
-    if (node) node.style.transform = `rotate(${-bearingDeg}deg)`
-  }, [])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -2194,31 +2420,7 @@ export function EditorCanvas({ vm }: VmProps) {
         className="touch-none"
       >
         <EditorScene vm={vm} onOpenMenu={setMenu} />
-        <CompassProbe onHeading={onHeading} />
       </Canvas>
-      <CompassRose dial={compassDial} />
-      <button
-        type="button"
-        title="Bring the camera back to where it started"
-        onClick={vm.onResetView}
-        style={{
-          position: 'absolute',
-          top: 76,
-          right: 12,
-          zIndex: 3,
-          padding: '6px 10px',
-          borderRadius: 8,
-          border: '1px solid #2a2e34',
-          background: 'rgba(17,18,21,0.72)',
-          backdropFilter: 'blur(4px)',
-          color: '#c8cdd4',
-          font: 'inherit',
-          fontSize: 11,
-          cursor: 'pointer',
-        }}
-      >
-        ⟲ Reset view
-      </button>
       <EditorMenuPopup menu={menu} onClose={() => setMenu(null)} />
     </div>
   )

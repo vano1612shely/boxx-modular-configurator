@@ -4,7 +4,7 @@ import { Suspense, useMemo } from 'react'
 import { MathUtils } from 'three'
 
 import type { BuildingScene } from '@/entities/building'
-import { roomFloorTopY, roomsOnFloor } from '@/entities/building'
+import { fittedSetOf, RoomParts, roomFloorTopY, roomsOnFloor } from '@/entities/building'
 import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
 import { PackageModel, type FurniturePackageEntity } from '@/entities/furniture-package'
@@ -60,13 +60,33 @@ export function StaticPlacements({ building, packages }: Props) {
         if (focusedRoomKey && placement.roomKey !== focusedRoomKey) return null
         if (!focusedRoomKey && !roomsOnView.has(placement.roomKey)) return null
 
+        // An arrangement the building holds, resolved the same way the
+        // configurator resolves it: an order line names a package and a room,
+        // and that pair is what the building answers with a kitchen. Nothing
+        // about the order had to change for this to come back.
+        const set = fittedSetOf(room, placement.packageId)
+        if (set) {
+          return (
+            <RoomParts
+              parts={set.parts}
+              buildingModelUrl={building.modelUrl}
+              floorY={roomFloorTopY(room)}
+            />
+          )
+        }
+
+        // A fitted package the building has since stopped arranging. The line
+        // stays on the summary; there is simply nothing left to draw for it.
+        const modelUrl = pkg.modelUrl
+        if (!modelUrl) return null
+
         return (
           <Suspense fallback={null}>
             <group
               position={[placement.x, roomFloorTopY(room), placement.z]}
               rotation={[0, MathUtils.degToRad(placement.rotationYDeg), 0]}
             >
-              <PackageModel pkg={pkg} />
+              <PackageModel pkg={{ ...pkg, modelUrl }} />
             </group>
           </Suspense>
         )

@@ -437,6 +437,30 @@ export interface BuildingModel {
           | boolean
           | null;
         /**
+         * Fittings that are simply in this room — a kitchen counter, a sink. Either a piece of the building model itself, named by path, or a model from the library placed by hand. Entering a room hides the building model, so anything of the building that should still be seen from inside belongs here. Arranged in the Scene Editor. Nothing here is sold.
+         */
+        builtIns?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        /**
+         * Arrangements this room offers — a kitchen of several appliances, each where the admin put it. The visitor picks one from the furniture panel like anything else, but cannot move it: only swap it for another or take it out. What each is called and what it costs comes from the furniture package it names. Arranged in the Scene Editor.
+         */
+        fittedSets?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        /**
          * The focused-room view is generated from these numbers — the building glb is never cut.
          */
         shell?: {
@@ -748,7 +772,14 @@ export interface FurniturePackage {
    * The grade shown on the package card.
    */
   tier?: (number | null) | FurnitureTier;
-  model: number | Model;
+  /**
+   * A fitted package is arranged in the building rather than carried in from here — a kitchen of several appliances, each put where it goes in the Scene Editor, on the room itself. This row gives it its name, its price and its picture; the room gives it its contents. The visitor adds and removes it like any other package but cannot move it. Ticking this on its own offers it nowhere.
+   */
+  fitted?: boolean | null;
+  /**
+   * The whole package as one model. Leave empty for a fitted package — its parts are placed on the room instead. Anything else without one is offered nowhere.
+   */
+  model?: (number | null) | Model;
   thumbnail?: (number | null) | Image;
   /**
    * USD.
@@ -1163,6 +1194,8 @@ export interface BuildingModelsSelect<T extends boolean = true> {
               id?: T;
             };
         zones?: T;
+        builtIns?: T;
+        fittedSets?: T;
         shell?:
           | T
           | {
@@ -1273,6 +1306,7 @@ export interface ExteriorOptionsSelect<T extends boolean = true> {
 export interface FurniturePackagesSelect<T extends boolean = true> {
   title?: T;
   tier?: T;
+  fitted?: T;
   model?: T;
   thumbnail?: T;
   price?: T;

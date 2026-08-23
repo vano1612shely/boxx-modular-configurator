@@ -127,11 +127,13 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
   setExteriorVariant: (slotKey, variantKey) =>
     set((state) => ({ exterior: { ...state.exterior, [slotKey]: variantKey } })),
 
+  // A pinned piece is not selected on the way in: selection raises a toolbar
+  // offering to turn and move it, and it is exactly the thing that does neither.
   addPackage: (placement) => {
     const instanceId = uniqueId()
     set((state) => ({
       placed: [...state.placed, { ...placement, instanceId }],
-      selectedInstanceId: instanceId,
+      selectedInstanceId: placement.pinned ? null : instanceId,
     }))
     return instanceId
   },
@@ -142,24 +144,44 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
       selectedInstanceId: state.selectedInstanceId === instanceId ? null : state.selectedInstanceId,
     })),
 
+  // The four ways a piece could be edited, each refusing a pinned one.
+  //
+  // Here rather than only in the scene, where the pinned piece is already drawn
+  // with no pointer handlers at all: this is the last door, and it is the one
+  // every other way in — the panel, a keyboard shortcut, a future feature —
+  // goes through. A rule worth one line in four places is worth having.
   movePackage: (instanceId, x, z) =>
     set((state) => ({
-      placed: state.placed.map((p) => (p.instanceId === instanceId ? { ...p, x, z } : p)),
+      placed: state.placed.map((p) =>
+        p.instanceId === instanceId && !p.pinned ? { ...p, x, z } : p,
+      ),
     })),
 
   rotatePackage: (instanceId, rotationYDeg) =>
     set((state) => ({
-      placed: state.placed.map((p) => (p.instanceId === instanceId ? { ...p, rotationYDeg } : p)),
+      placed: state.placed.map((p) =>
+        p.instanceId === instanceId && !p.pinned ? { ...p, rotationYDeg } : p,
+      ),
     })),
 
-  selectPackage: (instanceId) => set({ selectedInstanceId: instanceId }),
+  selectPackage: (instanceId) =>
+    set((state) => ({
+      selectedInstanceId:
+        instanceId !== null && state.placed.some((p) => p.instanceId === instanceId && p.pinned)
+          ? state.selectedInstanceId
+          : instanceId,
+    })),
   startDrag: (instanceId) =>
-    set({
-      draggingInstanceId: instanceId,
-      selectedInstanceId: instanceId,
-      dragPose: null,
-      dragValid: true,
-    }),
+    set((state) =>
+      state.placed.some((p) => p.instanceId === instanceId && p.pinned)
+        ? {}
+        : {
+            draggingInstanceId: instanceId,
+            selectedInstanceId: instanceId,
+            dragPose: null,
+            dragValid: true,
+          },
+    ),
   setDragPose: (dragPose) => set({ dragPose }),
   // One write for the whole landing: the pose, the end of the drag and the
   // clearing of the live one. Three would be three renders of everything that

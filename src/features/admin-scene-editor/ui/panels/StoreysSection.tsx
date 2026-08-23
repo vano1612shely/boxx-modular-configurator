@@ -34,7 +34,12 @@ export function StoreysSection({ vm }: PanelProps) {
           const rooms = vm.storeyRoomCounts[index] ?? 0
 
           return (
-            <div style={{ ...s.card, borderColor: selected ? STOREY_COLOR : undefined }}>
+            <div
+              style={{
+                ...s.card,
+                border: `1px solid ${selected ? STOREY_COLOR : tone.lineSoft}`,
+              }}
+            >
               <div style={s.row}>
                 <input
                   style={{ ...s.input, flex: 1 }}

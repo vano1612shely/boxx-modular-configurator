@@ -1,11 +1,12 @@
 'use client'
 
-import { Show } from '@/shared/ui/control-flow'
+import { Match, Switch } from '@/shared/ui/control-flow'
+
+import type { BuildingTab } from '../../model/use-scene-editor-model'
 
 import { Accordion } from '../controls/Accordion'
-import { MODE_HINTS, Toolbar } from '../controls/Toolbar'
-import { SegmentedControl } from '../controls/SegmentedControl'
-import { button, s } from '../editor-styles'
+import { Tabs } from '../controls/Tabs'
+import { s } from '../editor-styles'
 import { CameraSection } from './CameraSection'
 import { ExteriorSection } from './ExteriorSection'
 import { FloorLevelCard } from './FloorLevelCard'
@@ -17,141 +18,81 @@ import { SelectionPanel } from './SelectionPanel'
 import { StoreysSection } from './StoreysSection'
 import type { PanelProps } from './shared'
 
-const VIEW_OPTIONS = [
-  { value: '3d', label: '3D' },
-  { value: 'plan', label: '2D plan', title: 'Top-down — points land exactly where you click' },
-] as const
-
-const ROOF_OPTIONS = [
-  { value: 'shown', label: 'Shown' },
-  { value: 'hidden', label: 'Hidden', title: 'What the visitor sees with the roof toggled off' },
-] as const
-
 export function BuildingPanel({ vm, onOpenMenu }: PanelProps) {
   const rooms = vm.draft?.rooms ?? []
   const volumes = vm.draft?.sceneConfig?.roofBlocks ?? []
 
-  const storeyOptions = [
-    { value: 'all', label: 'All', title: 'The whole building, as it is today' },
-    ...vm.floors.map((floor, index) => ({
-      value: String(index),
-      label: String(index + 1),
-      title: floor.name,
-    })),
+  const tabs: Array<{ value: BuildingTab; label: string; count?: number; title?: string }> = [
+    { value: 'rooms', label: 'Rooms', count: rooms.length },
+    { value: 'storeys', label: 'Storeys', count: vm.floors.length },
+    {
+      value: 'model',
+      label: 'Model',
+      title: 'The glb itself: what is hidden, what the roof is, how the camera is bounded',
+    },
+    { value: 'exterior', label: 'Exterior', count: vm.exteriorSlots.length },
   ]
 
   return (
     <>
-      <div style={s.header}>
-        <div>
-          <p style={s.eyebrow}>Building</p>
-          <h2 style={s.title}>{vm.doc?.title ?? 'Scene'}</h2>
-        </div>
-
-        <Toolbar
-          hint={MODE_HINTS[vm.mode]}
-          tools={[
-            { label: 'Select', active: vm.mode === 'select', onSelect: () => vm.onSetMode('select') },
-            {
-              label: '✏ Draw room',
-              active: vm.mode === 'draw-room',
-              onSelect: () => vm.onSetMode('draw-room'),
-            },
-            {
-              label: '▩ Roof volume',
-              active: vm.mode === 'block-roof',
-              onSelect: () => vm.onSetMode('block-roof'),
-            },
-            {
-              label: '⇕ Floor level',
-              title: 'The height the next room you draw starts at',
-              active: vm.mode === 'floor-level',
-              onSelect: () => vm.onSetMode('floor-level'),
-            },
-          ]}
-        />
-
-        <div style={s.segmentGroup}>
-          <SegmentedControl
-            label="View"
-            value={vm.planMode ? 'plan' : '3d'}
-            options={VIEW_OPTIONS}
-            onChange={(value) => vm.onSetPlanMode(value === 'plan')}
-          />
-          <SegmentedControl
-            label="Roof"
-            value={vm.roofHidden ? 'hidden' : 'shown'}
-            options={ROOF_OPTIONS}
-            onChange={(value) => vm.onSetRoofHidden(value === 'hidden')}
-          />
-        </div>
-
-        {/* Cuts the model exactly as the visitor's storey picker will. */}
-        <Show when={vm.floors.length > 0}>
-          <SegmentedControl
-            label="Storey"
-            value={vm.previewFloorIndex === null ? 'all' : String(vm.previewFloorIndex)}
-            options={storeyOptions}
-            onChange={(value) => vm.onPreviewFloor(value === 'all' ? null : Number(value))}
-          />
-        </Show>
-
-        <Show when={vm.mode === 'floor-level'}>
-          <FloorLevelCard
-            vm={vm}
-            hint={
-              vm.previewFloorName
-                ? `The height rooms you draw next on ${vm.previewFloorName} will start at — every storey keeps its own. Rooms already drawn keep theirs.`
-                : vm.floors.length > 0
-                  ? 'The height rooms you draw next will start at. Pick a storey above first and this follows it.'
-                  : 'The height rooms you draw next will start at. Rooms already drawn keep their own.'
-            }
-          />
-        </Show>
-
-        <Show when={vm.mode === 'draw-room' && vm.drawingPoints.length > 0}>
-          <div style={s.row}>
-            <Show when={vm.drawingPoints.length >= 3}>
-              <button type="button" style={button('primary')} onClick={vm.onFinishRoom}>
-                Finish room ({vm.drawingPoints.length} points)
-              </button>
-            </Show>
-            <button type="button" style={button()} onClick={vm.onCancelDrawing}>
-              Cancel
-            </button>
-          </div>
-        </Show>
-      </div>
-
+      {/* Above the tabs, not inside one: what is selected is what you are
+          working on, and it used to sit under seven lists it had nothing to do
+          with — picked in the viewport, found by scrolling. */}
       <SelectionPanel vm={vm} />
 
-      <Accordion title="Rooms" badge={rooms.length} defaultOpen>
-        <RoomListSection vm={vm} onOpenMenu={onOpenMenu} />
-      </Accordion>
+      <Tabs tabs={tabs} value={vm.buildingTab} onChange={vm.onBuildingTab} />
 
-      <Accordion title="Storeys" badge={vm.floors.length}>
-        <StoreysSection vm={vm} onOpenMenu={onOpenMenu} />
-      </Accordion>
+      {/* The only part that scrolls. Everything above it — where you are, what
+          is selected, which job — is what you steer with, and steering that
+          scrolls away is the complaint this whole panel was rebuilt over. */}
+      <div style={s.scroll}>
+        <Switch>
+        <Match when={vm.buildingTab === 'rooms'}>
+          <RoomListSection vm={vm} onOpenMenu={onOpenMenu} />
+        </Match>
 
-      <Accordion title="Roof — from the model" badge={volumes.length}>
-        <RoofVolumesSection vm={vm} onOpenMenu={onOpenMenu} />
-      </Accordion>
+        <Match when={vm.buildingTab === 'storeys'}>
+          {/* Here rather than behind the Floor level tool: it is the height the
+              next room drawn on this storey starts at, which is a fact about
+              the storey and readable whether or not the tool is in hand. */}
+          <div style={{ padding: '10px 12px 0' }}>
+            <FloorLevelCard
+              vm={vm}
+              hint={
+                vm.previewFloorName
+                  ? `The height rooms you draw next on ${vm.previewFloorName} will start at — every storey keeps its own. Rooms already drawn keep theirs.`
+                  : vm.floors.length > 0
+                    ? 'The height rooms you draw next will start at. Pick a storey in the viewport bar and this follows it.'
+                    : 'The height rooms you draw next will start at. Rooms already drawn keep their own.'
+              }
+            />
+          </div>
+          <StoreysSection vm={vm} onOpenMenu={onOpenMenu} />
+        </Match>
 
-      <Accordion title="Roof — separate model" badge={vm.roofModelUrl ? 1 : 0}>
-        <RoofModelSection vm={vm} />
-      </Accordion>
+        <Match when={vm.buildingTab === 'model'}>
+          <Accordion title="Model objects" badge={vm.modelNodes.length} defaultOpen>
+            <ModelNodesSection vm={vm} onOpenMenu={onOpenMenu} />
+          </Accordion>
 
-      <Accordion title="Exterior — decks, stairs, ramps" badge={vm.exteriorSlots.length}>
-        <ExteriorSection vm={vm} />
-      </Accordion>
+          <Accordion title="Roof — from the model" badge={volumes.length}>
+            <RoofVolumesSection vm={vm} onOpenMenu={onOpenMenu} />
+          </Accordion>
 
-      <Accordion title="Model objects" badge={vm.modelNodes.length}>
-        <ModelNodesSection vm={vm} onOpenMenu={onOpenMenu} />
-      </Accordion>
+          <Accordion title="Roof — separate model" badge={vm.roofModelUrl ? 1 : 0}>
+            <RoofModelSection vm={vm} />
+          </Accordion>
 
-      <Accordion title="Default camera">
-        <CameraSection vm={vm} />
-      </Accordion>
+          <Accordion title="Camera limits">
+            <CameraSection vm={vm} />
+          </Accordion>
+        </Match>
+
+          <Match when={vm.buildingTab === 'exterior'}>
+            <ExteriorSection vm={vm} />
+          </Match>
+        </Switch>
+      </div>
     </>
   )
 }

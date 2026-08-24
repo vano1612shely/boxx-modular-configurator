@@ -291,7 +291,17 @@ function BuildingGlb({
     resolveRef.current = resolveAny
   }, [resolveAny, resolveRef])
 
-  const selectedPathsKey = vm.selectedNodePaths.join('|')
+  /**
+   * Empty inside a room, so the selection cannot be seen through the ghost.
+   *
+   * The overlays below are siblings of the model rather than children of it —
+   * they have to be, since they are drawn over it with the depth test off — so
+   * hiding the building does not hide them. A selection made before stepping
+   * into a room went on glowing at full strength over a translucent building,
+   * with nothing on screen able to say what it belonged to or how to be rid of
+   * it.
+   */
+  const selectedPathsKey = vm.roomMode ? '' : vm.selectedNodePaths.join('|')
   const modelNodes = vm.modelNodes
   const overlays = useMemo(() => {
     const paths = selectedPathsKey ? selectedPathsKey.split('|') : []
@@ -1199,7 +1209,12 @@ function EditorScene({
       }
     }
 
-    const root = buildingRootRef.current
+    // Not from inside a room. The building is a ghost there — something to
+    // stand a kitchen against, not something to pick apart — and its own menu
+    // offers roof volumes and hiding, neither of which a room has any use for.
+    // Taking a piece of it into the room is the "From the building" mode, which
+    // is a deliberate thing to turn on.
+    const root = vm.roomMode ? null : buildingRootRef.current
     let nodePath: string | null = null
     if (root) {
       const hit = raycaster
@@ -2461,6 +2476,41 @@ function EditorScene({
 export function EditorCanvas({ vm }: VmProps) {
   const [menu, setMenu] = useState<EditorMenuState>(null)
   const [partProps, setPartProps] = useState<PartPropsState>(null)
+
+  /**
+   * Escape backs out of whatever is open, one layer at a time.
+   *
+   * Through a ref because the vm is rebuilt on every render, and a listener
+   * re-subscribed sixty times a second is a listener that misses keystrokes.
+   * The menu and the popup go first: Escape means "close this", and the thing
+   * in front of the admin is the thing they mean.
+   */
+  const clearRef = useRef(vm.onClearSelection)
+  useEffect(() => {
+    clearRef.current = vm.onClearSelection
+  }, [vm.onClearSelection])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      // Typing a name into the panel and pressing Escape is about the field.
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+
+      if (menu) {
+        setMenu(null)
+        return
+      }
+      if (partProps) {
+        setPartProps(null)
+        return
+      }
+      clearRef.current()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [menu, partProps])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

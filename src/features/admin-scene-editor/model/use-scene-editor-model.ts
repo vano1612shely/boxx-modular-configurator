@@ -1597,6 +1597,21 @@ export function useSceneEditorModel() {
       setMode('select')
     },
     onSelectBlock: setSelectedBlock,
+    /**
+     * Drops everything that is picked, whatever kind of thing it is.
+     *
+     * Escape, which is the way out of a selection in every editor an admin has
+     * used before this one. Clicking bare ground does the same, but only where
+     * there is bare ground to click: inside a room the floor is covered by the
+     * room, and a selection could be left with no way to put it down.
+     */
+    onClearSelection: () => {
+      setSelectedBlocks([])
+      setSelectedNodePaths([])
+      setSelectedPartKeys([])
+      setSelectedOpeningId(null)
+      setSelectedZoneKey(null)
+    },
     onToggleBlockSelection: (ref: BlockRef) =>
       setSelectedBlocks((current) => {
         const without = current.filter((r) => !sameBlockRef(r, ref))

@@ -38,6 +38,56 @@ export function nodeMenuItems(
   return items
 }
 
+/**
+ * What can be done to the fittings under the pointer.
+ *
+ * Built from the keys the click settled on rather than from the selection,
+ * because selecting is a state change and this list is built in the same tick:
+ * reading `vm.selectedPartKeys` here would describe the selection as it was
+ * before the right-click landed on something outside it.
+ *
+ * `openProps` is the viewport's way in to the numbers — the panel already has
+ * them below the list, so it passes null and the item is left out.
+ */
+export function partMenuItems(
+  vm: SceneEditorVm,
+  keys: ReadonlyArray<string>,
+  openProps: (() => void) | null,
+): EditorMenuItem[] {
+  const items: EditorMenuItem[] = []
+  if (keys.length === 0) return items
+
+  const grouped = vm.scopedParts.some(
+    (part) => keys.includes(part.key) && part.groupKey !== null,
+  )
+  const arrangeable = vm.scopedParts.some(
+    (part) => keys.includes(part.key) && part.source === 'model',
+  )
+
+  if (openProps && arrangeable) {
+    items.push({ label: '⤢ Position and size…', onClick: openProps })
+  }
+
+  if (keys.length > 1) {
+    items.push({
+      label: `⛓ Merge ${keys.length} into one object`,
+      onClick: () => vm.onGroupSelection(),
+    })
+  }
+
+  if (grouped) {
+    items.push({ label: '⛓ Split back into pieces', onClick: () => vm.onUngroupSelection() })
+  }
+
+  items.push({
+    label: keys.length > 1 ? `Remove ${keys.length} fittings` : 'Remove fitting',
+    danger: true,
+    onClick: () => vm.onRemoveParts(keys),
+  })
+
+  return items
+}
+
 export function blockMenuItems(vm: SceneEditorVm, ref: BlockRef): EditorMenuItem[] {
   const items: EditorMenuItem[] = [{ label: 'Select', onClick: () => vm.onSelectBlock(ref) }]
 

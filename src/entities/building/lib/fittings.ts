@@ -36,7 +36,14 @@ export function partsCentre(parts: ReadonlyArray<RoomPart>): Point2 {
  * path is only meaningful inside one file.
  */
 export function partGeometryKey(part: RoomPart, buildingModelUrl: string): string {
-  return part.source === 'node' ? `${buildingModelUrl}#${part.nodePath}` : (part.modelUrl ?? '')
+  if (part.source === 'node') return `${buildingModelUrl}#${part.nodePath}`
+
+  // The path matters here too. A kitchen imported as its nine fittings is nine
+  // parts naming one file, and keying them by the file alone made them one
+  // shape: the first to be measured answered for all of them, so a bin stopped
+  // furniture with the outline of a fridge.
+  const url = part.modelUrl ?? ''
+  return part.nodePath ? `${url}#${part.nodePath}` : url
 }
 
 /**

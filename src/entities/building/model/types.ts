@@ -139,10 +139,36 @@ export type Zone = {
 export type RoomPart = {
   key: string
   source: 'node' | 'model'
-  /** Child-index path into the building glb. Null unless `source` is 'node'. */
+  /**
+   * Which object to draw, as a child-index path.
+   *
+   * Into the building's own glb for a 'node' part, and required there. Into the
+   * part's own model for a 'model' part, where it is optional: null draws the
+   * file whole, and a path draws one object out of a file that holds several —
+   * which is how a kitchen sold as one glb becomes a fridge and a microwave
+   * that move independently.
+   */
   nodePath: string | null
   /** Null unless `source` is 'model'. */
   modelUrl: string | null
+  /**
+   * What the list calls it, taken from the model on import.
+   *
+   * Stored rather than looked up: naming a piece means loading its model, and
+   * the panel that lists a room's fittings has no business pulling a 20 MB
+   * kitchen off the network to write "Microwave" in a row. Null falls back to
+   * the file name, which is all a whole-model part ever had.
+   */
+  name: string | null
+  /**
+   * Which merged object this belongs to, or null for a fitting standing alone.
+   *
+   * A water cooler arrives from its file as a base, a bottle and two levers,
+   * and an admin arranging a room is arranging a water cooler. Parts sharing a
+   * key are selected, moved and turned as one; the parts themselves are kept
+   * whole so that merging can be undone and each piece keeps its own model.
+   */
+  groupKey: string | null
   position: Vec3Tuple
   /** Degrees about Y. */
   yawDeg: number

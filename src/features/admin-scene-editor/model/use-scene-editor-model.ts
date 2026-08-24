@@ -51,7 +51,18 @@ import {
   type EditorBox,
 } from '../lib/blocks'
 import { draftSets, freeKeyIn } from '../lib/fittings-draft'
+import {
+  expandSelection,
+  freeGroupKey,
+  groupMates,
+  normaliseYaw,
+  partRows,
+  rotatedAround,
+  selectionCentre,
+  shortestTurn,
+} from '../lib/part-groups'
 import { findProblems } from '../lib/problems'
+import type { ModelPiece } from '../lib/split-model'
 import { draftZones } from '../lib/zones-draft'
 import type { PlaneBounds } from '../lib/floor-plane'
 import { useExteriorCatalogue, type ExteriorOptionRef } from './use-exterior-catalogue'
@@ -156,7 +167,10 @@ export function useSceneEditorModel() {
   const zoneSeq = useRef(1)
   /** Which of the room's lists is being arranged, and which part the handles are on. */
   const [fittingScope, setFittingScope] = useState<FittingScope>({ kind: 'built-ins' })
-  const [selectedPartKey, setSelectedPartKey] = useState<string | null>(null)
+  /** Always whole groups: a half-selected cooler could be dragged in half. */
+  const [selectedPartKeys, setSelectedPartKeys] = useState<string[]>([])
+  /** A model the admin has chosen but the viewport has not read the contents of yet. */
+  const [importingModelUrl, setImportingModelUrl] = useState<string | null>(null)
   /** Which job each panel is on. Kept across a trip into a room and back out. */
   const [buildingTab, setBuildingTab] = useState<BuildingTab>('rooms')
   const [roomTab, setRoomTab] = useState<RoomTab>('shape')
@@ -300,11 +314,31 @@ export function useSceneEditorModel() {
     return polygon.length >= 3 ? polygonCentroid(polygon) : { x: 0, z: 0 }
   }
 
-  const addPart = (part: Omit<RoomPart, 'key'>) => {
-    const key = freeKeyIn(scopedParts, 'part')
-    patchScopedParts((parts) => [...parts, { ...part, key }])
-    setSelectedPartKey(key)
+  /**
+   * Appends fittings, giving each a key nothing in the list already holds.
+   *
+   * Keyed one after another against a running copy rather than each against the
+   * saved list: a nine-piece kitchen added in one go would otherwise be nine
+   * parts all called `part-4`, and a key is the identity everything downstream
+   * selects, drags and deletes by.
+   */
+  const addParts = (incoming: Array<Omit<RoomPart, 'key'>>) => {
+    if (incoming.length === 0) return
+
+    const taken: Array<{ key: string }> = [...scopedParts]
+    const keyed = incoming.map((part) => {
+      const key = freeKeyIn(taken, 'part')
+      taken.push({ key })
+      return { ...part, key }
+    })
+
+    patchScopedParts((parts) => [...parts, ...keyed])
+    // One thing added is the thing you meant; nine are a set, and picking one
+    // of them for the admin only puts handles on an arbitrary microwave.
+    setSelectedPartKeys(keyed.length === 1 ? [keyed[0].key] : [])
   }
+
+  const addPart = (part: Omit<RoomPart, 'key'>) => addParts([part])
 
   const snapshotCamera = (): CameraSnapshot | null => cameraGetterRef.current?.() ?? null
 
@@ -1172,7 +1206,9 @@ export function useSceneEditorModel() {
 
     // ── Fittings: what stands still in a room ────────────────────────────────
     fittingScope,
-    selectedPartKey,
+    selectedPartKeys,
+    /** The one that is selected, or null when none or several are. */
+    selectedPartKey: selectedPartKeys.length === 1 ? selectedPartKeys[0] : null,
     hoveredNodePath,
     hoveredNodeName:
       hoveredNodePath === null
@@ -1185,15 +1221,116 @@ export function useSceneEditorModel() {
     fittedSets: roomSets,
     /** The one list being arranged, which is what the viewport draws handles on. */
     scopedParts,
-    selectedPart: scopedParts.find((part) => part.key === selectedPartKey) ?? null,
+    /**
+     * Everything the visitor would see standing in this room, drawn for real.
+     *
+     * What a room comes with is always on: an admin arranging a kitchen set has
+     * to see the counter it goes against. What is being sold is only the one
+     * arrangement being worked on, because a room may offer several and drawing
+     * them at once would stack three fridges in one corner.
+     */
+    previewParts:
+      fittingScope.kind === 'built-ins' ? roomBuiltIns : [...roomBuiltIns, ...scopedParts],
+    /**
+     * Pieces of the building this room draws its own copy of.
+     *
+     * Hidden on the model itself while the room is open, or the ghost's pale
+     * translucent version of a counter sits in exactly the same place as the
+     * solid copy — which is both a z-fight and a lie about what the visitor
+     * gets.
+     */
+    roomNodePaths: (fittingScope.kind === 'built-ins'
+      ? roomBuiltIns
+      : [...roomBuiltIns, ...scopedParts]
+    )
+      .filter((part) => part.source === 'node' && part.nodePath)
+      .map((part) => part.nodePath as string),
+    selectedPart:
+      selectedPartKeys.length === 1
+        ? (scopedParts.find((part) => part.key === selectedPartKeys[0]) ?? null)
+        : null,
+    /** The list as the panel shows it: a merged object takes one row. */
+    partRows: partRows(scopedParts),
+    /** Where the selection's handles stand, in the room's own frame. */
+    selectionCentre: selectionCentre(scopedParts, selectedPartKeys),
+    /** A selection's facing is its first member's — what the ring reads back. */
+    selectionYawDeg:
+      scopedParts.find((part) => part.key === selectedPartKeys[0])?.yawDeg ?? 0,
+    selectionGrouped: scopedParts.some(
+      (part) => selectedPartKeys.includes(part.key) && part.groupKey !== null,
+    ),
+    selectionScale: scopedParts.find((part) => part.key === selectedPartKeys[0])?.scale ?? 1,
+    /**
+     * Whether the selection has anything an admin can place.
+     *
+     * A piece of the building stands where the building has it, so a selection
+     * of nothing but those has no numbers to show — and saying so is better
+     * than showing five fields that do nothing.
+     */
+    selectionArrangeable: scopedParts.some(
+      (part) => selectedPartKeys.includes(part.key) && part.source === 'model',
+    ),
     onScopeFittings: (scope: FittingScope) => {
       setFittingScope(scope)
-      setSelectedPartKey(null)
+      setSelectedPartKeys([])
       // Leaving the mode with it: a click meant for the old list would otherwise
       // drop a piece of building into the new one.
       setMode('select')
     },
-    onSelectPart: (key: string | null) => setSelectedPartKey(key),
+    /**
+     * Picks a fitting, or adds it to what is already picked.
+     *
+     * Always grown to whole groups, wherever the click came from — the scene or
+     * the list — so the two cannot disagree about what is selected.
+     */
+    onSelectPart: (key: string | null, additive = false) => {
+      if (key === null) {
+        setSelectedPartKeys([])
+        return
+      }
+
+      setSelectedPartKeys((current) => {
+        const mates = groupMates(scopedParts, key)
+        if (!additive) {
+          // Clicking the thing that is already selected on its own clears it,
+          // which is how every other list in this editor behaves.
+          const same =
+            current.length === mates.length && mates.every((mate) => current.includes(mate))
+          return same ? [] : mates
+        }
+
+        const held = mates.every((mate) => current.includes(mate))
+        const next = held
+          ? current.filter((row) => !mates.includes(row))
+          : [...current, ...mates.filter((mate) => !current.includes(mate))]
+        return expandSelection(scopedParts, next)
+      })
+    },
+    onSelectPartRow: (keys: ReadonlyArray<string>, additive = false) => {
+      setSelectedPartKeys((current) =>
+        expandSelection(scopedParts, additive ? [...current, ...keys] : keys),
+      )
+    },
+    /**
+     * Makes one object of everything selected.
+     *
+     * Merging groups that were already merged folds them together rather than
+     * nesting: a cooler dragged into a kitchen island is one object, and a tree
+     * of objects would need a tree to select in.
+     */
+    onGroupSelection: () => {
+      if (selectedPartKeys.length < 2) return
+      const groupKey = freeGroupKey(scopedParts)
+      patchScopedParts((parts) =>
+        parts.map((part) => (selectedPartKeys.includes(part.key) ? { ...part, groupKey } : part)),
+      )
+    },
+    onUngroupSelection: () => {
+      if (selectedPartKeys.length === 0) return
+      patchScopedParts((parts) =>
+        parts.map((part) => (selectedPartKeys.includes(part.key) ? { ...part, groupKey: null } : part)),
+      )
+    },
     /**
      * Takes a piece of the building itself into the room.
      *
@@ -1206,38 +1343,170 @@ export function useSceneEditorModel() {
         source: 'node',
         nodePath,
         modelUrl: null,
+        name: null,
+        groupKey: null,
         position: [0, 0, 0],
         yawDeg: 0,
         scale: 1,
       })
       setMode('select')
     },
-    onAddModelFitting: (modelUrl: string) => {
+    /**
+     * Starts an import rather than finishing one.
+     *
+     * Whether a file is one fitting or a kitchen full of them is a fact about
+     * its contents, and nothing here has read them — so the url is handed to
+     * the viewport, which is where models are loaded, and comes back through
+     * `onModelPieces` once there is something to measure.
+     */
+    onAddModelFitting: (modelUrl: string) => setImportingModelUrl(modelUrl),
+    importingModelUrl,
+    /**
+     * The import, once the file has been read: one fitting, or one per object.
+     *
+     * The pieces arrive placed relative to the model's own middle and its own
+     * underside, so dropping the set on the middle of the room preserves the
+     * arrangement the modeller made — the microwave stays on the worktop and
+     * the bin stays beside the fridge — while every piece is separately
+     * movable from that moment on.
+     */
+    onModelPieces: (modelUrl: string, pieces: ReadonlyArray<ModelPiece>) => {
+      setImportingModelUrl((current) => (current === modelUrl ? null : current))
+
       const centre = roomCentre()
-      addPart({
-        source: 'model',
-        nodePath: null,
-        modelUrl,
-        position: [centre.x, 0, centre.z],
-        yawDeg: 0,
-        scale: 1,
+      if (pieces.length === 0) {
+        addPart({
+          source: 'model',
+          nodePath: null,
+          modelUrl,
+          name: null,
+          groupKey: null,
+          position: [centre.x, 0, centre.z],
+          yawDeg: 0,
+          scale: 1,
+        })
+        return
+      }
+
+      addParts(
+        pieces.map((piece) => ({
+          source: 'model' as const,
+          nodePath: piece.nodePath,
+          modelUrl,
+          name: piece.name,
+          groupKey: null,
+          position: [
+            centre.x + piece.offset[0],
+            piece.offset[1],
+            centre.z + piece.offset[2],
+          ] as Vec3Tuple,
+          yawDeg: 0,
+          scale: 1,
+        })),
+      )
+    },
+    /**
+     * Moves the selection so its middle lands here, arrangement intact.
+     *
+     * Everything selected shifts by the same amount rather than being placed
+     * one by one, which is what makes a merged cooler a thing you can slide
+     * along a wall instead of four objects to line up again afterwards.
+     *
+     * The height given is the underside of the lowest piece, so clamping it at
+     * the floor cannot flatten a group: the bottle stays its own distance above
+     * the base however far down the base is pushed.
+     */
+    onMoveSelectionTo: (x: number | null, y: number | null, z: number | null) => {
+      patchScopedParts((parts) => {
+        /**
+         * Measured here, against the parts as they are now.
+         *
+         * A drag calls this on every pointermove, and pointermove fires faster
+         * than React re-renders. Read from the render's own copy, the second
+         * move of a frame would work out its shift from where the selection was
+         * before the first one had been applied — and then apply it on top. The
+         * fitting overshot, the next frame corrected it, and the whole thing
+         * shook. Measuring inside the update makes every call absolute: the
+         * selection lands with its middle here, however many times it is asked.
+         */
+        const centre = selectionCentre(parts, selectedPartKeys)
+        if (!centre) return parts
+
+        // Null means "leave this axis where it is". Passing the axis back in
+        // from the caller's own copy of the centre would reintroduce the very
+        // staleness this moved inside the update to avoid — a drag across the
+        // floor would drift in height, because the height it handed back was
+        // one frame old.
+        const dx = x === null ? 0 : x - centre.x
+        const dy = y === null ? 0 : Math.max(y, 0) - centre.y
+        const dz = z === null ? 0 : z - centre.z
+        if (dx === 0 && dy === 0 && dz === 0) return parts
+
+        return parts.map((part) =>
+          selectedPartKeys.includes(part.key)
+            ? {
+                ...part,
+                position: [
+                  part.position[0] + dx,
+                  part.position[1] + dy,
+                  part.position[2] + dz,
+                ] as Vec3Tuple,
+              }
+            : part,
+        )
       })
     },
-    onMovePart: (key: string, x: number, y: number, z: number) =>
-      patchScopedParts((parts) =>
-        parts.map((part) => (part.key === key ? { ...part, position: [x, y, z] } : part)),
-      ),
-    onSetPartYaw: (key: string, yawDeg: number) =>
-      patchScopedParts((parts) =>
-        parts.map((part) => (part.key === key ? { ...part, yawDeg } : part)),
-      ),
-    onSetPartScale: (key: string, scale: number) =>
-      patchScopedParts((parts) =>
-        parts.map((part) => (part.key === key ? { ...part, scale: scale > 0 ? scale : 1 } : part)),
-      ),
-    onRemovePart: (key: string) => {
-      patchScopedParts((parts) => parts.filter((part) => part.key !== key))
-      setSelectedPartKey((current) => (current === key ? null : current))
+    /** Turns the selection about its own middle, members orbiting with it. */
+    onSetSelectionYaw: (yawDeg: number) => {
+      patchScopedParts((parts) => {
+        // Against the current facing, for the same reason the move above is:
+        // a turn worked out from a stale angle is applied on top of the turn it
+        // did not know about, and the selection spins past the pointer.
+        const first = parts.find((part) => part.key === selectedPartKeys[0])
+        const centre = selectionCentre(parts, selectedPartKeys)
+        if (!first || !centre) return parts
+
+        const delta = shortestTurn(first.yawDeg, yawDeg)
+        if (delta === 0) return parts
+
+        return parts.map((part) => {
+          if (!selectedPartKeys.includes(part.key)) return part
+          const turned = rotatedAround(centre, { x: part.position[0], z: part.position[2] }, delta)
+          return {
+            ...part,
+            position: [turned.x, part.position[1], turned.z] as Vec3Tuple,
+            yawDeg: normaliseYaw(part.yawDeg + delta),
+          }
+        })
+      })
+    },
+    /** Resizes the selection about its middle: the gaps scale with the pieces. */
+    onSetSelectionScale: (scale: number) => {
+      patchScopedParts((parts) => {
+        const first = parts.find((part) => part.key === selectedPartKeys[0])
+        const centre = selectionCentre(parts, selectedPartKeys)
+        if (!first || !centre) return parts
+
+        const factor = (scale > 0 ? scale : 1) / (first.scale || 1)
+        if (factor === 1) return parts
+
+        return parts.map((part) => {
+          if (!selectedPartKeys.includes(part.key)) return part
+          return {
+            ...part,
+            scale: (part.scale || 1) * factor,
+            position: [
+              centre.x + (part.position[0] - centre.x) * factor,
+              centre.y + (part.position[1] - centre.y) * factor,
+              centre.z + (part.position[2] - centre.z) * factor,
+            ] as Vec3Tuple,
+          }
+        })
+      })
+    },
+    onRemoveParts: (keys: ReadonlyArray<string>) => {
+      patchScopedParts((parts) => parts.filter((part) => !keys.includes(part.key)))
+      setSelectedPartKeys((current) => current.filter((key) => !keys.includes(key)))
     },
     onAddFittedSet: (packageId: number) => {
       if (selectedRoomIndex === null) return
@@ -1250,7 +1519,7 @@ export function useSceneEditorModel() {
         ],
       }))
       setFittingScope({ kind: 'set', key })
-      setSelectedPartKey(null)
+      setSelectedPartKeys([])
     },
     onRemoveFittedSet: (key: string) => {
       if (selectedRoomIndex === null) return
@@ -1262,7 +1531,7 @@ export function useSceneEditorModel() {
       }))
       if (fittingScope.kind === 'set' && fittingScope.key === key) {
         setFittingScope({ kind: 'built-ins' })
-        setSelectedPartKey(null)
+        setSelectedPartKeys([])
       }
     },
 

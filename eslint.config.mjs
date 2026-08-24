@@ -30,6 +30,11 @@ const eslintConfig = [
       'src/payload-types.ts',
       'src/payload-generated-schema.ts',
       'src/migrations/',
+      // Where the admin guide's capture script keeps its browser profile. It is
+      // gitignored, so CI never sees it, and locally its bundled extensions are
+      // tens of thousands of lines of minified vendor code that drown every
+      // real finding — `pnpm lint` reported fifty errors, none of them ours.
+      'docs/admin-guide/.build/',
     ],
   },
 ]

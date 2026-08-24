@@ -9,6 +9,8 @@ function modelPart(key: string, x: number, z: number, url = '/a.glb'): RoomPart 
     source: 'model',
     nodePath: null,
     modelUrl: url,
+    name: null,
+    groupKey: null,
     position: [x, 0, z],
     yawDeg: 0,
     scale: 1,
@@ -21,6 +23,8 @@ function nodePart(key: string, nodePath: string): RoomPart {
     source: 'node',
     nodePath,
     modelUrl: null,
+    name: null,
+    groupKey: null,
     position: [0, 0, 0],
     yawDeg: 0,
     scale: 1,
@@ -112,5 +116,16 @@ describe('partGeometryKey', () => {
   // thing.
   it('names a piece of the building by the building as well as the path', () => {
     expect(partGeometryKey(nodePart('a', '47/0'), '/boxx.glb')).toBe('/boxx.glb#47/0')
+  })
+
+  // Nine fittings imported out of one kitchen name one file between them, and a
+  // key that stopped at the file made them one shape to everything downstream.
+  it('tells two pieces of the same model apart', () => {
+    const fridge = { ...modelPart('a', 0, 0, '/kitchen.glb'), nodePath: '3' }
+    const microwave = { ...modelPart('b', 0, 0, '/kitchen.glb'), nodePath: '5' }
+
+    expect(partGeometryKey(fridge, '/boxx.glb')).toBe('/kitchen.glb#3')
+    expect(partGeometryKey(microwave, '/boxx.glb')).toBe('/kitchen.glb#5')
+    expect(partGeometryKey(fridge, '/boxx.glb')).not.toBe(partGeometryKey(microwave, '/boxx.glb'))
   })
 })

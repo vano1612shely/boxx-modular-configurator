@@ -1,12 +1,17 @@
 'use client'
 
-import type { RoomPart } from '@/entities/building'
+import { useState, type MouseEvent } from 'react'
+
 import { For, Show } from '@/shared/ui/control-flow'
 
+import type { PartRow } from '../../../lib/part-groups'
 import type { SceneEditorVm } from '../../../model/use-scene-editor-model'
 import { AssetPicker, useAssetLibrary } from '../../controls/AssetPicker'
-import { NumberInput } from '../../controls/NumberInput'
+import { EditorMenuPopup, type EditorMenuState } from '../../EditorMenu'
 import { button, s, tone } from '../../editor-styles'
+import { partMenuItems } from '../../menu-items'
+
+import { PartFields } from './PartFields'
 
 type Props = { vm: SceneEditorVm }
 
@@ -20,31 +25,56 @@ const row: React.CSSProperties = {
 
 const iconButton = { ...button(), padding: '5px 8px', fontSize: 12 }
 
-/** What a row calls itself. A path is not a name; the model's own name is. */
-function partLabel(part: RoomPart, nameOf: (path: string) => string | null): string {
-  if (part.source === 'node') {
-    const name = part.nodePath ? nameOf(part.nodePath) : null
-    return name ? `⌂ ${name}` : `⌂ ${part.nodePath ?? '?'}`
-  }
-  const file = (part.modelUrl ?? '').split('/').pop() ?? ''
-  return decodeURIComponent(file) || 'Model'
+/** Held down, a click adds to the selection instead of replacing it. */
+function additiveClick(event: MouseEvent): boolean {
+  return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
 /**
- * The things standing in a room, and the numbers for whichever one is picked.
+ * The things standing in a room, and the numbers for whatever is picked.
  *
  * One editor for both of a room's lists. A counter that came with the building
  * and a fridge that is being sold are the same job to arrange, and giving each
  * its own panel would have been two of everything below for no difference an
  * admin could name — the difference between them is what they mean, which is
  * what the two tabs above are for.
+ *
+ * A merged object takes one row. Several rows can be held at once with shift or
+ * ctrl, and right-clicking any of them offers the same menu the viewport does —
+ * so merging, arranging and removing are in the same place whichever half of
+ * the editor an admin is working in.
  */
 export function PartList({ vm }: Props) {
   const { assets, refresh } = useAssetLibrary('models')
-  const parts = vm.scopedParts
   const picking = vm.mode === 'pick-fitting'
-  const selected = vm.selectedPart
+  const [menu, setMenu] = useState<EditorMenuState>(null)
   const nameOf = (path: string) => vm.modelNodes.find((node) => node.path === path)?.name ?? null
+
+  /** What a row calls itself. A path is not a name; the model's own name is. */
+  const labelOf = (entry: PartRow): string => {
+    if (entry.grouped) return `${entry.label} · ${entry.keys.length} pcs`
+
+    const part = vm.scopedParts.find((candidate) => candidate.key === entry.keys[0])
+    if (part?.source === 'node') {
+      const name = part.nodePath ? nameOf(part.nodePath) : null
+      return `⌂ ${name ?? part.nodePath ?? '?'}`
+    }
+    return entry.label
+  }
+
+  const openMenu = (event: MouseEvent, entry: PartRow) => {
+    event.preventDefault()
+
+    const held = entry.keys.every((key) => vm.selectedPartKeys.includes(key))
+    const keys = held ? vm.selectedPartKeys : entry.keys
+    vm.onSelectPartRow(keys)
+
+    setMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: partMenuItems(vm, keys, null),
+    })
+  }
 
   return (
     <>
@@ -92,123 +122,75 @@ export function PartList({ vm }: Props) {
         </div>
       </Show>
 
+      {/* A kitchen is tens of megabytes, and until it has been read nothing can
+          be said about how many fittings are in it. */}
+      <Show when={vm.importingModelUrl !== null}>
+        <p style={{ ...s.hint, marginTop: 6 }}>Reading the model…</p>
+      </Show>
+
       <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <For each={parts} getKey={(part) => part.key} fallback={<p style={s.hint}>Nothing yet.</p>}>
-          {(part) => (
-            <div
-              style={{
-                ...row,
-                background: vm.selectedPartKey === part.key ? tone.raised : 'transparent',
-              }}
-            >
-              <button
-                type="button"
-                style={{
-                  ...button(),
-                  flex: 1,
-                  textAlign: 'left',
-                  border: 'none',
-                  background: 'transparent',
-                  padding: '2px 0',
-                  fontSize: 12,
-                }}
-                onClick={() => vm.onSelectPart(vm.selectedPartKey === part.key ? null : part.key)}
+        <For
+          each={vm.partRows}
+          getKey={(entry) => entry.id}
+          fallback={<p style={s.hint}>Nothing yet.</p>}
+        >
+          {(entry) => {
+            const held = entry.keys.every((key) => vm.selectedPartKeys.includes(key))
+            return (
+              <div
+                style={{ ...row, background: held ? tone.raised : 'transparent' }}
+                onContextMenu={(event) => openMenu(event, entry)}
               >
-                {partLabel(part, nameOf)}
-              </button>
-              <button
-                type="button"
-                style={iconButton}
-                title="Take it out of the room"
-                onClick={() => vm.onRemovePart(part.key)}
-              >
-                ✕
-              </button>
-            </div>
-          )}
+                <button
+                  type="button"
+                  style={{
+                    ...button(),
+                    flex: 1,
+                    textAlign: 'left',
+                    border: 'none',
+                    background: 'transparent',
+                    padding: '2px 0',
+                    fontSize: 12,
+                  }}
+                  title="Shift or ctrl to hold several — then right-click to merge them"
+                  onClick={(event) => vm.onSelectPart(entry.keys[0], additiveClick(event))}
+                >
+                  {labelOf(entry)}
+                </button>
+                <button
+                  type="button"
+                  style={iconButton}
+                  title="Take it out of the room"
+                  onClick={() => vm.onRemoveParts(entry.keys)}
+                >
+                  ✕
+                </button>
+              </div>
+            )
+          }}
         </For>
       </div>
 
-      <Show when={selected}>
-        {(part) => (
-          <Show
-            when={part.source === 'model'}
-            fallback={
-              <p style={{ ...s.hint, marginTop: 8 }}>
-                A piece of the building stands where the building has it. Nothing to set.
-              </p>
-            }
-          >
-            <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              <label style={s.field}>
-                <span style={s.label}>X m</span>
-                <NumberInput
-                  style={s.input}
-                  value={part.position[0]}
-                  onCommit={(value) =>
-                    vm.onMovePart(part.key, value, part.position[1], part.position[2])
-                  }
-                />
-              </label>
-              <label style={s.field}>
-                <span style={s.label}>Z m</span>
-                <NumberInput
-                  style={s.input}
-                  value={part.position[2]}
-                  onCommit={(value) =>
-                    vm.onMovePart(part.key, part.position[0], part.position[1], value)
-                  }
-                />
-              </label>
-              <label style={s.field}>
-                <span style={s.label}>Height m</span>
-                <NumberInput
-                  style={s.input}
-                  step={0.01}
-                  value={part.position[1]}
-                  onCommit={(value) =>
-                    vm.onMovePart(part.key, part.position[0], value, part.position[2])
-                  }
-                />
-              </label>
-              <div style={s.field}>
-                <span style={s.label}>Facing °</span>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <NumberInput
-                    style={{ ...s.input, flex: 1, minWidth: 0 }}
-                    step={5}
-                    value={part.yawDeg}
-                    onCommit={(value) => vm.onSetPartYaw(part.key, value)}
-                  />
-                  <button
-                    type="button"
-                    style={{ ...iconButton, flexShrink: 0 }}
-                    title="Quarter turn"
-                    onClick={() => vm.onSetPartYaw(part.key, (part.yawDeg + 90) % 360)}
-                  >
-                    ↻
-                  </button>
-                </div>
-              </div>
-              <label style={s.field}>
-                <span style={s.label}>Scale</span>
-                <NumberInput
-                  style={s.input}
-                  step={0.01}
-                  value={part.scale}
-                  onCommit={(value) => vm.onSetPartScale(part.key, value)}
-                />
-              </label>
-            </div>
-            <p style={{ ...s.hint, marginTop: 6 }}>
-              In the viewport: the white puck under it moves it across the floor, the yellow arrow
-              over it sets the height, and the blue grip on the ring turns it. Height is measured
-              from this room&rsquo;s floor, so a microwave on a 0.92 m worktop stays on it if the
-              storey is ever re-levelled.
-            </p>
-          </Show>
-        )}
+      <Show when={vm.selectedPartKeys.length > 0}>
+        <Show when={vm.selectedPartKeys.length > 1}>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            <button type="button" style={{ ...button(), flex: 1 }} onClick={vm.onGroupSelection}>
+              ⛓ Merge into one object
+            </button>
+          </div>
+        </Show>
+        <Show when={vm.selectionGrouped}>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            <button type="button" style={{ ...button(), flex: 1 }} onClick={vm.onUngroupSelection}>
+              ⛓ Split back into pieces
+            </button>
+          </div>
+        </Show>
+
+        <PartFields vm={vm} />
       </Show>
+
+      <EditorMenuPopup menu={menu} onClose={() => setMenu(null)} />
     </>
   )
 }

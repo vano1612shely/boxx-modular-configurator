@@ -304,6 +304,9 @@ export function roomParts(value: unknown): RoomPart[] {
       source,
       nodePath,
       modelUrl,
+      name: typeof part.name === 'string' && part.name.trim() ? part.name.trim() : null,
+      groupKey:
+        typeof part.groupKey === 'string' && part.groupKey.trim() ? part.groupKey.trim() : null,
       position: toTuple(
         { x: part.position?.[0], y: part.position?.[1], z: part.position?.[2] },
         [0, 0, 0],

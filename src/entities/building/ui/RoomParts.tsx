@@ -3,8 +3,8 @@
 import { Suspense, useEffect, useMemo } from 'react'
 import { MathUtils, type Material, type Mesh, type Object3D } from 'three'
 
-import { centreOnFootprint } from '@/shared/three/centre-model'
 import { createNodeResolver } from '@/shared/three/node-path'
+import { partObject } from '@/shared/three/part-object'
 import { useModel } from '@/shared/three/use-model'
 import { For } from '@/shared/ui/control-flow'
 
@@ -110,12 +110,13 @@ function NodePart({ part, buildingModelUrl }: { part: RoomPart; buildingModelUrl
  */
 function ModelPart({ part, floorY }: { part: RoomPart; floorY: number }) {
   const scene = useModel(part.modelUrl ?? '')
+  const nodePath = part.nodePath
 
   const object = useMemo(() => {
-    const clone = scene.clone(true)
-    const measured = centreOnFootprint(clone)
-    clone.position.y -= measured.baseY
+    const taken = partObject(scene, nodePath)
+    if (!taken) return null
 
+    const clone = taken.object
     clone.traverse((node) => {
       const mesh = node as Mesh
       if (!mesh.isMesh) return
@@ -125,7 +126,9 @@ function ModelPart({ part, floorY }: { part: RoomPart; floorY: number }) {
     makeInert(clone)
 
     return clone
-  }, [scene])
+  }, [scene, nodePath])
+
+  if (!object) return null
 
   return (
     <group

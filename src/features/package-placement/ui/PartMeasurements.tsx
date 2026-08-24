@@ -7,6 +7,7 @@ import { partGeometryKey } from '@/entities/building'
 import { measureShape } from '@/entities/furniture-package'
 import { centreOnFootprint } from '@/shared/three/centre-model'
 import { createNodeResolver } from '@/shared/three/node-path'
+import { partObject } from '@/shared/three/part-object'
 import { useModel } from '@/shared/three/use-model'
 import { For } from '@/shared/ui/control-flow'
 
@@ -30,15 +31,25 @@ type Props = {
  * Loading the model a second time costs a clone: drei hands out one parse per
  * URL, and these are the same URLs the room is already drawing.
  */
-function MeasureModel({ part }: { part: RoomPart }) {
+function MeasureModel({
+  part,
+  buildingModelUrl,
+}: {
+  part: RoomPart
+  buildingModelUrl: string
+}) {
   const scene = useModel(part.modelUrl ?? '')
-  const key = part.modelUrl ?? ''
+  const key = partGeometryKey(part, buildingModelUrl)
 
   useEffect(() => {
     if (hasPartObstacle(key)) return
 
-    const clone = scene.clone(true)
-    const measured = centreOnFootprint(clone)
+    // One piece of the file when the part names one, so a microwave is measured
+    // as a microwave rather than as the kitchen it was imported with.
+    const taken = partObject(scene, part.nodePath)
+    if (!taken) return
+
+    const { object: clone, bounds: measured } = taken
     clone.updateMatrixWorld(true)
 
     const footprint = {
@@ -56,7 +67,7 @@ function MeasureModel({ part }: { part: RoomPart }) {
       // the rectangle is the rule everything followed before shapes existed.
       shape: part.scale === 1 ? measureShape(clone, footprint) : null,
     })
-  }, [scene, key, part.position, part.scale, part.yawDeg])
+  }, [scene, key, part.nodePath, part.position, part.scale, part.yawDeg])
 
   return null
 }
@@ -116,7 +127,7 @@ export function PartMeasurements({ parts, buildingModelUrl }: Props) {
           {part.source === 'node' ? (
             <MeasureNode part={part} buildingModelUrl={buildingModelUrl} />
           ) : (
-            <MeasureModel part={part} />
+            <MeasureModel part={part} buildingModelUrl={buildingModelUrl} />
           )}
         </Suspense>
       )}

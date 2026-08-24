@@ -39,7 +39,7 @@ const HANDLE_SCRATCH = new Vector3()
  */
 export type RegisterHandle = (
   mesh: Object3D,
-  begin: (ray: Ray) => void,
+  begin: (ray: Ray, event: PointerEvent) => void,
   priority?: number,
 ) => () => void
 
@@ -105,7 +105,7 @@ export function HandlePoint({
   rotation?: [number, number, number]
   hitRadius?: number
   register: RegisterHandle
-  begin: (ray: Ray) => void
+  begin: (ray: Ray, event: PointerEvent) => void
   children: ReactNode
 }) {
   const hitRef = useRef<Mesh>(null)

@@ -40,6 +40,7 @@ import {
   onOutline,
   mapRoom,
   planOpeningPlacements,
+  RoomParts,
   RoomShell,
   roomVertices,
   SceneLighting,
@@ -56,6 +57,7 @@ import { For, Show } from '@/shared/ui/control-flow'
 import { defaultYRange, planCutY } from '../lib/blocks'
 import { heightAboveFloor } from '../lib/fittings-draft'
 import { floorPlaneBounds } from '../lib/floor-plane'
+import { groupMates } from '../lib/part-groups'
 import { bearingDeg, draggedYaw, slotToWorld, worldToSlot } from '../lib/slot-drag'
 
 import { SIDE_COLORS } from './editor-styles'
@@ -71,6 +73,7 @@ import {
 
 import { ExteriorSpots } from './canvas/ExteriorSpots'
 import { FloorPlaneGizmo } from './canvas/FloorPlaneGizmo'
+import { ModelImport } from './canvas/ModelImport'
 import { RoofModelGizmo } from './canvas/RoofModelGizmo'
 import { RoomFittingsGizmo } from './canvas/RoomFittingsGizmo'
 import { SunMarker } from './canvas/SunMarker'
@@ -82,7 +85,8 @@ import {
   type RegisterHandle,
 } from './canvas/handles'
 import { EditorMenuPopup, type EditorMenuItem, type EditorMenuState } from './EditorMenu'
-import { blockMenuItems, nodeMenuItems } from './menu-items'
+import { PartPropsPopup, type PartPropsState } from './PartPropsPopup'
+import { blockMenuItems, nodeMenuItems, partMenuItems } from './menu-items'
 import { useModel } from '@/shared/three/use-model'
 
 type VmProps = { vm: SceneEditorVm }
@@ -113,11 +117,12 @@ type DragState =
   | { kind: 'create-block'; startX: number; startZ: number }
   | { kind: 'floor-plane'; cx: number; cz: number }
   | { kind: 'roof-move'; grabDX: number; grabDZ: number; y: number }
-  | { kind: 'fitting-move'; key: string; grabDX: number; grabDZ: number; y: number }
-  | { kind: 'fitting-height'; key: string; cx: number; cz: number; grabDY: number }
+  // No key: a gesture on a fitting moves everything selected, which for a
+  // merged water cooler is its base, its bottle and both its levers.
+  | { kind: 'fitting-move'; grabDX: number; grabDZ: number; y: number }
+  | { kind: 'fitting-height'; cx: number; cz: number; grabDY: number }
   | {
       kind: 'fitting-yaw'
-      key: string
       cx: number
       cz: number
       y: number
@@ -510,9 +515,14 @@ function BuildingGlb({
     )
   }, [vm.exteriorSlots, vm.selectedSlotIndex, vm.previewVariantIndex])
 
+  // Joined into one string so the effect below compares by value: `roomNodePaths`
+  // is derived per render and a fresh array every time.
+  const roomNodesKey = vm.roomMode ? vm.roomNodePaths.join('|') : ''
+
   useEffect(() => {
+    const inRoom = roomNodesKey ? roomNodesKey.split('|') : []
     const removed: Object3D[] = []
-    for (const path of [...vm.hiddenNodePaths, ...exteriorHidden]) {
+    for (const path of [...vm.hiddenNodePaths, ...exteriorHidden, ...inRoom]) {
       const object = resolveAny(path)
       if (object) {
         object.visible = false
@@ -522,7 +532,7 @@ function BuildingGlb({
     return () => {
       for (const object of removed) object.visible = true
     }
-  }, [vm.hiddenNodePaths, exteriorHidden, resolveAny])
+  }, [vm.hiddenNodePaths, exteriorHidden, roomNodesKey, resolveAny])
 
   // Solid while a piece of the building is being picked, whatever the toggle
   // says. A ghost cannot be aimed at and a hidden model cannot be clicked at
@@ -969,7 +979,12 @@ const PlanCamera = memo(function PlanCamera({
 function EditorScene({
   vm,
   onOpenMenu,
-}: VmProps & { onOpenMenu: (menu: EditorMenuState) => void }) {
+  onOpenPartProps,
+}: VmProps & {
+  onOpenMenu: (menu: EditorMenuState) => void
+  /** Opens the numbers for the selection, anchored where the click landed. */
+  onOpenPartProps: (x: number, y: number) => void
+}) {
   const [drag, setDrag] = useState<DragState>(null)
   const [ghostRect, setGhostRect] = useState<{
     minX: number
@@ -981,9 +996,11 @@ function EditorScene({
 
   const controlsRef = useRef<CameraControls>(null)
   const buildingRootRef = useRef<Object3D | null>(null)
+  /** Everything drawn for the room's fittings, for right-click to hit-test. */
+  const fittingsRootRef = useRef<Object3D | null>(null)
   const resolveRef = useRef<(path: string) => Object3D | null>(() => null)
   const handleMapRef = useRef(
-    new Map<Object3D, { begin: (ray: Ray) => void; priority: number }>(),
+    new Map<Object3D, { begin: (ray: Ray, event: PointerEvent) => void; priority: number }>(),
   )
   const lastDragEndRef = useRef(0)
   const rightDownRef = useRef<{ x: number; y: number } | null>(null)
@@ -1103,7 +1120,7 @@ function EditorScene({
       // Priority before distance: a grip beats the surface it is drawn on
       // however far behind that surface it sits. Hits arrive nearest-first, so
       // a strict comparison keeps the closest of any equal rank.
-      let taken: ((ray: Ray) => void) | null = null
+      let taken: ((ray: Ray, event: PointerEvent) => void) | null = null
       let rank = -Infinity
       for (const hit of raycaster.intersectObjects(handles, false)) {
         const entry = handleMapRef.current.get(hit.object)
@@ -1116,7 +1133,7 @@ function EditorScene({
       if (taken) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        taken(ray)
+        taken(ray, event)
         return
       }
     }
@@ -1150,6 +1167,37 @@ function EditorScene({
 
     const items: EditorMenuItem[] = []
     rayFromEvent(event)
+
+    // Fittings first: they stand in front of the building, and inside a room
+    // they are what the admin is working on. A hit here answers the whole menu.
+    const fittings = fittingsRootRef.current
+    if (vm.roomMode && fittings) {
+      const hit = raycaster
+        .intersectObject(fittings, true)
+        .find((entry) => isTreeVisible(entry.object))
+
+      let owner: Object3D | null = hit?.object ?? null
+      while (owner && owner !== fittings && !(owner.userData as { partKey?: string }).partKey) {
+        owner = owner.parent
+      }
+      const partKey = (owner?.userData as { partKey?: string } | undefined)?.partKey
+
+      if (partKey) {
+        // What was already held, if this is part of it — otherwise this alone.
+        // Right-clicking one of five selected fittings must not throw the other
+        // four away before the menu has been read.
+        const held = vm.selectedPartKeys.includes(partKey)
+        const keys = held ? vm.selectedPartKeys : groupMates(vm.scopedParts, partKey)
+        vm.onSelectPartRow(keys)
+
+        onOpenMenu({
+          x: event.clientX,
+          y: event.clientY,
+          items: partMenuItems(vm, keys, () => onOpenPartProps(event.clientX, event.clientY)),
+        })
+        return
+      }
+    }
 
     const root = buildingRootRef.current
     let nodePath: string | null = null
@@ -1249,36 +1297,26 @@ function EditorScene({
     if (drag.kind === 'fitting-move') {
       const hit = rayAtY(ray, drag.y)
       if (!hit) return
-      const part = vm.scopedParts.find((p) => p.key === drag.key)
-      if (!part) return
       // Height untouched: this gesture is across the floor, and a microwave
       // being slid along a counter must not fall off it.
-      vm.onMovePart(
-        drag.key,
-        snap(hit.x - drag.grabDX),
-        part.position[1],
-        snap(hit.z - drag.grabDZ),
-      )
+      vm.onMoveSelectionTo(snap(hit.x - drag.grabDX), null, snap(hit.z - drag.grabDZ))
       return
     }
 
     if (drag.kind === 'fitting-yaw') {
       const hit = rayAtY(ray, drag.y)
       if (!hit) return
-      const part = vm.scopedParts.find((p) => p.key === drag.key)
-      if (!part) return
 
       // Measured from the grip rather than accumulated per move, so a long
       // gesture cannot drift; `draggedYaw` resolves the wrap against the facing
-      // the fitting is at this instant, so a full turn stays a full turn.
-      vm.onSetPartYaw(
-        drag.key,
+      // the selection is at this instant, so a full turn stays a full turn.
+      vm.onSetSelectionYaw(
         Math.round(
           draggedYaw({
             startYaw: drag.startYaw,
             startBearing: drag.startBearing,
             bearing: bearingDeg(hit.x - drag.cx, hit.z - drag.cz),
-            currentYaw: part.yawDeg,
+            currentYaw: vm.selectionYawDeg,
           }),
         ),
       )
@@ -1288,13 +1326,11 @@ function EditorScene({
     if (drag.kind === 'fitting-height') {
       const worldY = rayAtVertical(ray, drag.cx, drag.cz)
       if (worldY === null) return
-      const part = vm.scopedParts.find((p) => p.key === drag.key)
-      if (!part) return
 
       // Absolute, against the offset measured once when the grip was taken.
       // The frame conversion and the clamp live in `heightAboveFloor`.
       const above = heightAboveFloor(worldY, drag.grabDY, vm.roomFloorY)
-      vm.onMovePart(drag.key, part.position[0], above, part.position[2])
+      vm.onMoveSelectionTo(null, above, null)
       return
     }
 
@@ -1756,6 +1792,16 @@ function EditorScene({
             onPick={handleScenePick}
           />
         </Suspense>
+      </Show>
+
+      {/* Reads a model the admin has just chosen, so the panel can turn it into
+          one fitting or into the several it holds. Draws nothing. */}
+      <Show when={vm.importingModelUrl}>
+        {(url) => (
+          <Suspense fallback={null}>
+            <ModelImport url={url} onPieces={vm.onModelPieces} />
+          </Suspense>
+        )}
       </Show>
 
       <mesh
@@ -2263,47 +2309,57 @@ function EditorScene({
       {/* Only inside a room: fittings are a room's business, and outside one
           the building's own model already shows whatever it came with. */}
       <Show when={vm.roomMode}>
-        <RoomFittingsGizmo
-          parts={vm.scopedParts}
-          floorY={vm.roomFloorY}
-          selectedKey={vm.selectedPartKey}
-          register={registerHandle}
-          onSelect={vm.onSelectPart}
-          onStartMove={(key, grabDX, grabDZ, planeY) =>
-            setDrag({ kind: 'fitting-move', key, grabDX, grabDZ, y: planeY })
-          }
-          // The drag plane runs through the grip the pointer actually took, and
-          // the offset from the fitting's own base is measured once — adding a
-          // delta per pointermove lets the error accumulate over a long gesture.
-          onStartHeight={(key, ray, grip) => {
-            const part = vm.scopedParts.find((p) => p.key === key)
-            if (!part) return
-            const worldY = rayAtVertical(ray, grip[0], grip[2])
-            setDrag({
-              kind: 'fitting-height',
-              key,
-              cx: grip[0],
-              cz: grip[2],
-              grabDY: (worldY ?? grip[1]) - (vm.roomFloorY + part.position[1]),
-            })
-          }}
-          onStartYaw={(key, ray, centre) => {
-            const part = vm.scopedParts.find((p) => p.key === key)
-            if (!part) return
-            const hit = rayAtY(ray, centre[1])
-            setDrag({
-              kind: 'fitting-yaw',
-              key,
-              cx: centre[0],
-              cz: centre[2],
-              y: centre[1],
-              startBearing: hit
-                ? bearingDeg(hit.x - centre[0], hit.z - centre[2])
-                : part.yawDeg,
-              startYaw: part.yawDeg,
-            })
-          }}
-        />
+        {/* Pieces of the building this room takes in, drawn solid rather than
+            left to the ghost. An admin lining a kitchen set up against a
+            counter has to see the counter the way the visitor will. */}
+        <Suspense fallback={null}>
+          <RoomParts
+            parts={vm.previewParts.filter((part) => part.source === 'node')}
+            buildingModelUrl={vm.modelUrl ?? ''}
+            floorY={vm.roomFloorY}
+          />
+        </Suspense>
+
+        <group ref={fittingsRootRef}>
+          <RoomFittingsGizmo
+            parts={vm.previewParts}
+            rows={vm.partRows}
+            floorY={vm.roomFloorY}
+            selectedKeys={vm.selectedPartKeys}
+            register={registerHandle}
+            onSelect={vm.onSelectPartRow}
+            onStartMove={(grabDX, grabDZ, planeY) =>
+              setDrag({ kind: 'fitting-move', grabDX, grabDZ, y: planeY })
+            }
+            // The drag plane runs through the grip the pointer actually took,
+            // and the offset from the selection's own base is measured once —
+            // adding a delta per pointermove lets the error accumulate.
+            onStartHeight={(ray, grip) => {
+              const centre = vm.selectionCentre
+              if (!centre) return
+              const worldY = rayAtVertical(ray, grip[0], grip[2])
+              setDrag({
+                kind: 'fitting-height',
+                cx: grip[0],
+                cz: grip[2],
+                grabDY: (worldY ?? grip[1]) - (vm.roomFloorY + centre.y),
+              })
+            }}
+            onStartYaw={(ray, centre) => {
+              const hit = rayAtY(ray, centre[1])
+              setDrag({
+                kind: 'fitting-yaw',
+                cx: centre[0],
+                cz: centre[2],
+                y: centre[1],
+                startBearing: hit
+                  ? bearingDeg(hit.x - centre[0], hit.z - centre[2])
+                  : vm.selectionYawDeg,
+                startYaw: vm.selectionYawDeg,
+              })
+            }}
+          />
+        </group>
       </Show>
 
       <Show when={vm.roofModelUrl}>
@@ -2404,6 +2460,7 @@ function EditorScene({
 
 export function EditorCanvas({ vm }: VmProps) {
   const [menu, setMenu] = useState<EditorMenuState>(null)
+  const [partProps, setPartProps] = useState<PartPropsState>(null)
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -2419,9 +2476,14 @@ export function EditorCanvas({ vm }: VmProps) {
         }}
         className="touch-none"
       >
-        <EditorScene vm={vm} onOpenMenu={setMenu} />
+        <EditorScene
+          vm={vm}
+          onOpenMenu={setMenu}
+          onOpenPartProps={(x, y) => setPartProps({ x, y })}
+        />
       </Canvas>
       <EditorMenuPopup menu={menu} onClose={() => setMenu(null)} />
+      <PartPropsPopup vm={vm} at={partProps} onClose={() => setPartProps(null)} />
     </div>
   )
 }

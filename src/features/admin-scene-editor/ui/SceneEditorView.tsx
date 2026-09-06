@@ -25,12 +25,20 @@ export function SceneEditorView() {
         loadingFallback={
           <p style={{ margin: 'auto', color: '#9aa1ab', fontSize: 14 }}>Loading scene…</p>
         }
-        error={vm.modelUrl === null && !vm.isLoading ? 'no-model' : undefined}
-        errorFallback={
-          <p style={{ margin: 'auto', color: '#9aa1ab', fontSize: 14 }}>
-            Attach a 3D model to this building first, then reopen the Scene Editor.
-          </p>
+        error={
+          vm.loadError
+            ? 'load-failed'
+            : vm.modelUrl === null && !vm.isLoading
+              ? 'no-model'
+              : undefined
         }
+        errorFallback={(error) => (
+          <p style={{ margin: 'auto', color: '#9aa1ab', fontSize: 14 }}>
+            {error === 'load-failed'
+              ? 'This building could not be loaded. Reload the page — if you have been away a while, sign in again first.'
+              : 'Attach a 3D model to this building first, then reopen the Scene Editor.'}
+          </p>
+        )}
       >
         <div style={{ flex: 1, position: 'relative' }}>
           <EditorCanvas vm={vm} />
@@ -42,4 +50,3 @@ export function SceneEditorView() {
   )
 }
 
-export default SceneEditorView

@@ -17,8 +17,12 @@ export const IntegrationSettings: GlobalConfig = {
     group: 'Sales',
     description: 'Where finished configurations are delivered.',
   },
+  // No public read. Every reader of this global is server-side and goes through
+  // the Local API, which overrides access anyway; leaving it open only ever
+  // exposed the one thing here worth stealing — the webhook address and the
+  // headers that authenticate to it — over GET /api/globals/integration-settings.
   access: {
-    read: () => true,
+    read: ({ req }) => Boolean(req.user),
   },
   fields: [
     {
@@ -56,7 +60,12 @@ export const IntegrationSettings: GlobalConfig = {
       name: 'targetOrigin',
       type: 'text',
       defaultValue: '*',
-      admin: { description: 'Allowed origin for postMessage. Use the host-site origin in production.' },
+      admin: {
+        description:
+          'Allowed origin for postMessage. `*` delivers every submitted configuration — ' +
+          'building, packages and prices — to whatever page has the configurator in a frame. ' +
+          'Set the host site\'s own origin in production.',
+      },
     },
     {
       // A group rather than a tab: the global is still five fields long, and

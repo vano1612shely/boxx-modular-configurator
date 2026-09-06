@@ -109,4 +109,3 @@ export function ModelPreviewField() {
   )
 }
 
-export default ModelPreviewField

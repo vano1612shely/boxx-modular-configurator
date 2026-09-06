@@ -184,6 +184,8 @@ function ModelCage({
   const centre = new Vector3(mid.x * scale[0], mid.y * scale[1], mid.z * scale[2])
   const half: Triple = [size.x / 2, size.y / 2, size.z / 2]
   const geometry = useMemo(() => new BoxGeometry(size.x, size.y, size.z), [size.x, size.y, size.z])
+  // Rebuilt on every size change, which during a resize drag is every frame.
+  useEffect(() => () => geometry.dispose(), [geometry])
 
   const reach = (axis: Axis) => (axis === 'x' ? half[0] : axis === 'y' ? half[1] : half[2])
 

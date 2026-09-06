@@ -11,7 +11,6 @@ import { roomMarkers, type RoomMarker } from '../lib/room-markers'
 export function useSceneViewerModel(building: BuildingScene) {
   const focusedRoomKey = useConfiguratorSession((s) => s.focusedRoomKey)
   const focusRoom = useConfiguratorSession((s) => s.focusRoom)
-  const exitRoomFocus = useConfiguratorSession((s) => s.exitRoomFocus)
   const interactionLock = useConfiguratorSession((s) => s.interactionLock)
   const selectedFloorKey = useConfiguratorSession((s) => s.selectedFloorKey)
   const previewRoomKey = useConfiguratorSession((s) => s.previewRoomKey)
@@ -64,7 +63,6 @@ export function useSceneViewerModel(building: BuildingScene) {
         ? focusRoom(marker.room.key, marker.zone?.key ?? null)
         : previewRoom(marker.room.key),
     onPreviewRoom: previewRoom,
-    onExitRoomFocus: exitRoomFocus,
     // Picking the half you are already in steps back out to the whole room, so
     // the floor is never a one-way door.
     onPickZone: (key: string) => setActiveZone(activeZoneKey === key ? null : key),

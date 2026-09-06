@@ -18,8 +18,8 @@ export const Quotes: CollectionConfig = {
         ...data,
         title: data?.contact?.name || data?.contact?.email || 'Quote request',
         // Minted here and taken from nowhere else. Never from the request: the
-        // collection is open to anonymous creates, and the reference is the only
-        // thing guarding an order, so a caller must not be able to choose it.
+        // reference is the only thing guarding an order, so a caller must not be
+        // able to choose it.
         // Never carried over on a create either — Payload's Duplicate copies the
         // row's fields, and two orders answering to one link is worse than the
         // duplicate having its own. On an update the existing one is kept, so a
@@ -33,7 +33,11 @@ export const Quotes: CollectionConfig = {
     ],
   },
   access: {
-    create: () => true,
+    // Not open to the world. The configurator submits through a server action,
+    // which uses the Local API and overrides access, so the only caller this
+    // ever admitted was an anonymous POST /api/quotes — a way to write rows
+    // straight past the Zod schema that guards the real path.
+    create: ({ req }) => Boolean(req.user),
     read: ({ req }) => Boolean(req.user),
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),

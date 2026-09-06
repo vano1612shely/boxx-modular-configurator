@@ -31,9 +31,19 @@ export function useModelThumbnail(url: string | null | undefined): string | null
 
 // Mount once: one shared WebGL context renders the pending models one at a time.
 export function ModelThumbnailFactory({ urls }: { urls: ReadonlyArray<string> }) {
-  const pending = useMemo(() => urls.filter((url) => url && !cache.has(url)), [urls])
-  const [index, setIndex] = useState(0)
-  const current = pending[index]
+  // Which models have had their turn, by url rather than by position. This
+  // component outlives the room it was opened from — that is the whole reason
+  // it is mounted outside the panel — so a cursor counting up through one
+  // room's list is already past the end of the next room's, and every package
+  // after the first room fell back to no thumbnail at all. Recording the
+  // attempt, not just the success, is what stops a model that cannot be shot
+  // from being tried again on every render.
+  const [attempted, setAttempted] = useState<ReadonlySet<string>>(() => new Set())
+  const pending = useMemo(
+    () => urls.filter((url) => url && !cache.has(url) && !attempted.has(url)),
+    [urls, attempted],
+  )
+  const current = pending[0]
 
   if (!current) return null
 
@@ -61,7 +71,11 @@ export function ModelThumbnailFactory({ urls }: { urls: ReadonlyArray<string> })
       >
         <ModelStage />
         <Suspense fallback={null}>
-          <Shot key={current} url={current} onDone={() => setIndex((i) => i + 1)} />
+          <Shot
+            key={current}
+            url={current}
+            onDone={() => setAttempted((seen) => new Set(seen).add(current))}
+          />
         </Suspense>
       </Canvas>
     </div>

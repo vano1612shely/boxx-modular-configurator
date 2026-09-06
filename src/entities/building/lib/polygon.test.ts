@@ -171,6 +171,23 @@ describe('rectifyPolygon', () => {
     ]
     expect(rectifyPolygon(tagged).map((p) => p.side)).toEqual(['w1', 'w2', 'w3', 'w4'])
   })
+
+  // A room drawn on the editor's 5 cm grid, every wall already exactly on an
+  // axis, with one deliberate 5 cm step in the long bottom wall. The step used
+  // to be read as a nearly-vertical edge and flattened, which dragged the 4 m
+  // wall sharing its corner off the axis it was already on.
+  it('leaves a short axis-aligned step alone instead of snapping it sideways', () => {
+    const withJog = [
+      { x: 0, z: 0 },
+      { x: 4, z: 0 },
+      { x: 4, z: 0.05 },
+      { x: 6, z: 0.05 },
+      { x: 6, z: 4 },
+      { x: 0, z: 4 },
+    ]
+
+    expect(rectifyPolygon(withJog)).toEqual(withJog)
+  })
 })
 
 describe('outwardEdgeNormal', () => {

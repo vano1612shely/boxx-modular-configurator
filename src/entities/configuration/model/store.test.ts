@@ -10,8 +10,17 @@ function place() {
   return config().addPackage({ packageId: 1, roomKey: 'office-1', x: 0, z: 0, rotationYDeg: 0 })
 }
 
+// The store had a `clear` action that nothing but this line ever called. The
+// same write, done here, so every test still starts from exactly the state it
+// used to — `buildingId` and `dragValid` deliberately left as they were.
 beforeEach(() => {
-  config().clear()
+  useConfiguration.setState({
+    placed: [],
+    exterior: {},
+    selectedInstanceId: null,
+    draggingInstanceId: null,
+    dragPose: null,
+  })
 })
 
 describe('opening a building', () => {

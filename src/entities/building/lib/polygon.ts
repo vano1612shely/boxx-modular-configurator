@@ -22,11 +22,18 @@ export function rectifyPolygon<T extends Point2>(polygon: T[]): T[] {
       const b = points[(i + 1) % points.length]
       const dx = Math.abs(a.x - b.x)
       const dz = Math.abs(a.z - b.z)
-      if (dx > 0 && dx <= tolerance(dz)) {
+      // `dx < dz` before the tolerance, and its mirror below: an edge is only
+      // straightened onto the axis it is already closest to. Without it the
+      // 0.2 m floor in `tolerance` fires on any deviation under 20 cm whatever
+      // the edge's own length, so the first branch simply won — a deliberate
+      // 5 cm jog, exactly horizontal, was snapped as though it were vertical.
+      // The snap writes through to `a` and `b`, which the neighbouring edges
+      // share, so that then pulled the 4 m wall beside it off its own axis.
+      if (dx > 0 && dx < dz && dx <= tolerance(dz)) {
         const x = (a.x + b.x) / 2
         a.x = x
         b.x = x
-      } else if (dz > 0 && dz <= tolerance(dx)) {
+      } else if (dz > 0 && dz < dx && dz <= tolerance(dx)) {
         const z = (a.z + b.z) / 2
         a.z = z
         b.z = z
@@ -178,22 +185,6 @@ export function closestPointOnSegment(p: Point2, a: Point2, b: Point2): Point2 {
   if (lenSq < 1e-12) return { x: a.x, z: a.z }
   const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.z - a.z) * abz) / lenSq))
   return { x: a.x + abx * t, z: a.z + abz * t }
-}
-
-export function closestPointOnPolygon(p: Point2, poly: Point2[]): Point2 {
-  let best: Point2 = poly[0]
-  let bestDistSq = Infinity
-  for (let i = 0; i < poly.length; i++) {
-    const candidate = closestPointOnSegment(p, poly[i], poly[(i + 1) % poly.length])
-    const dx = candidate.x - p.x
-    const dz = candidate.z - p.z
-    const distSq = dx * dx + dz * dz
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq
-      best = candidate
-    }
-  }
-  return best
 }
 
 export function footprintCorners(

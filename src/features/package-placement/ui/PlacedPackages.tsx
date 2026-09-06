@@ -709,10 +709,17 @@ function PlacedPackageItem({ placement, pkg, room, grabOffsetRef, obstacles }: I
             onPointerDown={(event) => {
               event.stopPropagation()
               setInteractionLock(true)
-              // Slider drags leave the bar, so the release lands anywhere.
-              window.addEventListener('pointerup', () => setInteractionLock(false), {
-                once: true,
-              })
+              // Slider drags leave the bar, so the release lands anywhere. A
+              // touch the browser takes over ends in `pointercancel` and never
+              // in `pointerup`, which left the camera locked for the rest of
+              // the visit, so both endings have to be listened for.
+              const release = () => {
+                setInteractionLock(false)
+                window.removeEventListener('pointerup', release)
+                window.removeEventListener('pointercancel', release)
+              }
+              window.addEventListener('pointerup', release)
+              window.addEventListener('pointercancel', release)
             }}
           >
             <Show when={rotateOpen}>

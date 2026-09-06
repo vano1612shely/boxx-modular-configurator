@@ -23,8 +23,14 @@ export type CatalogueTerms = {
  * since edited.
  *
  * Written term by term against what is already there, so it is safe to run on
- * every boot: a term an admin renamed keeps its name, one they deleted stays
- * deleted, and only a genuinely missing one is created.
+ * every boot: matching is by slug, so a term an admin renamed keeps its name
+ * and is not duplicated.
+ *
+ * A starter term an admin deletes, though, is missing by this test and comes
+ * back on the next boot. Nothing records that the deletion was deliberate, and
+ * telling that apart from a database that never had the row needs somewhere to
+ * write it down — so for now a starter term cannot be got rid of for good, only
+ * renamed or left unused.
  */
 export async function ensureCatalogueTerms(payload: Payload): Promise<CatalogueTerms> {
   const ids = new Map<string, number>()

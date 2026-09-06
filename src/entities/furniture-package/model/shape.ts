@@ -61,11 +61,10 @@ type Posed = {
   rotationYDeg: number
 }
 
-/** Whether the [lo, hi] runs stored at `ai` in `a` reach any of those at `bi` in `b`. */
+/** Whether the [lo, hi] runs stored at `ai` in `a` reach any of those at `bi` in `bSpans`. */
 function spansMeet(
   a: PackageShape,
   ai: number,
-  b: PackageShape,
   bi: number,
   bSpans: Float32Array,
   bCount: Uint8Array,
@@ -148,7 +147,7 @@ export function shapesCollide(first: Posed, second: Posed): boolean {
         Math.min(qs.nz - 1, Math.max(0, gj)) * qs.nx + Math.min(qs.nx - 1, Math.max(0, gi))
       if (qs.dilatedCount[qi] === 0) continue
 
-      if (spansMeet(ps, pi, qs, qi, qs.dilated, qs.dilatedCount)) return true
+      if (spansMeet(ps, pi, qi, qs.dilated, qs.dilatedCount)) return true
     }
   }
 

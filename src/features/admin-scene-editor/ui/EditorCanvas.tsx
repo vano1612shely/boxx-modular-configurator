@@ -333,6 +333,22 @@ function BuildingGlb({
     return clones
   }, [selectedPathsKey, resolveAny, modelNodes])
 
+  // Each overlay carries a material of its own, and the clones are rebuilt every
+  // time the selection changes. The clones themselves share the source's
+  // geometry, so the materials are the only thing here that has to be given back.
+  useEffect(() => {
+    const materials = new Set<Material>()
+    for (const clone of overlays) {
+      clone.traverse((object) => {
+        const mesh = object as Mesh
+        if (!mesh.isMesh) return
+        if (Array.isArray(mesh.material)) mesh.material.forEach((m) => materials.add(m))
+        else if (mesh.material) materials.add(mesh.material)
+      })
+    }
+    return () => materials.forEach((material) => material.dispose())
+  }, [overlays])
+
   /**
    * The object under the pointer, painted over itself while one is being picked.
    *
@@ -371,8 +387,8 @@ function BuildingGlb({
     return { clone, material }
   }, [hoveredPath, vm.selectedNodePaths, resolveAny])
 
-  // The selection overlays above leak their materials; this one does not add to
-  // it — a hover changes far more often than a selection does.
+  // The same bargain as the selection overlays above, and more often: a hover
+  // changes with every pointer move.
   useEffect(() => {
     const material = hoverOverlay?.material
     return () => material?.dispose()
@@ -455,16 +471,14 @@ function BuildingGlb({
       }
       return `Group ${id}`
     }
-    const walk = (obj: Object3D, parentId: number | null, depth: number, path: string) => {
+    const walk = (obj: Object3D, depth: number, path: string) => {
       const id = nextId++
       const box = boxes.get(obj)
       nodes.push({
         id,
-        parentId,
         depth,
         name: displayName(obj, id),
         kind: (obj as Mesh).isMesh ? 'mesh' : 'group',
-        hasChildren: obj.children.length > 0,
         path,
         box:
           box && !box.isEmpty()
@@ -474,12 +488,14 @@ function BuildingGlb({
               }
             : null,
       })
-      obj.children.forEach((child, index) => walk(child, id, depth + 1, `${path}/${index}`))
+      obj.children.forEach((child, index) => walk(child, depth + 1, `${path}/${index}`))
     }
-    prepared.children.forEach((child, index) => walk(child, null, 0, `${index}`))
+    prepared.children.forEach((child, index) => walk(child, 0, `${index}`))
 
     vm.onModelNodes(nodes)
     ;(window as unknown as { __editorNodes?: ModelNode[] }).__editorNodes = nodes
+    // The loaded model is the only thing this reads. `vm` is a fresh object on
+    // every render, so naming it here would walk the whole glb again each time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prepared])
 
@@ -732,6 +748,11 @@ function RoomShape({
     geo.rotateX(-Math.PI / 2)
     return geo
   }, [polygon])
+
+  // `polygon` is a fresh array on every draft change, so dragging a vertex
+  // builds one of these per frame. Without the disposal the old buffers stay on
+  // the GPU for as long as the editor is open.
+  useEffect(() => () => geometry?.dispose(), [geometry])
 
   if (!geometry) return null
 
@@ -1055,6 +1076,8 @@ function EditorScene({
         target: { x: round(target.x), y: round(target.y), z: round(target.z) },
       }
     })
+    // Handing over the getter is a mount-time introduction, not something to
+    // repeat: the closure reads the ref, so it stays current on its own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

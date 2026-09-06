@@ -7,6 +7,9 @@ import config from '@payload-config'
 import { quoteRequestSchema } from '@/entities/quote'
 import { err, ok, type Result } from '@/shared/lib'
 
+/** How long the customer is made to wait on somebody else's endpoint. */
+const WEBHOOK_TIMEOUT_MS = 10_000
+
 type SubmitOutcome = {
   quoteId: number
   /** The order's own address, which is what the customer is given. */
@@ -49,17 +52,32 @@ export async function submitQuote(input: unknown): Promise<Result<SubmitOutcome>
           method: 'POST',
           headers,
           body: JSON.stringify({ contact, configuration }),
+          // The customer is watching a spinner while this runs, and the address
+          // at the other end belongs to somebody else. Without a deadline, an
+          // endpoint that accepts the connection and then never answers holds
+          // the request open for as long as the platform allows.
+          signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
         })
         forwarded = response.ok
       } catch {
         forwarded = false
       }
 
-      await payload.update({
-        collection: 'quotes',
-        id: quote.id,
-        data: { status: forwarded ? 'forwarded' : 'webhook-failed' },
-      })
+      // Its own try. By this point the quote exists and has already been sent
+      // on, so a database hiccup while stamping the outcome must not be
+      // reported to the customer as a failed request — they would submit a
+      // second one and the sales team would get the same order twice.
+      try {
+        await payload.update({
+          collection: 'quotes',
+          id: quote.id,
+          data: { status: forwarded ? 'forwarded' : 'webhook-failed' },
+        })
+      } catch {
+        payload.logger.warn(
+          `Quote ${quote.id} went out but its status could not be written back.`,
+        )
+      }
     }
 
     // Written by the collection's own beforeChange hook, so it is there on a

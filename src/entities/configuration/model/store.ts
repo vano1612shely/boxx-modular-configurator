@@ -69,7 +69,6 @@ type ConfigurationState = {
   /** Puts the dragged piece down at `pose`, or back where it was when null. */
   dropDrag: (pose: Omit<DragPose, 'instanceId'> | null) => void
   setDragValid: (valid: boolean) => void
-  clear: () => void
 }
 
 export const useConfiguration = create<ConfigurationState>((set) => ({
@@ -201,12 +200,4 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
       dragValid: true,
     })),
   setDragValid: (valid) => set({ dragValid: valid }),
-  clear: () =>
-    set({
-      placed: [],
-      exterior: {},
-      selectedInstanceId: null,
-      draggingInstanceId: null,
-      dragPose: null,
-    }),
 }))

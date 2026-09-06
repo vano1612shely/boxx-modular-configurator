@@ -21,6 +21,16 @@ const EPS = 1e-9
 /** Two points closer than this are the same point. */
 const SAME = 1e-6
 
+/**
+ * How far off the outline a midpoint may sit and still count as on it (meters).
+ *
+ * The cut's ends are rounded to a millimetre so both halves share an identical
+ * boundary, and on a wall that is not axis-aligned that rounding lands them
+ * just off the wall's own line. A cut laid along a wall has to stay a cut with
+ * nothing beside it rather than becoming one that left the room.
+ */
+const ON_OUTLINE = 1e-3
+
 export type PolygonCut = [Point2[], Point2[]]
 
 export type CutFailure =
@@ -165,6 +175,22 @@ export function cutPolygon(polygon: Point2[], path: Point2[]): CutResult {
   const line = [from.point, ...inner, to.point]
 
   for (let i = 0; i < line.length - 1; i++) {
+    // The room is only asked about the corners between the ends, and a two-click
+    // cut has none — so nothing used to look at the stretch itself. Touching an
+    // edge at an endpoint is deliberately not a crossing, so a segment that left
+    // the room at one anchor and came back at the other crossed nothing and was
+    // allowed: across the notch of an L-shaped room that produced a zone larger
+    // than the whole floor. One point per segment settles it, since a straight
+    // run whose interior leaves the room has its middle outside.
+    const mid = {
+      x: (line[i].x + line[i + 1].x) / 2,
+      z: (line[i].z + line[i + 1].z) / 2,
+    }
+    const onWall = anchorOn(polygon, mid)
+    if (!pointInPolygon(mid, polygon) && !(onWall && onWall.distance <= ON_OUTLINE)) {
+      return { ok: false, reason: 'leaves-the-room' }
+    }
+
     for (let j = i + 2; j < line.length - 1; j++) {
       if (properlyCross(line[i], line[i + 1], line[j], line[j + 1])) {
         return { ok: false, reason: 'crosses-itself' }
@@ -199,7 +225,3 @@ function rounded(p: Point2): Point2 {
   return { x: round3(p.x), z: round3(p.z) }
 }
 
-/** Whether a cut drawn so far could be finished at `end`, without building it. */
-export function canCut(polygon: Point2[], path: Point2[]): boolean {
-  return cutPolygon(polygon, path).ok
-}

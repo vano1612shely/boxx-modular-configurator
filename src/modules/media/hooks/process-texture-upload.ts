@@ -30,7 +30,11 @@ export const processTextureUpload: CollectionBeforeOperationHook = async ({
     const image = sharp(req.file.data)
     const { width = 0, height = 0 } = await image.metadata()
 
-    const output = await image
+    // Asked for with the object, so the recorded size is the one sharp actually
+    // produced. Only the long side is capped and `fit: 'inside'` scales the
+    // other to match, so clamping both by hand recorded the short side of a
+    // 4000x1000 texture as 1000 when the file stored is 512 tall.
+    const { data: output, info } = await image
       .resize({
         width: width > height ? Math.min(width, MAX_SIDE) : undefined,
         height: height >= width ? Math.min(height, MAX_SIDE) : undefined,
@@ -38,7 +42,7 @@ export const processTextureUpload: CollectionBeforeOperationHook = async ({
         fit: 'inside',
       })
       .webp({ quality: 88 })
-      .toBuffer()
+      .toBuffer({ resolveWithObject: true })
 
     req.file.data = output
     req.file.size = output.byteLength
@@ -46,8 +50,8 @@ export const processTextureUpload: CollectionBeforeOperationHook = async ({
     req.file.mimetype = 'image/webp'
 
     req.context.textureMeta = {
-      width: Math.min(width, MAX_SIDE),
-      height: Math.min(height, MAX_SIDE),
+      width: info.width,
+      height: info.height,
       sizeBefore,
       sizeAfter: output.byteLength,
     } satisfies TextureMeta

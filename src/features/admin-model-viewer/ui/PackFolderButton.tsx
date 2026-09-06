@@ -91,4 +91,3 @@ export function PackFolderButton() {
   )
 }
 
-export default PackFolderButton

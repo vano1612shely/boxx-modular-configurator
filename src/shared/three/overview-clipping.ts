@@ -9,9 +9,21 @@ import {
   type WebGLProgramParametersWithUniforms,
 } from 'three'
 
-import type { ZoneBox } from '@/entities/building'
-
 import { CUT_FACE } from './scene-tokens'
+
+/**
+ * An axis-aligned volume in model space (metres).
+ *
+ * Structurally the building entity's `ZoneBox`, declared again rather than
+ * imported: this was the one file under `shared/` that reached up into
+ * `entities/`, and a box of six numbers is not a thing the shared layer needs
+ * the building domain to explain to it. Callers keep passing `ZoneBox` — the
+ * two shapes are the same, so nothing at a call site changes.
+ */
+export type ClipBox = {
+  min: [number, number, number]
+  max: [number, number, number]
+}
 
 export const MAX_HIDE_BOXES = 24
 
@@ -23,7 +35,7 @@ export const MAX_HIDE_BOXES = 24
 const KEEP_EDGE = 1e-4
 
 /** Wide enough to keep everything, without leaving float32. */
-const UNBOUNDED: ZoneBox = { min: [-1e5, -1e5, -1e5], max: [1e5, 1e5, 1e5] }
+const UNBOUNDED: ClipBox = { min: [-1e5, -1e5, -1e5], max: [1e5, 1e5, 1e5] }
 
 type SharedUniforms = {
   uHideCount: { value: number }
@@ -36,7 +48,7 @@ type SharedUniforms = {
 export const CAP_COLOR = CUT_FACE
 
 export type OverviewClippingController = {
-  setHideBoxes: (boxes: ZoneBox[]) => void
+  setHideBoxes: (boxes: ClipBox[]) => void
   /**
    * Keeps only what is inside the box, and hides the rest from the shadow map
    * too. Pass null to keep everything.
@@ -47,7 +59,7 @@ export type OverviewClippingController = {
    * `clippingPlanes` among them. A storey cut with a discard would go on
    * shading the storey below it.
    */
-  setKeepBox: (box: ZoneBox | null) => void
+  setKeepBox: (box: ClipBox | null) => void
   patchMaterial: (material: Material) => void
   readonly materialCount: number
 }
@@ -106,7 +118,7 @@ export function applyOverviewClipping(
     new Plane(new Vector3(0, 0, 1), 0),
     new Plane(new Vector3(0, 0, -1), 0),
   ]
-  const writeKeepBox = ({ min, max }: ZoneBox) => {
+  const writeKeepBox = ({ min, max }: ClipBox) => {
     keepPlanes[0].constant = -(min[0] - KEEP_EDGE)
     keepPlanes[1].constant = max[0] + KEEP_EDGE
     keepPlanes[2].constant = -(min[1] - KEEP_EDGE)

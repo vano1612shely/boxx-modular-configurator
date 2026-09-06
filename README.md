@@ -357,9 +357,14 @@ Models are used as-is after automatic optimization; prepare them once before upl
 ## Architecture notes
 
 - `src/modules/*` — Payload domains (users, media, regions, buildings, furniture,
-  quotes); `payload.config.ts` only aggregates them.
+  quotes, settings) plus `shared`, which holds what more than one of them needs.
+  `payload.config.ts` aggregates them and does the two things that belong to the
+  whole app: the admin's own branding, and writing the starter room types and
+  furniture tiers on boot.
 - `src/entities|features|views` — FSD frontend; interactive slices follow MVVM
   (`use<Slice>Model` hooks); shared control-flow primitives in `src/shared/ui/control-flow`.
+  Five of the eight feature slices carry such a hook — `admin-model-viewer`,
+  `building-intake` and `order-view` are small enough to be their components.
 - Rules engine: `src/entities/building/lib/rules-engine.ts` (pure, unit-tested).
 - Placement geometry (fit/collision/clamping): `src/features/package-placement/lib/placement-geometry.ts` (unit-tested).
 - Two packages are in each other's way only if all three of these are true, in order:

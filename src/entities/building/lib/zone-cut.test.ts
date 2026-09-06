@@ -175,6 +175,39 @@ describe('cutPolygon', () => {
   it('refuses a single point', () => {
     expect(refusal(ROOM, [{ x: 3, z: 0 }])).toBe('short-path')
   })
+
+  // The notch of an L-shaped room is outside the floor. A straight cut across
+  // it leaves the room between its two ends and comes back — touching the
+  // outline only at those ends, which is deliberately not a crossing — so it
+  // used to be accepted, and produced a zone larger than the whole room.
+  it('refuses a cut that crosses the notch of a concave room', () => {
+    const L: Point2[] = [
+      { x: 0, z: 0 },
+      { x: 6, z: 0 },
+      { x: 6, z: 3 },
+      { x: 3, z: 3 },
+      { x: 3, z: 6 },
+      { x: 0, z: 6 },
+    ]
+
+    expect(refusal(L, [{ x: 3, z: 4.7 }, { x: 4.4, z: 3 }])).toBe('leaves-the-room')
+  })
+
+  // The same room still has to be divisible, or the guard above has cost more
+  // than it saved.
+  it('still cuts a concave room where the cut stays inside it', () => {
+    const L: Point2[] = [
+      { x: 0, z: 0 },
+      { x: 6, z: 0 },
+      { x: 6, z: 3 },
+      { x: 3, z: 3 },
+      { x: 3, z: 6 },
+      { x: 0, z: 6 },
+    ]
+    const [near, far] = parts(L, [{ x: 0, z: 1.5 }, { x: 6, z: 1.5 }])
+
+    expect(area(near) + area(far)).toBeCloseTo(area(L), 6)
+  })
 })
 
 // The editor lights up whatever this returns and starts or finishes the cut on

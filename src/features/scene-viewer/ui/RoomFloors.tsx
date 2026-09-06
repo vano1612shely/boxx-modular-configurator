@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Shape, ShapeGeometry } from 'three'
 
 import type { Room } from '@/entities/building'
@@ -47,6 +47,9 @@ function RoomFloor({
 }) {
   const [hovered, setHovered] = useState(false)
   const geometry = useMemo(() => floorGeometry(room), [room])
+  // Built here rather than in JSX, so R3F does not own it and nothing else
+  // gives it back when the visitor leaves the overview.
+  useEffect(() => () => geometry.dispose(), [geometry])
   // R3F only applies its own "did the pointer move" test to the miss path, so
   // an orbit that starts and ends over a floor arrives here as a click and
   // would preview the room the visitor was only turning the building around.

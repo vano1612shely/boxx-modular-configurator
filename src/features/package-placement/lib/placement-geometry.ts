@@ -2,8 +2,6 @@ import {
   clampPoseToRegion,
   footprintFitsRegion,
   poseInsideRegion,
-  regionOf,
-  type Point2,
   type Region,
 } from '@/entities/building'
 import type { PlacedPackage } from '@/entities/configuration'
@@ -366,13 +364,3 @@ function middleOfTheGap(
   return { x, z }
 }
 
-/** The single-polygon case, which is every room nobody has divided. */
-export function findFreeSpot(
-  preferred: { x: number; z: number },
-  footprint: PackageFootprint,
-  rotationYDeg: number,
-  polygon: Point2[],
-  others: PlacedWithFootprint[],
-): { x: number; z: number } | null {
-  return findFreeSpotInRegion(preferred, footprint, rotationYDeg, regionOf(polygon), others)
-}

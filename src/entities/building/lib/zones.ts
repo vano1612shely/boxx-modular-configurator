@@ -3,16 +3,11 @@ import { ZONE_TINTS } from '@/shared/three/scene-tokens'
 
 import type { Room, RoomType, Zone } from '../model/types'
 import { pointInPolygon, polygonSignedArea, type Point2 } from './polygon'
-import { connectedGroups, regionAround, regionFrom, type Region } from './region'
+import { regionAround, regionFrom, type Region } from './region'
 
 /** Rooms are undivided until somebody cuts one, which is most of them. */
 export function isDivided(room: Room): boolean {
   return room.zones.length > 0
-}
-
-export function zoneOf(room: Room, key: string | null): Zone | null {
-  if (key === null) return null
-  return room.zones.find((zone) => zone.key === key) ?? null
 }
 
 /** The zone a point stands in, or null in an undivided room or a gap. */
@@ -91,15 +86,3 @@ export function acceptingFloor(
   return regionFrom(polygons.length ? polygons : [room.floorPolygon])
 }
 
-/**
- * Zones of the room a package could be offered in at all.
- *
- * Grouped by reachability so the panel can say "this seats six, and there are
- * two places in this room it could go" without implying they are one place.
- */
-export function reachableGroups(
-  room: Room,
-  compatibleRoomTypes: ReadonlyArray<RoomType>,
-): Point2[][][] {
-  return connectedGroups(acceptingPolygons(room, compatibleRoomTypes))
-}

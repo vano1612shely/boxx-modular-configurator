@@ -1,10 +1,8 @@
 import { APIError, type CollectionBeforeOperationHook } from 'payload'
 
-import { externalReferences, optimizeGlb, type ModelMeta } from '../lib/optimize-model'
+import { externalReferences, optimizeGlb, optimizeGltfJson } from '../lib/optimize-model'
 
 const GLB_EXTENSIONS = ['.glb', '.gltf']
-
-export type ProcessedModel = { meta: ModelMeta }
 
 export const processModelUpload: CollectionBeforeOperationHook = async ({ args, operation, req }) => {
   if (operation !== 'create' && operation !== 'update') return args
@@ -31,7 +29,9 @@ export const processModelUpload: CollectionBeforeOperationHook = async ({ args, 
   }
 
   try {
-    const { output, meta } = await optimizeGlb(req.file.data)
+    const { output, meta } = name.endsWith('.gltf')
+      ? await optimizeGltfJson(req.file.data)
+      : await optimizeGlb(req.file.data)
 
     req.file.data = output
     req.file.size = output.byteLength

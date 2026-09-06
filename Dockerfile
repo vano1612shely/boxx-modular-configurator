@@ -33,6 +33,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/.next ./.next
+# /favicon.svg is asked for by both the configurator's layout and the admin
+# panel's own meta. Without this the runner has no public/ and both 404.
+COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY --from=builder /app/src ./src

@@ -334,7 +334,6 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     focusedRoom,
     activeZone,
     isPanelOpen: focusedRoom !== null,
-    standingFitted,
     onPutFitted: putFitted,
     /** True while a divided room is shown whole, which is what grows accordions. */
     isSplit: sections.length > 1,

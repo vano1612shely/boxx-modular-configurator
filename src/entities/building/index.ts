@@ -115,7 +115,6 @@ export {
   type SizingResult,
 } from './lib/rules-engine'
 export {
-  closestPointOnPolygon,
   footprintCorners,
   nearestEdgeAlignedRotation,
   pointInPolygon,
@@ -142,7 +141,6 @@ export {
   type Region,
 } from './lib/region'
 export {
-  canCut,
   cutPolygon,
   onOutline,
   OUTLINE_GRAB,
@@ -155,10 +153,8 @@ export {
   isDivided,
   nextZoneTint,
   reachableFloor,
-  reachableGroups,
   zoneAccepts,
   zoneArea,
   zoneAt,
   zoneNamesJoined,
-  zoneOf,
 } from './lib/zones'

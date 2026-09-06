@@ -1543,7 +1543,7 @@ export interface IntegrationSetting {
    */
   enablePostMessage?: boolean | null;
   /**
-   * Allowed origin for postMessage. Use the host-site origin in production.
+   * Allowed origin for postMessage. `*` delivers every submitted configuration — building, packages and prices — to whatever page has the configurator in a frame. Set the host site's own origin in production.
    */
   targetOrigin?: string | null;
   /**

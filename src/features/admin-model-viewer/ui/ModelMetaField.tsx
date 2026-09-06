@@ -66,4 +66,3 @@ export function ModelMetaField() {
   )
 }
 
-export default ModelMetaField

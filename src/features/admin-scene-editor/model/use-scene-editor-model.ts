@@ -111,11 +111,9 @@ type DraftRoom = NonNullable<Draft['rooms']>[number]
 /** One node of the loaded glb scene graph, flattened for the outliner. */
 export type ModelNode = {
   id: number
-  parentId: number | null
   name: string
   kind: 'mesh' | 'group'
   depth: number
-  hasChildren: boolean
   /** Child-index path from the model root ("2/0/5"). */
   path: string
   /** World-space AABB of the node's subtree (null when empty). */
@@ -211,6 +209,7 @@ export function useSceneEditorModel() {
   const modelFootprint = modelBox?.footprint ?? null
   const [dirty, setDirty] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [loadError, setLoadError] = useState(false)
 
   const cameraGetterRef = useRef<(() => CameraSnapshot | null) | null>(null)
 
@@ -227,16 +226,31 @@ export function useSceneEditorModel() {
     if (!id) return
 
     const load = async () => {
-      const response = await fetch(`/api/building-models/${id}?depth=1`, {
-        credentials: 'include',
-      })
-      const docJson = (await response.json()) as BuildingModel
+      // A refused or failed GET answers with { errors: [...] }, which read as a
+      // building has no sceneConfig and no rooms — an empty one, indistinguishable
+      // on screen from a building nobody has set up yet. Saving that wrote the
+      // emptiness back over the real thing, so a lapsed session cost the room
+      // layout. Nothing is put into the draft unless the document arrived.
+      try {
+        const response = await fetch(`/api/building-models/${id}?depth=1`, {
+          credentials: 'include',
+        })
 
-      setDoc(docJson)
-      setDraft({
-        sceneConfig: docJson.sceneConfig ?? {},
-        rooms: docJson.rooms ?? [],
-      })
+        if (!response.ok) {
+          setLoadError(true)
+          return
+        }
+
+        const docJson = (await response.json()) as BuildingModel
+
+        setDoc(docJson)
+        setDraft({
+          sceneConfig: docJson.sceneConfig ?? {},
+          rooms: docJson.rooms ?? [],
+        })
+      } catch {
+        setLoadError(true)
+      }
     }
 
     void load()
@@ -692,11 +706,6 @@ export function useSceneEditorModel() {
       )
     : null
 
-  // A storey the admin is standing on owns its own drawing level, and owns it
-  // on the document: a level that lived only in this session came back wrong
-  // after a reload, and furniture stands on whatever the room was given. With
-  // no storeys there is one level and it behaves exactly as it always did.
-  const storeyBaseY = previewedStorey?.box.min[1] ?? 0
   // Held on the document, not in this hook: a level that lived only in the
   // session came back at zero after a reload, and every room drawn afterwards
   // started on the wrong plane.
@@ -868,15 +877,24 @@ export function useSceneEditorModel() {
 
     setSaveState('saving')
 
-    const response = await fetch(`/api/building-models/${id}`, {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(draft),
-    })
+    // A rejected fetch — the laptop's lid closed mid-save, the server restarted —
+    // used to leave the state on 'saving', which is the one value that disables
+    // the button. The work was still in the draft and there was no longer any
+    // way to send it.
+    try {
+      const response = await fetch(`/api/building-models/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      })
 
-    setDirty(!response.ok)
-    setSaveState(response.ok ? 'saved' : 'error')
+      setDirty(!response.ok)
+      setSaveState(response.ok ? 'saved' : 'error')
+    } catch {
+      setDirty(true)
+      setSaveState('error')
+    }
   }
 
   const selectedShell = (
@@ -1064,7 +1082,10 @@ export function useSceneEditorModel() {
   }
 
   return {
-    isLoading: !doc || !draft,
+    // A failed load stops being "loading": the Gate shows what went wrong
+    // instead of a message that will never resolve.
+    isLoading: !loadError && (!doc || !draft),
+    loadError,
     doc,
     draft,
     modelUrl: doc ? modelUrlOf(doc.model) : null,
@@ -1086,7 +1107,6 @@ export function useSceneEditorModel() {
     modelFootprint,
     exteriorSlots,
     selectedSlotIndex,
-    selectedSlot,
     // A spot takes over the sidebar the way a room does, and for the same
     // reason: it is a place with its own contents.
     spotMode: selectedSlotIndex !== null && selectedRoomIndex === null,
@@ -1176,7 +1196,6 @@ export function useSceneEditorModel() {
     roomsOffStoreys,
     previewRoomIndexes,
     previewFloorName: previewedStorey?.name ?? null,
-    previewFloorBaseY: storeyBaseY,
     previewFloorIndex,
     previewFloorBox:
       previewFloorIndex === null
@@ -1207,8 +1226,6 @@ export function useSceneEditorModel() {
     // ── Fittings: what stands still in a room ────────────────────────────────
     fittingScope,
     selectedPartKeys,
-    /** The one that is selected, or null when none or several are. */
-    selectedPartKey: selectedPartKeys.length === 1 ? selectedPartKeys[0] : null,
     hoveredNodePath,
     hoveredNodeName:
       hoveredNodePath === null
@@ -1245,10 +1262,6 @@ export function useSceneEditorModel() {
     )
       .filter((part) => part.source === 'node' && part.nodePath)
       .map((part) => part.nodePath as string),
-    selectedPart:
-      selectedPartKeys.length === 1
-        ? (scopedParts.find((part) => part.key === selectedPartKeys[0]) ?? null)
-        : null,
     /** The list as the panel shows it: a merged object takes one row. */
     partRows: partRows(scopedParts),
     /** Where the selection's handles stand, in the room's own frame. */
@@ -1712,10 +1725,6 @@ export function useSceneEditorModel() {
         next.splice(edgeIndex + 1, 0, { x, z, side: vertices[edgeIndex]?.side ?? 'w1' })
         return next
       }),
-    onRemoveRoomPoint: (roomIndex: number, pointIndex: number) =>
-      patchPolygon(roomIndex, (vertices) =>
-        vertices.length > 3 ? vertices.filter((_, i) => i !== pointIndex) : vertices,
-      ),
 
     selectedOpeningId,
     openingKind,
@@ -1735,10 +1744,6 @@ export function useSceneEditorModel() {
         const sides = autoAssignSides(vertices)
         return vertices.map((v, i) => ({ ...v, side: sides[i] }))
       }),
-    onSetVertexSide: (roomIndex: number, vertexIndex: number, side: WallSide) =>
-      patchPolygon(roomIndex, (vertices) =>
-        vertices.map((v, i) => (i === vertexIndex ? { ...v, side } : v)),
-      ),
     onAddOpening: addOpening,
     onUpdateOpening: (roomIndex: number, id: string, patch: Partial<RoomOpening>) =>
       patchOpenings(roomIndex, (openings) =>

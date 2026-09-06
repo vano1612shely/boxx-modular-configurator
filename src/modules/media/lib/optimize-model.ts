@@ -56,6 +56,27 @@ export async function optimizeGlb(input: Buffer): Promise<{ output: Buffer; meta
   return run(document, input.byteLength)
 }
 
+/**
+ * The same pass for a .gltf, which is JSON and not a GLB container.
+ *
+ * `readBinary` refuses one, so a .gltf used to fall straight into the caller's
+ * catch and be stored exactly as uploaded — no optimisation, no meta, and only
+ * a line in the log to say so. Whatever reaches here is self-contained: the
+ * upload hook turns away any .gltf that still points at separate files, so
+ * every buffer and image left is a data URI, which `readJSON` decodes itself.
+ */
+export async function optimizeGltfJson(
+  input: Buffer,
+): Promise<{ output: Buffer; meta: ModelMeta }> {
+  const nodeIO = await getModelIO()
+  const document = await nodeIO.readJSON({
+    json: JSON.parse(input.toString('utf8')),
+    resources: {},
+  })
+
+  return run(document, input.byteLength)
+}
+
 /** Reads from disk so a glTF's relative .bin/texture paths resolve; emits one embedded GLB. */
 export async function optimizeModelFile(
   path: string,

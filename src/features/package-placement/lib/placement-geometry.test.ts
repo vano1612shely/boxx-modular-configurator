@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { collidesWithAny, findFreeSpot, overlaps, rotatedHalfExtents } from './placement-geometry'
+import { regionOf } from '@/entities/building'
+
+import {
+  collidesWithAny,
+  findFreeSpotInRegion,
+  overlaps,
+  rotatedHalfExtents,
+} from './placement-geometry'
 
 const roomPoly = [
   { x: -3, z: -3 },
@@ -41,20 +48,22 @@ describe('overlaps / collidesWithAny', () => {
   })
 })
 
-describe('findFreeSpot', () => {
+describe('findFreeSpotInRegion', () => {
   const at = (x: number, z: number) => ({ x, z, rotationYDeg: 0, footprint })
+  // The undivided room, which is what most rooms are: one polygon as a region.
+  const room = regionOf(roomPoly)
 
   it('returns the preferred spot when free', () => {
-    expect(findFreeSpot({ x: 0, z: 0 }, footprint, 0, roomPoly, [])).toEqual({ x: 0, z: 0 })
+    expect(findFreeSpotInRegion({ x: 0, z: 0 }, footprint, 0, room, [])).toEqual({ x: 0, z: 0 })
   })
 
   it('finds a nearby spot when the preferred one is taken', () => {
-    const spot = findFreeSpot({ x: 0, z: 0 }, footprint, 0, roomPoly, [at(0, 0)])
+    const spot = findFreeSpotInRegion({ x: 0, z: 0 }, footprint, 0, room, [at(0, 0)])
     expect(spot).not.toBeNull()
     expect(collidesWithAny({ ...spot!, rotationYDeg: 0, footprint }, [at(0, 0)])).toBe(false)
   })
 
   it('returns null when the package cannot fit the room at all', () => {
-    expect(findFreeSpot({ x: 0, z: 0 }, { width: 10, depth: 10 }, 0, roomPoly, [])).toBeNull()
+    expect(findFreeSpotInRegion({ x: 0, z: 0 }, { width: 10, depth: 10 }, 0, room, [])).toBeNull()
   })
 })

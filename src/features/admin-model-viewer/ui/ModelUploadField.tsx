@@ -140,4 +140,3 @@ export function ModelUploadField() {
   )
 }
 
-export default ModelUploadField

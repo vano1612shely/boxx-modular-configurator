@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Shape, ShapeGeometry } from 'three'
 
 import type { Room, Zone } from '@/entities/building'
@@ -48,6 +48,9 @@ function ZoneFloor({
 }) {
   const [hovered, setHovered] = useState(false)
   const geometry = useMemo(() => floorGeometry(zone), [zone])
+  // Built here rather than in JSX, so R3F does not own it and nothing else
+  // gives it back when the visitor leaves the room.
+  useEffect(() => () => geometry.dispose(), [geometry])
   // R3F only applies its own "did the pointer move" test to the miss path, so
   // an orbit that starts and ends over a zone arrives here as a click and would
   // switch the panel out from under a visitor who was only turning the room.

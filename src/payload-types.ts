@@ -777,9 +777,37 @@ export interface FurniturePackage {
    */
   fitted?: boolean | null;
   /**
-   * The whole package as one model. Leave empty for a fitted package — its parts are placed on the room instead. Anything else without one is offered nowhere.
+   * The whole package as one model. Leave empty for a fitted package — its parts are placed on the room instead — or for a group, which is made of the pieces below. Anything else without one is offered nowhere.
    */
   model?: (number | null) | Model;
+  /**
+   * Several models sold as one thing — a table and its chairs. Adding a piece here makes this a group: the visitor adds and removes the whole group at once, for the one price above, but can then move each piece on its own like any other furniture. Leave empty for an ordinary package. Arrange them in the scene below rather than typing coordinates.
+   */
+  members?:
+    | {
+        /**
+         * A piece with no model yet is listed but not drawn.
+         */
+        model?: (number | null) | Model;
+        /**
+         * What this piece is called in the arranger. Falls back to the file name.
+         */
+        name?: string | null;
+        /**
+         * Metres right of the group centre.
+         */
+        x?: number | null;
+        /**
+         * Metres forward of the group centre.
+         */
+        z?: number | null;
+        /**
+         * Degrees about Y.
+         */
+        rotationYDeg?: number | null;
+        id?: string | null;
+      }[]
+    | null;
   thumbnail?: (number | null) | Image;
   /**
    * USD.
@@ -1308,6 +1336,16 @@ export interface FurniturePackagesSelect<T extends boolean = true> {
   tier?: T;
   fitted?: T;
   model?: T;
+  members?:
+    | T
+    | {
+        model?: T;
+        name?: T;
+        x?: T;
+        z?: T;
+        rotationYDeg?: T;
+        id?: T;
+      };
   thumbnail?: T;
   price?: T;
   description?: T;

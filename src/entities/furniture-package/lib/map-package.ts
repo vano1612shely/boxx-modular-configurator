@@ -1,8 +1,8 @@
 import { roomTypeSlug } from '@/modules/shared/room-types'
 import type { FurniturePackage, Image, Model } from '@/payload-types'
-import { assetUrl } from '@/shared/lib'
+import { assetUrl, footprintFromMeta } from '@/shared/lib'
 
-import type { FurniturePackageEntity } from '../model/types'
+import type { FurniturePackageEntity, PackageMember } from '../model/types'
 
 /** The keys of a list of room types, dropping any that came back as bare ids. */
 function slugs(value: unknown): string[] {
@@ -30,6 +30,40 @@ function thumbnailUrl(value: number | Image | null | undefined): string | null {
   return assetUrl(value)
 }
 
+/**
+ * The pieces of a group, dropping any that cannot be drawn.
+ *
+ * A row with no model yet is a piece the admin has started and not finished, and
+ * an empty relationship is the state the Add button leaves behind — neither is
+ * worth failing the whole catalogue over, and neither can be put in a room.
+ */
+function members(rows: FurniturePackage['members']): PackageMember[] {
+  if (!Array.isArray(rows)) return []
+
+  return rows.flatMap((row, index) => {
+    const url = modelUrl(row.model)
+    if (!url) return []
+
+    return [
+      {
+        // Payload only mints a row id once the document is saved, so a piece
+        // added and arranged before the first save falls back to its position.
+        key: row.id ?? String(index),
+        name: row.name?.trim() || null,
+        modelUrl: url,
+        x: row.x ?? 0,
+        z: row.z ?? 0,
+        rotationYDeg: row.rotationYDeg ?? 0,
+        footprint: footprintFromMeta(
+          row.model && typeof row.model === 'object'
+            ? (row.model.meta as Parameters<typeof footprintFromMeta>[0])
+            : null,
+        ) ?? { width: 1, depth: 1 },
+      },
+    ]
+  })
+}
+
 export function mapFurniturePackage(doc: FurniturePackage): FurniturePackageEntity {
   return {
     id: doc.id,
@@ -48,5 +82,6 @@ export function mapFurniturePackage(doc: FurniturePackage): FurniturePackageEnti
     },
     compatibleRoomTypes: slugs(doc.compatibleRoomTypes),
     recommendedFor: slugs(doc.recommendedFor),
+    members: members(doc.members),
   }
 }

@@ -363,8 +363,15 @@ Models are used as-is after automatic optimization; prepare them once before upl
   furniture tiers on boot.
 - `src/entities|features|views` — FSD frontend; interactive slices follow MVVM
   (`use<Slice>Model` hooks); shared control-flow primitives in `src/shared/ui/control-flow`.
-  Five of the eight feature slices carry such a hook — `admin-model-viewer`,
+  Six of the nine feature slices carry such a hook — `admin-model-viewer`,
   `building-intake` and `order-view` are small enough to be their components.
+- A furniture package is one model, or several. Several makes it a *group*: the
+  visitor adds and removes the whole thing for one price but moves each piece
+  afterwards, so a group becomes one placement per piece sharing a `groupId`.
+  Everything downstream — the drag, the collision tests, the clamp to the room —
+  sees ordinary furniture, because `placedPackage` in `@/entities/furniture-package`
+  dresses a piece as a package of its own. The default arrangement is laid out in
+  `admin-furniture-group`, on the package's own page.
 - Rules engine: `src/entities/building/lib/rules-engine.ts` (pure, unit-tested).
 - Placement geometry (fit/collision/clamping): `src/features/package-placement/lib/placement-geometry.ts` (unit-tested).
 - Two packages are in each other's way only if all three of these are true, in order:

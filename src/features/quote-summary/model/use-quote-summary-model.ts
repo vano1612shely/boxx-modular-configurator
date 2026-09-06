@@ -65,32 +65,59 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
   // The zone is worked out from where the thing stands rather than stored with
   // it, so a piece dragged across an open boundary is quoted under the half it
   // ended up in — which is the half the customer will get it in.
-  const quotePackages = useMemo(
-    () =>
-      placed.flatMap((placement) => {
-        const pkg = packagesById.get(placement.packageId)
-        if (!pkg) return []
+  const quotePackages = useMemo(() => {
+    // A group is one purchase however many pieces it left in the room, so only
+    // the first piece of each writes a line. The line is filed where that piece
+    // stands: the pieces move independently once they are down, and picking one
+    // of them beats inventing a middle that nothing is actually at.
+    const counted = new Set<string>()
 
-        const room = roomsByKey.get(placement.roomKey) ?? null
-        const zone = room ? zoneAt(room, placement.x, placement.z) : null
+    return placed.flatMap((placement) => {
+      const pkg = packagesById.get(placement.packageId)
+      if (!pkg) return []
 
-        return [
-          {
-            packageId: pkg.id,
-            title: pkg.title,
-            roomKey: placement.roomKey,
-            zoneKey: zone?.key ?? null,
-            zoneName: zone?.name ?? null,
-            placeKey: placeKeyOf(placement.roomKey, zone?.key ?? null),
-            price: pkg.price,
-            x: placement.x,
-            z: placement.z,
-            rotationYDeg: placement.rotationYDeg,
-          },
-        ]
-      }),
-    [placed, packagesById, roomsByKey],
-  )
+      if (placement.groupId) {
+        if (counted.has(placement.groupId)) return []
+        counted.add(placement.groupId)
+      }
+
+      // Every piece of the group, so reopening the order puts the arrangement
+      // back rather than one table where a dining set used to be.
+      const pieces = placement.groupId
+        ? placed.flatMap((piece) =>
+            piece.groupId === placement.groupId && piece.memberKey
+              ? [
+                  {
+                    memberKey: piece.memberKey,
+                    x: piece.x,
+                    z: piece.z,
+                    rotationYDeg: piece.rotationYDeg,
+                  },
+                ]
+              : [],
+          )
+        : undefined
+
+      const room = roomsByKey.get(placement.roomKey) ?? null
+      const zone = room ? zoneAt(room, placement.x, placement.z) : null
+
+      return [
+        {
+          packageId: pkg.id,
+          title: pkg.title,
+          roomKey: placement.roomKey,
+          zoneKey: zone?.key ?? null,
+          zoneName: zone?.name ?? null,
+          placeKey: placeKeyOf(placement.roomKey, zone?.key ?? null),
+          price: pkg.price,
+          x: placement.x,
+          z: placement.z,
+          rotationYDeg: placement.rotationYDeg,
+          ...(pieces ? { pieces } : {}),
+        },
+      ]
+    })
+  }, [placed, packagesById, roomsByKey])
 
   // One line per spot that offers a choice — a spot with a single entry is part
   // of the building rather than something the customer picked.

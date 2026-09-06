@@ -6,19 +6,12 @@ import {
 } from '@/entities/building'
 import type { PlacedPackage } from '@/entities/configuration'
 import { shapesCollide, type PackageFootprint, type PackageShape } from '@/entities/furniture-package'
+import { rotatedHalfExtents, type HalfExtents } from '@/shared/lib'
 
-export type HalfExtents = { halfW: number; halfD: number }
-
-/** World-axis-aligned half extents of a footprint rotated by rotationYDeg. */
-export function rotatedHalfExtents(footprint: PackageFootprint, rotationYDeg: number): HalfExtents {
-  const rad = (rotationYDeg * Math.PI) / 180
-  const cos = Math.abs(Math.cos(rad))
-  const sin = Math.abs(Math.sin(rad))
-  return {
-    halfW: (cos * footprint.width + sin * footprint.depth) / 2,
-    halfD: (sin * footprint.width + cos * footprint.depth) / 2,
-  }
-}
+// The arithmetic moved to `shared/lib` when the admin's group arranger came to
+// need the same answer; re-exported here because this is where every caller and
+// this slice's own tests have always looked for it.
+export { rotatedHalfExtents, type HalfExtents }
 
 type PlacedWithFootprint = Pick<PlacedPackage, 'x' | 'z' | 'rotationYDeg'> & {
   footprint: PackageFootprint

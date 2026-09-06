@@ -48,6 +48,7 @@ import {
   useCentredPackage,
   type FurniturePackageEntity,
   type PackageShape,
+  placedPackage,
 } from '@/entities/furniture-package'
 import { cn } from '@/shared/lib'
 import { HIGHLIGHT } from '@/shared/three/scene-tokens'
@@ -114,7 +115,7 @@ function placementObstacles(
   const set = room ? fittedSetOf(room, placement.packageId) : null
   if (set) return fittingObstacles(set.parts, buildingModelUrl)
 
-  const pkg = packagesById.get(placement.packageId)
+  const pkg = placedPackage(packagesById.get(placement.packageId), placement.memberKey)
   if (!pkg) return []
 
   return [
@@ -225,7 +226,7 @@ export function PlacedPackages({ building, packages }: Props) {
       <PartMeasurements parts={fittingsHere} buildingModelUrl={building.modelUrl} />
       <For each={placed} getKey={(p) => p.instanceId}>
         {(placement) => {
-          const pkg = packagesById.get(placement.packageId)
+          const pkg = placedPackage(packagesById.get(placement.packageId), placement.memberKey)
           const room = roomsByKey.get(placement.roomKey)
           if (!pkg || !room) return null
 
@@ -868,7 +869,9 @@ function DragPlane({ building, packages, grabOffsetRef }: DragPlaneProps) {
     if (!dragging) return
 
     const placement = state.placed.find((p) => p.instanceId === dragging)
-    const pkg = placement ? packages.get(placement.packageId) : null
+    const pkg = placement
+      ? placedPackage(packages.get(placement.packageId), placement.memberKey)
+      : null
     const room = placement ? building.rooms.find((r) => r.key === placement.roomKey) : null
     if (!placement || !pkg || !room) return
 

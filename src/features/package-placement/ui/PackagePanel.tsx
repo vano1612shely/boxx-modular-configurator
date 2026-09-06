@@ -17,6 +17,7 @@ import {
   type FloorSection,
   type PackageOffer,
   type PackagePlacementVm,
+  type PlacedItem,
 } from '../model/use-package-placement-model'
 
 const SHEET_INSET = 'px-[max(1.25rem,env(safe-area-inset-left))]'
@@ -71,7 +72,13 @@ export function PackagePanel({ building, packages }: Props) {
           a new one up — with a fresh environment map — on every room the
           visitor entered or left. */}
       <ModelThumbnailFactory
-        urls={vm.offers.flatMap((offer) => (offer.pkg.modelUrl ? [offer.pkg.modelUrl] : []))}
+        urls={vm.offers.flatMap((offer) => {
+          if (offer.pkg.modelUrl) return [offer.pkg.modelUrl]
+          // A group's tile is drawn from its first piece, so that is the one
+          // this has to have; the rest are warmed for the room, not for here.
+          const first = offer.pkg.members[0]?.modelUrl
+          return first ? [first] : []
+        })}
       />
 
       <Show when={vm.isPanelOpen}>
@@ -262,6 +269,26 @@ function ZoneAccordion({ section, children }: { section: FloorSection; children:
   )
 }
 
+/** What a row is called: the set it came with, then the piece inside it. */
+function label(item: PlacedItem): string {
+  const piece = item.pkg?.title ?? 'Package'
+  if (!item.group || item.group.title === piece) return piece
+  return `${item.group.title} · ${piece}`
+}
+
+/** Whether this row carries the bin: always, unless earlier kin already does. */
+function ownsTheBin(rows: PlacedItem[], item: PlacedItem, index: number): boolean {
+  if (!item.groupId) return true
+  return rows.findIndex((row) => row.groupId === item.groupId) === index
+}
+
+function removeLabel(item: PlacedItem, rows: PlacedItem[]): string {
+  if (!item.groupId) return `Remove ${item.pkg?.title ?? 'package'}`
+
+  const pieces = rows.filter((row) => row.groupId === item.groupId).length
+  return `Remove ${item.group?.title ?? 'the set'} and its ${pieces} pieces`
+}
+
 function SectionBody({
   vm,
   section,
@@ -311,7 +338,7 @@ function SectionBody({
         </Eyebrow>
         <ul className="flex flex-col gap-card">
           <For each={section.placed} getKey={(p) => p.instanceId}>
-            {(placedItem) => (
+            {(placedItem, index) => (
               <Card
                 as="li"
                 tone="cream"
@@ -340,7 +367,7 @@ function SectionBody({
                   when={!placedItem.pinned}
                   fallback={
                     <span className="min-w-0 flex-1 truncate px-2 py-2 text-sm">
-                      {placedItem.pkg?.title ?? 'Package'}
+                      {label(placedItem)}
                     </span>
                   }
                 >
@@ -353,17 +380,25 @@ function SectionBody({
                     aria-pressed={vm.selectedInstanceId === placedItem.instanceId}
                     className="min-w-0 flex-1 truncate rounded-full px-2 py-2 text-left text-sm transition-colors hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {placedItem.pkg?.title ?? 'Package'}
+                    {label(placedItem)}
                   </button>
                 </Show>
-                <button
-                  type="button"
-                  onClick={() => vm.onRemovePackage(placedItem.instanceId)}
-                  aria-label={`Remove ${placedItem.pkg?.title ?? 'package'}`}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {/* One bin per group, on the piece that opens it. Every piece
+                    still has its own row, because a chair pushed under a desk is
+                    behind it from every angle and this list is the way back to
+                    it — but the group came in as one thing and goes out as one,
+                    and four bins that each empty the whole set is four ways to
+                    be surprised. */}
+                <Show when={ownsTheBin(section.placed, placedItem, index)}>
+                  <button
+                    type="button"
+                    onClick={() => vm.onRemovePackage(placedItem.instanceId)}
+                    aria-label={removeLabel(placedItem, section.placed)}
+                    className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </Show>
               </Card>
             )}
           </For>
@@ -472,7 +507,10 @@ type OfferTileProps = {
 // A component per offer: the thumbnail subscription is a hook and the list length varies.
 function OfferTile({ offer, onAdd }: OfferTileProps) {
   const { pkg, fits } = offer
-  const rendered = useModelThumbnail(pkg.modelUrl)
+  // A group has no model of its own, so the first piece stands for it — better
+  // than an empty tile, and an admin who wants the whole arrangement in the
+  // picture uploads a thumbnail, which wins over either.
+  const rendered = useModelThumbnail(pkg.modelUrl ?? pkg.members[0]?.modelUrl ?? null)
 
   return (
     <MediaTile

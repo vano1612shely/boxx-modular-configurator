@@ -15,6 +15,7 @@ function line(over: Partial<StoredQuotePackage> = {}): StoredQuotePackage {
     x: 1.5,
     z: -2,
     rotationYDeg: 90,
+    pieces: [],
     ...over,
   }
 }
@@ -81,5 +82,66 @@ describe('replayExterior', () => {
   // spot falls back to its own default, which is how it renders at all.
   it('makes nothing of an empty list', () => {
     expect(replayExterior([])).toEqual({})
+  })
+})
+
+/**
+ * A group is saved as one line — one title, one price — carrying where each of
+ * its pieces was left. Reopening the order has to put all of them back, or a
+ * dining set comes back as a table with nowhere to sit.
+ */
+describe('replayPlacements, for a group', () => {
+  const dining = line({
+    packageId: 9,
+    title: 'Dining set',
+    x: 0,
+    z: 0,
+    pieces: [
+      { memberKey: 'table', x: 0, z: 0, rotationYDeg: 0 },
+      { memberKey: 'chair-a', x: 0, z: 1, rotationYDeg: 180 },
+      { memberKey: 'chair-b', x: 0, z: -1, rotationYDeg: 0 },
+    ],
+  })
+
+  it('puts back one placement per piece, where each was left', () => {
+    const placed = replayPlacements([dining])
+
+    expect(placed).toHaveLength(3)
+    expect(placed[1]).toMatchObject({
+      packageId: 9,
+      memberKey: 'chair-a',
+      roomKey: 'office-1',
+      x: 0,
+      z: 1,
+      rotationYDeg: 180,
+    })
+  })
+
+  it('keeps them reading as one set', () => {
+    const placed = replayPlacements([dining])
+    const groups = new Set(placed.map((p) => p.groupId))
+
+    expect(groups.size).toBe(1)
+    expect([...groups][0]).toBeTruthy()
+  })
+
+  it('gives every piece its own key, and the same ones on both renders', () => {
+    const ids = replayPlacements([dining]).map((p) => p.instanceId)
+
+    expect(new Set(ids).size).toBe(3)
+    expect(replayPlacements([dining]).map((p) => p.instanceId)).toEqual(ids)
+  })
+
+  it('leaves an ordinary line exactly as it was', () => {
+    const [placed] = replayPlacements([line()])
+
+    expect(placed.groupId).toBeUndefined()
+    expect(placed.memberKey).toBeUndefined()
+    expect(placed).toMatchObject({ x: 1.5, z: -2, rotationYDeg: 90 })
+  })
+
+  it('does not mix the groups of two sets in one order', () => {
+    const placed = replayPlacements([dining, { ...dining, roomKey: 'office-2' }])
+    expect(new Set(placed.map((p) => p.groupId)).size).toBe(2)
   })
 })

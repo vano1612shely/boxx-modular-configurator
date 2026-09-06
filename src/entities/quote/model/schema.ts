@@ -19,6 +19,28 @@ export const quotePackageSchema = z.object({
   x: z.number(),
   z: z.number(),
   rotationYDeg: z.number(),
+  /**
+   * The pieces of a group, where the visitor left each one.
+   *
+   * A group is one purchase and so one line — one title, one price, which is
+   * what the customer reads and what the sales system is sent. But the pieces
+   * move independently once they are down, so the line has to carry them or
+   * reopening the order would put a dining set back as a single table.
+   *
+   * Optional, and absent on every ordinary package: a quote taken before groups
+   * existed still parses, and a line with no pieces is one thing standing at
+   * `x, z` exactly as it always was.
+   */
+  pieces: z
+    .array(
+      z.object({
+        memberKey: z.string(),
+        x: z.number(),
+        z: z.number(),
+        rotationYDeg: z.number(),
+      }),
+    )
+    .optional(),
 })
 
 export const quoteExteriorSchema = z.object({

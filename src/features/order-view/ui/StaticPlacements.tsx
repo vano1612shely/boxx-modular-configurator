@@ -7,7 +7,7 @@ import type { BuildingScene } from '@/entities/building'
 import { fittedSetOf, RoomParts, roomFloorTopY, roomsOnFloor } from '@/entities/building'
 import { useConfiguration } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
-import { PackageModel, type FurniturePackageEntity } from '@/entities/furniture-package'
+import { PackageModel, placedPackage, type FurniturePackageEntity } from '@/entities/furniture-package'
 import { For } from '@/shared/ui/control-flow'
 
 type Props = {
@@ -50,7 +50,7 @@ export function StaticPlacements({ building, packages }: Props) {
   return (
     <For each={placed} getKey={(placement) => placement.instanceId}>
       {(placement) => {
-        const pkg = packagesById.get(placement.packageId)
+        const pkg = placedPackage(packagesById.get(placement.packageId), placement.memberKey)
         const room = roomsByKey.get(placement.roomKey)
         // A package or a room the catalogue no longer has. Left out rather than
         // guessed at: the summary panel still lists the line, so the order is

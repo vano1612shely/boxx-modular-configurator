@@ -78,8 +78,35 @@ describe('readStoredPackages', () => {
         x: 1,
         z: 2,
         rotationYDeg: 90,
+        // An ordinary package is one thing standing at x, z. The list is where
+        // a group records its pieces, and this line has none.
+        pieces: [],
       },
     ])
+  })
+
+  it('keeps the pieces of a group, so the arrangement can be put back', () => {
+    const [line] = readStoredPackages([
+      {
+        ...desk,
+        title: 'Dining set',
+        pieces: [
+          { memberKey: 'table', x: 0, z: 0, rotationYDeg: 0 },
+          { memberKey: 'chair', x: 0, z: 1, rotationYDeg: 180 },
+        ],
+      },
+    ])
+
+    expect(line.pieces).toEqual([
+      { memberKey: 'table', x: 0, z: 0, rotationYDeg: 0 },
+      { memberKey: 'chair', x: 0, z: 1, rotationYDeg: 180 },
+    ])
+  })
+
+  // The line is still a line, and still says what was bought and what it cost.
+  it('keeps a line whose pieces cannot be read, without them', () => {
+    const [line] = readStoredPackages([{ ...desk, pieces: 'nonsense' }])
+    expect(line).toMatchObject({ packageId: 7, pieces: [] })
   })
 
   // One broken piece of furniture must not blank a whole order.

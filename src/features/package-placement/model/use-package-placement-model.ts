@@ -17,7 +17,13 @@ import {
 } from '@/entities/building'
 import { useConfiguration, type PlacedPackage } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
-import type { FurniturePackageEntity } from '@/entities/furniture-package'
+import {
+  groupLayout,
+  groupPieces,
+  isGroup,
+  placedPackage,
+  type FurniturePackageEntity,
+} from '@/entities/furniture-package'
 
 import { findFreeSpotInRegion } from '../lib/placement-geometry'
 
@@ -37,7 +43,11 @@ export type OfferGroups = {
   other: PackageOffer[]
 }
 
-export type PlacedItem = PlacedPackage & { pkg: FurniturePackageEntity | null }
+export type PlacedItem = PlacedPackage & {
+  pkg: FurniturePackageEntity | null
+  /** The group this arrived with, or null for a piece of furniture on its own. */
+  group: FurniturePackageEntity | null
+}
 
 /**
  * An arrangement this piece of floor offers, and whether it is the one standing.
@@ -88,6 +98,7 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   const activeZoneKey = useConfiguratorSession((s) => s.activeZoneKey)
   const placed = useConfiguration((s) => s.placed)
   const addPackage = useConfiguration((s) => s.addPackage)
+  const addGroup = useConfiguration((s) => s.addGroup)
   const removePackage = useConfiguration((s) => s.removePackage)
   const selectPackage = useConfiguration((s) => s.selectPackage)
   const selectedInstanceId = useConfiguration((s) => s.selectedInstanceId)
@@ -113,7 +124,17 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     () =>
       placed
         .filter((p) => p.roomKey === focusedRoom?.key)
-        .map((p) => ({ ...p, pkg: packagesById.get(p.packageId) ?? null })),
+        .map((p) => {
+          const owner = packagesById.get(p.packageId)
+          return {
+            ...p,
+            pkg: placedPackage(owner, p.memberKey),
+            // What the piece belongs to, when it belongs to something. The list
+            // in the panel says so, because four rows reading "Chair" with no
+            // sign they arrived together is four things the visitor did not add.
+            group: p.groupId && owner ? owner : null,
+          }
+        }),
     [placed, focusedRoom, packagesById],
   )
 
@@ -136,14 +157,20 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     const offersFor = (accepts: (types: RoomType[]) => boolean): PackageOffer[] =>
       packages
         // A fitted package is offered by the building, below, and never by room
-        // type: it exists only where somebody has arranged it. One with no model
-        // at all has nothing to carry in and is nobody's mistake to discover in
-        // the scene — it is simply not on offer.
-        .filter((pkg) => !pkg.fitted && pkg.modelUrl !== null)
+        // type: it exists only where somebody has arranged it. Of the rest, one
+        // has something to carry in if it is a model or a group of them; one
+        // that is neither is nobody's mistake to discover in the scene — it is
+        // simply not on offer.
+        .filter((pkg) => !pkg.fitted && (pkg.modelUrl !== null || isGroup(pkg)))
         .filter((pkg) => accepts(pkg.compatibleRoomTypes))
         .map((pkg) => ({
           pkg,
-          fits: footprintFitsRegion(pkg.footprint, acceptingFloor(room, pkg.compatibleRoomTypes)),
+          // A group is asked about the floor the whole arrangement needs, which
+          // is what it will actually be given when the visitor presses add.
+          fits: footprintFitsRegion(
+            isGroup(pkg) ? groupLayout(pkg).footprint : pkg.footprint,
+            acceptingFloor(room, pkg.compatibleRoomTypes),
+          ),
         }))
 
     if (room.zones.length === 0) {
@@ -241,6 +268,11 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   useEffect(() => {
     for (const offer of offers) {
       if (offer.pkg.modelUrl) useGLTF.preload(offer.pkg.modelUrl, false, true)
+      // A group has no model of its own; what it will draw is its pieces, and
+      // fetching them now is what stops a table arriving before its chairs.
+      for (const member of offer.pkg.members) {
+        useGLTF.preload(member.modelUrl, false, true)
+      }
     }
     for (const url of fittedModels) {
       useGLTF.preload(url, false, true)
@@ -288,9 +320,29 @@ export function usePackagePlacementModel({ building, packages }: Args) {
     //
     // Two angles, not four: the floor a rectangle covers is the same turned
     // half round, so 180 and 270 could only ever fail wherever 0 and 90 did.
+    // A group asks the room for the space the whole arrangement needs, then
+    // lays its pieces out inside it. One search, not one per piece: chairs
+    // hunting for their own free spots would arrive scattered, and the point of
+    // arranging them in the admin panel is that they arrive together.
+    const wanted = isGroup(pkg) ? groupLayout(pkg).footprint : pkg.footprint
+
     for (const rotationYDeg of [0, 90]) {
-      const spot = findFreeSpotInRegion(centroid, pkg.footprint, rotationYDeg, region, others)
+      const spot = findFreeSpotInRegion(centroid, wanted, rotationYDeg, region, others)
       if (!spot) continue
+
+      if (isGroup(pkg)) {
+        addGroup(
+          groupPieces(pkg, spot, rotationYDeg).map((piece) => ({
+            packageId: pkg.id,
+            roomKey: room.key,
+            memberKey: piece.memberKey,
+            x: piece.x,
+            z: piece.z,
+            rotationYDeg: piece.rotationYDeg,
+          })),
+        )
+        return true
+      }
 
       addPackage({ packageId: pkg.id, roomKey: room.key, ...spot, rotationYDeg })
       return true

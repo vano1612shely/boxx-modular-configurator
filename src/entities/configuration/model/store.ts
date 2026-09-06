@@ -60,6 +60,15 @@ type ConfigurationState = {
   hydrate: (snapshot: ConfigurationSnapshot) => void
   setExteriorVariant: (slotKey: string, variantKey: string) => void
   addPackage: (placement: Omit<PlacedPackage, 'instanceId'>) => string
+  /**
+   * Puts down every piece of a group at once, under one shared id.
+   *
+   * One write rather than a loop of `addPackage`: that action leaves the last
+   * piece selected, which would raise a toolbar around whichever chair happened
+   * to be listed last, and each call would re-render everything that reads the
+   * configuration. Returns the group's id, or null when handed nothing.
+   */
+  addGroup: (pieces: ReadonlyArray<Omit<PlacedPackage, 'instanceId' | 'groupId'>>) => string | null
   removePackage: (instanceId: string) => void
   movePackage: (instanceId: string, x: number, z: number) => void
   rotatePackage: (instanceId: string, rotationYDeg: number) => void
@@ -137,11 +146,47 @@ export const useConfiguration = create<ConfigurationState>((set) => ({
     return instanceId
   },
 
-  removePackage: (instanceId) =>
+  addGroup: (pieces) => {
+    if (pieces.length === 0) return null
+
+    const groupId = uniqueId()
     set((state) => ({
-      placed: state.placed.filter((p) => p.instanceId !== instanceId),
-      selectedInstanceId: state.selectedInstanceId === instanceId ? null : state.selectedInstanceId,
-    })),
+      placed: [
+        ...state.placed,
+        ...pieces.map((piece) => ({ ...piece, groupId, instanceId: uniqueId() })),
+      ],
+      // Nothing is selected on the way in. A single piece is selected because
+      // the visitor is expected to want it where they meant it; a group has no
+      // one piece to say that about, and picking one would put a toolbar around
+      // whichever chair came last.
+      selectedInstanceId: null,
+    }))
+    return groupId
+  },
+
+  // Takes the whole group when the piece asked for belongs to one: a table
+  // and its chairs are one thing to buy and one thing to be rid of, and leaving
+  // three chairs around the space where a table was is not what "remove" means
+  // on the card that put them there.
+  removePackage: (instanceId) =>
+    set((state) => {
+      const target = state.placed.find((p) => p.instanceId === instanceId)
+      if (!target) return {}
+
+      const doomed = new Set(
+        target.groupId
+          ? state.placed.filter((p) => p.groupId === target.groupId).map((p) => p.instanceId)
+          : [instanceId],
+      )
+
+      return {
+        placed: state.placed.filter((p) => !doomed.has(p.instanceId)),
+        selectedInstanceId:
+          state.selectedInstanceId !== null && doomed.has(state.selectedInstanceId)
+            ? null
+            : state.selectedInstanceId,
+      }
+    }),
 
   // The four ways a piece could be edited, each refusing a pinned one.
   //

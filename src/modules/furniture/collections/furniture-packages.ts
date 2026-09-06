@@ -45,7 +45,8 @@ export const FurniturePackages: CollectionConfig = {
       admin: {
         description:
           'The whole package as one model. Leave empty for a fitted package — its parts are ' +
-          'placed on the room instead. Anything else without one is offered nowhere.',
+          'placed on the room instead — or for a group, which is made of the pieces below. ' +
+          'Anything else without one is offered nowhere.',
       },
     },
     {
@@ -54,6 +55,68 @@ export const FurniturePackages: CollectionConfig = {
       admin: {
         components: {
           Field: '/features/admin-model-viewer/ui/ModelPreviewField#ModelPreviewField',
+        },
+      },
+    },
+    {
+      name: 'members',
+      type: 'array',
+      labels: { singular: 'Piece', plural: 'Pieces' },
+      admin: {
+        description:
+          'Several models sold as one thing — a table and its chairs. Adding a piece here ' +
+          'makes this a group: the visitor adds and removes the whole group at once, for the ' +
+          'one price above, but can then move each piece on its own like any other furniture. ' +
+          'Leave empty for an ordinary package. Arrange them in the scene below rather than ' +
+          'typing coordinates.',
+      },
+      fields: [
+        {
+          name: 'model',
+          type: 'relationship',
+          relationTo: 'models',
+          // Not required, so a model can still be deleted while a group names
+          // it: the piece is left without one, the arranger says which piece,
+          // and nothing is drawn for it. Required would turn that into a
+          // constraint violation with no way back but editing the group first.
+          admin: { description: 'A piece with no model yet is listed but not drawn.' },
+        },
+        {
+          name: 'name',
+          type: 'text',
+          admin: { description: 'What this piece is called in the arranger. Falls back to the file name.' },
+        },
+        {
+          type: 'row',
+          fields: [
+            {
+              name: 'x',
+              type: 'number',
+              defaultValue: 0,
+              admin: { description: 'Metres right of the group centre.' },
+            },
+            {
+              name: 'z',
+              type: 'number',
+              defaultValue: 0,
+              admin: { description: 'Metres forward of the group centre.' },
+            },
+            {
+              name: 'rotationYDeg',
+              type: 'number',
+              defaultValue: 0,
+              admin: { description: 'Degrees about Y.' },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'arrangement',
+      type: 'ui',
+      admin: {
+        components: {
+          Field: '/features/admin-furniture-group/ui/GroupArrangerField#GroupArrangerField',
         },
       },
     },

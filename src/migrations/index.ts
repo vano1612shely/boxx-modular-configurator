@@ -19,6 +19,7 @@ import * as migration_20260817_233000_room_types_and_tiers_as_collections from '
 import * as migration_20260819_130500_add_order_reference_and_success_copy from './20260819_130500_add_order_reference_and_success_copy';
 import * as migration_20260820_100500_add_room_restroom_flag from './20260820_100500_add_room_restroom_flag';
 import * as migration_20260823_120000_add_room_fittings from './20260823_120000_add_room_fittings';
+import * as migration_20260906_120000_add_furniture_group_members from './20260906_120000_add_furniture_group_members';
 
 export const migrations = [
   {
@@ -125,5 +126,10 @@ export const migrations = [
     up: migration_20260823_120000_add_room_fittings.up,
     down: migration_20260823_120000_add_room_fittings.down,
     name: '20260823_120000_add_room_fittings',
+  },
+  {
+    up: migration_20260906_120000_add_furniture_group_members.up,
+    down: migration_20260906_120000_add_furniture_group_members.down,
+    name: '20260906_120000_add_furniture_group_members',
   },
 ];

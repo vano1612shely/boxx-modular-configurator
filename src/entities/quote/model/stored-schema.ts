@@ -50,6 +50,26 @@ const storedPackageSchema = z.object({
   x: z.coerce.number(),
   z: z.coerce.number(),
   rotationYDeg: looseNumber(0),
+  // The pieces of a group, where the visitor left each one. Read as loosely as
+  // everything else here — a line whose pieces are unreadable is still a line,
+  // and falls back to being one thing standing at `x, z`.
+  pieces: z
+    .array(
+      z.object({
+        memberKey: z.string(),
+        x: z.coerce.number(),
+        z: z.coerce.number(),
+        rotationYDeg: looseNumber(0),
+      }),
+    )
+    .nullable()
+    .optional()
+    // Caught rather than allowed to fail the line. The same rule as everything
+    // else here: an order says what was bought and what it cost, and losing
+    // that because the arrangement inside one of its lines is unreadable would
+    // be the one thing worse than losing the arrangement.
+    .catch(undefined)
+    .transform((rows) => rows ?? []),
 })
 
 const storedExteriorSchema = z.object({

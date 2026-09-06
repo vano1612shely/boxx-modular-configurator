@@ -9,6 +9,17 @@ export {
 export { assetUrl, type UploadDoc } from './asset-url'
 export { cn } from './cn'
 export { isCoarsePointer } from './device'
+export {
+  groupBounds,
+  rotatedHalfExtents,
+  type HalfExtents,
+  type PlacedBox,
+} from './group-bounds'
+export {
+  footprintFromMeta,
+  type Footprint,
+  type MeasuredMeta,
+} from './footprint-from-meta'
 export { formatBytes, formatCount, savingPercent } from './format-size'
 export { uniqueId } from './unique-id'
 export { ok, err, type Result } from './result'

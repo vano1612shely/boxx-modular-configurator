@@ -14,14 +14,36 @@ import type { StoredQuoteExterior, StoredQuotePackage } from '@/entities/quote'
  * and a stored zone would only be a second opinion about it.
  */
 export function replayPlacements(packages: StoredQuotePackage[]): PlacedPackage[] {
-  return packages.map((line, index) => ({
-    instanceId: `order-${index}`,
-    packageId: line.packageId,
-    roomKey: line.roomKey,
-    x: line.x,
-    z: line.z,
-    rotationYDeg: line.rotationYDeg,
-  }))
+  return packages.flatMap((line, index) => {
+    // A group was saved as one line carrying its pieces, because it was one
+    // purchase. It goes back as the several things it actually is, each where
+    // the visitor left it — one table plus its chairs, not a table alone.
+    if (line.pieces?.length) {
+      return line.pieces.map((piece, pieceIndex) => ({
+        instanceId: `order-${index}-${pieceIndex}`,
+        // Shared, so the pieces still read as one set. A saved order cannot be
+        // edited, but the panel lists what is in the room and counts it.
+        groupId: `order-group-${index}`,
+        packageId: line.packageId,
+        memberKey: piece.memberKey,
+        roomKey: line.roomKey,
+        x: piece.x,
+        z: piece.z,
+        rotationYDeg: piece.rotationYDeg,
+      }))
+    }
+
+    return [
+      {
+        instanceId: `order-${index}`,
+        packageId: line.packageId,
+        roomKey: line.roomKey,
+        x: line.x,
+        z: line.z,
+        rotationYDeg: line.rotationYDeg,
+      },
+    ]
+  })
 }
 
 /**

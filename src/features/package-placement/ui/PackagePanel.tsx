@@ -269,23 +269,33 @@ function ZoneAccordion({ section, children }: { section: FloorSection; children:
   )
 }
 
-/** What a row is called: the set it came with, then the piece inside it. */
+/**
+ * One row per thing the visitor added, which is what they think they added.
+ *
+ * A group left several pieces standing in the room, but it went in as one
+ * choice and it comes out as one — so listing its pieces separately would be
+ * this panel disagreeing with every other thing the group does.
+ */
+function listRows(rows: PlacedItem[]): PlacedItem[] {
+  const seen = new Set<string>()
+
+  return rows.filter((row) => {
+    if (!row.groupId) return true
+    if (seen.has(row.groupId)) return false
+    seen.add(row.groupId)
+    return true
+  })
+}
+
+/** What a row is called: the set, when it is one, and not its first piece. */
 function label(item: PlacedItem): string {
-  const piece = item.pkg?.title ?? 'Package'
-  if (!item.group || item.group.title === piece) return piece
-  return `${item.group.title} · ${piece}`
+  return item.group?.title ?? item.pkg?.title ?? 'Package'
 }
 
-/** Whether this row carries the bin: always, unless earlier kin already does. */
-function ownsTheBin(rows: PlacedItem[], item: PlacedItem, index: number): boolean {
-  if (!item.groupId) return true
-  return rows.findIndex((row) => row.groupId === item.groupId) === index
-}
-
-function removeLabel(item: PlacedItem, rows: PlacedItem[]): string {
+function removeLabel(item: PlacedItem, all: PlacedItem[]): string {
   if (!item.groupId) return `Remove ${item.pkg?.title ?? 'package'}`
 
-  const pieces = rows.filter((row) => row.groupId === item.groupId).length
+  const pieces = all.filter((row) => row.groupId === item.groupId).length
   return `Remove ${item.group?.title ?? 'the set'} and its ${pieces} pieces`
 }
 
@@ -337,8 +347,8 @@ function SectionBody({
           In {where}
         </Eyebrow>
         <ul className="flex flex-col gap-card">
-          <For each={section.placed} getKey={(p) => p.instanceId}>
-            {(placedItem, index) => (
+          <For each={listRows(section.placed)} getKey={(p) => p.instanceId}>
+            {(placedItem) => (
               <Card
                 as="li"
                 tone="cream"
@@ -363,8 +373,11 @@ function SectionBody({
                     furniture standing in the room like the rest of the list,
                     and naming the mechanism would be talking about ourselves.
                     Removing it is the same button as for a chair. */}
+                {/* And a group is a label for the same reason: the row stands
+                    for the whole set, so there is no one piece for a toolbar to
+                    turn. Its pieces are picked in the scene, where they are. */}
                 <Show
-                  when={!placedItem.pinned}
+                  when={!placedItem.pinned && !placedItem.groupId}
                   fallback={
                     <span className="min-w-0 flex-1 truncate px-2 py-2 text-sm">
                       {label(placedItem)}
@@ -383,22 +396,14 @@ function SectionBody({
                     {label(placedItem)}
                   </button>
                 </Show>
-                {/* One bin per group, on the piece that opens it. Every piece
-                    still has its own row, because a chair pushed under a desk is
-                    behind it from every angle and this list is the way back to
-                    it — but the group came in as one thing and goes out as one,
-                    and four bins that each empty the whole set is four ways to
-                    be surprised. */}
-                <Show when={ownsTheBin(section.placed, placedItem, index)}>
-                  <button
-                    type="button"
-                    onClick={() => vm.onRemovePackage(placedItem.instanceId)}
-                    aria-label={removeLabel(placedItem, section.placed)}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </Show>
+                <button
+                  type="button"
+                  onClick={() => vm.onRemovePackage(placedItem.instanceId)}
+                  aria-label={removeLabel(placedItem, section.placed)}
+                  className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Trash2 size={16} />
+                </button>
               </Card>
             )}
           </For>

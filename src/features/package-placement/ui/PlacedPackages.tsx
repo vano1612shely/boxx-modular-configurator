@@ -123,8 +123,14 @@ function placementObstacles(
       x: placement.x,
       z: placement.z,
       rotationYDeg: placement.rotationYDeg,
-      footprint: footprintOf(placement.packageId, pkg.footprint),
-      shape: shapeOf(placement.packageId),
+      // Asked of the resolved package, not of `placement.packageId`. For an
+      // ordinary piece of furniture the two are the same id. For one piece of a
+      // group they are not: the placement names the group, and asking the caches
+      // for that gave the chair the whole set's rectangle and no measured shape
+      // at all — so a chair could not be pushed under its own table, and the
+      // shape test everything else enjoys quietly fell back to boxes.
+      footprint: footprintOf(pkg.id, pkg.footprint),
+      shape: shapeOf(pkg.id),
     },
   ]
 }

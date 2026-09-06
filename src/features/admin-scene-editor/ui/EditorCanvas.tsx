@@ -629,8 +629,13 @@ function BuildingGlb({
       return
     }
 
+    // The roof follows its own switch, storey or no storey. It used to be given
+    // up on the moment one was previewed, on the assumption that the storey cut
+    // took the roof with it — but a top storey's volume reaches over the roof by
+    // construction, so the keep box holds onto it and "Hidden" quietly stopped
+    // meaning anything on the one storey where it is most in the way.
     controller.setHideBoxes(
-      !storey && vm.roofHidden ? (draft.sceneConfig?.roofBlocks ?? []).map(toZone) : [],
+      vm.roofHidden ? (draft.sceneConfig?.roofBlocks ?? []).map(toZone) : [],
     )
   })
 

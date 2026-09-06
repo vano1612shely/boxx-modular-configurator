@@ -134,6 +134,18 @@ function Scene({ vm, selected, onSelect, onFootprint, footprints }: SceneProps) 
   const drag = useRef<{ index: number; grabX: number; grabZ: number; x: number; z: number } | null>(
     null,
   )
+  /**
+   * Whether the gesture in progress began on bare floor.
+   *
+   * Clicking the floor is how a selection is let go of, and r3f raises that
+   * click on the pointer going *up* — which is the same moment a press that
+   * began on a piece ends. So picking a piece selected it and then dropped it
+   * again the instant the button came up, and the controls for it were only
+   * ever on screen while the button was held down. A press that lands on a
+   * piece stops propagating and the floor never sees it, which is exactly what
+   * tells the two gestures apart.
+   */
+  const fromFloor = useRef(false)
 
   const clashes = useMemo(
     () =>
@@ -150,6 +162,7 @@ function Scene({ vm, selected, onSelect, onFootprint, footprints }: SceneProps) 
 
   const start = (index: number) => (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
+    fromFloor.current = false
     // The camera and the piece share one canvas; without this the scene turns
     // under the very thing being dragged.
     if (controls.current) controls.current.enabled = false
@@ -206,10 +219,15 @@ function Scene({ vm, selected, onSelect, onFootprint, footprints }: SceneProps) 
           bare floor is how a selection is let go of. */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
+        onPointerDown={() => {
+          fromFloor.current = true
+        }}
         onPointerMove={move}
         onPointerUp={end}
         onPointerLeave={end}
-        onClick={() => onSelect(null)}
+        onClick={() => {
+          if (fromFloor.current) onSelect(null)
+        }}
       >
         <planeGeometry args={[200, 200]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useAllFormFields } from '@payloadcms/ui'
+import { useAllFormFields, useForm } from '@payloadcms/ui'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { assetUrl } from '@/shared/lib'
@@ -88,6 +88,12 @@ function useModelUrls(ids: ReadonlyArray<number>): Map<number, string> {
  */
 export function useGroupArrangerModel() {
   const [fields, dispatch] = useAllFormFields()
+  // Writing a value into the field state is not the same as telling the form
+  // something changed: Payload keeps `modified` of its own, the Save button is
+  // disabled until it turns true, and only the field components set it. Moving
+  // a piece here therefore changed the numbers and left Save greyed out, with
+  // no way to keep the arrangement but to nudge one of them by hand.
+  const { setModified } = useForm()
 
   const rows = useMemo(() => {
     const count = Array.isArray(fields.members?.rows) ? fields.members.rows.length : 0
@@ -119,8 +125,9 @@ export function useGroupArrangerModel() {
   const write = useCallback(
     (index: number, field: 'x' | 'z' | 'rotationYDeg', value: number) => {
       dispatch({ type: 'UPDATE', path: `members.${index}.${field}`, value })
+      setModified(true)
     },
-    [dispatch],
+    [dispatch, setModified],
   )
 
   /** Millimetres are noise on a piece of furniture; centimetres are not. */

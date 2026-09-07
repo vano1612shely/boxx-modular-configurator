@@ -61,13 +61,14 @@ function labelOf(marker: RoomMarker): string {
  * another, and on a phone the whole building is a few hundred pixels across, so
  * the names print over each other and none of them can be read.
  *
- * Where each one goes is `declutterLabels`; this is the half that has to be
- * done in the frame loop. Two things here, and both were learned the hard way.
- * The target is recomputed only when the camera has actually moved — every
- * frame is wasted work and, worse, a source of shake. And the chip is eased
- * towards it rather than put there, so a marker that has to give way slides
- * over instead of appearing somewhere else; the easing also absorbs the moment
- * two rooms trade places, which is a glide rather than a jump.
+ * Where each one goes is `declutterLabels`, which shares the move out among the
+ * crowd so no single chip is carried far; this is the half that has to be done
+ * in the frame loop. Two things here, and both were learned the hard way. The
+ * target is recomputed only when the camera has actually moved — every frame is
+ * wasted work and, worse, a source of shake. And the chip is eased towards it
+ * rather than put there, so a marker that has to give way slides over instead
+ * of appearing somewhere else, and a crowd that breaks up as the camera turns
+ * drifts home rather than snapping there.
  *
  * Written straight onto the elements. Re-rendering a dozen drei `<Html>`
  * portals per frame is the one thing that would make turning the building cost
@@ -121,10 +122,7 @@ function useDeclutter(markers: RoomMarker[], active: boolean) {
         }
       })
 
-      // Fed its own last answer, so a label that has already given way keeps
-      // the side it gave way on for as long as that side works.
-      const held = markers.map((marker) => target.current.get(marker.key) ?? 0)
-      const offsets = declutterLabels(boxes, held)
+      const offsets = declutterLabels(boxes)
       markers.forEach((marker, index) => target.current.set(marker.key, offsets[index]))
     }
 

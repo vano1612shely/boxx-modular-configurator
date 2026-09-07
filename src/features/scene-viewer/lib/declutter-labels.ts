@@ -5,127 +5,121 @@ export type LabelBox = {
   y: number
   width: number
   height: number
-  /** Distance from the camera to what it names. The nearest one keeps its place. */
+  /** Distance from the camera to what it names. Only used to break ties. */
   depth: number
 }
 
-/**
- * How finely the search steps outwards, in pixels.
- *
- * Two is under the eye's notice once the move is animated, and it keeps the
- * search to a couple of dozen tries per label.
- */
-const STEP = 2
+/** Pixels left between two labels that had to be moved apart. */
+const GAP = 4
 
 /**
  * How far a label may be lifted off its own room, in pixels.
  *
- * A marker means "this room, here", and past a certain distance it stops saying
- * that — better a little overlap than a chip hovering over the wrong half of
- * the building. When nothing within reach is clear the label simply stays where
- * it belongs and takes the overlap.
+ * A marker means "this room, here", and one carried far enough stops pointing at
+ * anything — on a building a couple of hundred pixels high it ends up over the
+ * lawn. This is one chip's height and a little over: enough to let three in a
+ * row settle, and no more.
+ *
+ * It binds far less often than it looks. Because the crowd shares the move, a
+ * crowded *pair* — much the commonest case — steps only half a chip either way
+ * and never comes near this. Only three or more on one spot reach it, and past
+ * it they are left to overlap rather than walked off the building.
  */
-const MAX_SHIFT = 44
+const MAX_SHIFT = 28
 
-type Rect = { left: number; right: number; top: number; bottom: number }
+type Placed = { index: number; box: LabelBox }
 
-function rectOf(box: LabelBox, offset: number): Rect {
-  return {
-    left: box.x - box.width / 2,
-    right: box.x + box.width / 2,
-    top: box.y - box.height / 2 + offset,
-    bottom: box.y + box.height / 2 + offset,
-  }
+/** Whether two labels would print over each other where they naturally fall. */
+function crowds(a: LabelBox, b: LabelBox): boolean {
+  const apartX = Math.abs(a.x - b.x) >= (a.width + b.width) / 2
+  const apartY = Math.abs(a.y - b.y) >= (a.height + b.height) / 2 + GAP
+  return !apartX && !apartY
 }
 
-function hits(a: Rect, b: Rect): boolean {
-  return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom)
+/**
+ * The labels that crowd each other, gathered into groups.
+ *
+ * Not pairs: three markers in a row are one problem, and solving them two at a
+ * time moves the middle one twice.
+ */
+function clusters(items: ReadonlyArray<Placed>): Placed[][] {
+  const groups: Placed[][] = []
+  const home = new Map<number, number>()
+
+  for (const item of items) {
+    const joined = new Set<number>()
+    for (const other of items) {
+      if (other.index === item.index) continue
+      const group = home.get(other.index)
+      if (group !== undefined && crowds(item.box, other.box)) joined.add(group)
+    }
+
+    if (joined.size === 0) {
+      home.set(item.index, groups.length)
+      groups.push([item])
+      continue
+    }
+
+    // Touching two groups at once merges them: one label can be the thing that
+    // ties one crowd to another.
+    const [keep, ...rest] = [...joined].sort((a, b) => a - b)
+    groups[keep].push(item)
+    home.set(item.index, keep)
+
+    for (const merged of rest) {
+      for (const moved of groups[merged]) home.set(moved.index, keep)
+      groups[keep].push(...groups[merged])
+      groups[merged] = []
+    }
+  }
+
+  return groups.filter((group) => group.length > 1)
 }
 
 /**
  * How far each label should move so the crowded ones can still be read.
  *
- * Ordered by distance from the camera, not by where they land on screen. The
- * nearest label keeps its place and the ones behind it give way — and because
- * depth changes smoothly as the camera goes round, so does the answer. Screen
- * order was the first thing tried and it flips the moment two rooms pass each
- * other, which sends every label in the scene somewhere else at once.
+ * Spread about the middle of the crowd, not pushed off one another. Pinning the
+ * nearest label and shoving its neighbour clear was the obvious thing and it is
+ * wrong: one chip then carries the whole separation — a chip's height and more —
+ * and lands somewhere with no room under it, while the one that kept its place
+ * looks untouched. Sharing the move means two crowded markers step half as far
+ * each and both stay over the rooms they name.
  *
- * Moved by the least that clears, up or down, rather than stacked downwards:
- * a stack walks the whole crowd off the building, and the shortest way out
- * keeps each chip as near its own room as the crowding allows. Never further
- * than `MAX_SHIFT`; a label with nowhere to go stays put and overlaps, which is
- * the honest failure — it is still pointing at its own room.
+ * Ordered by where they already are, so nothing crosses anything on the way and
+ * what comes out matches what is underneath. Depth only settles ties, so two
+ * labels at the same height come out the same way round every frame.
  *
  * Only vertical. Sideways a chip stops pointing at its room and starts pointing
  * at its neighbour's, which is the one thing a marker must not do.
  *
- * A label that has not been measured yet — width or height of zero — is left
- * where it is and pushes nobody.
+ * Never further than `MAX_SHIFT`. A crowd too big for that budget is spread as
+ * far as the budget goes and left to overlap the rest, rather than being walked
+ * off the building. A label that has not been measured yet — width or height of
+ * zero — is left where it is.
  */
-export function declutterLabels(
-  boxes: ReadonlyArray<LabelBox>,
-  previous: ReadonlyArray<number> = [],
-): number[] {
+export function declutterLabels(boxes: ReadonlyArray<LabelBox>): number[] {
   const offsets = new Array<number>(boxes.length).fill(0)
 
-  const order = boxes
+  const measured = boxes
     .map((box, index) => ({ box, index }))
     .filter(({ box }) => box.width > 0 && box.height > 0)
-    .sort((a, b) => a.box.depth - b.box.depth || a.index - b.index)
 
-  const placed: Rect[] = []
+  for (const group of clusters(measured)) {
+    const inOrder = [...group].sort(
+      (a, b) => a.box.y - b.box.y || a.box.depth - b.box.depth || a.index - b.index,
+    )
 
-  for (const { box, index } of order) {
-    const rest = rectOf(box, 0)
+    const pitch = Math.max(...inOrder.map(({ box }) => box.height)) + GAP
+    const middle = inOrder.reduce((sum, { box }) => sum + box.y, 0) / inOrder.length
+    const first = middle - (pitch * (inOrder.length - 1)) / 2
 
-    // Home first: a label goes back to its own room the moment the room next
-    // to it stops needing the space.
-    if (!placed.some((other) => hits(rest, other))) {
-      placed.push(rest)
-      continue
-    }
-
-    // Then wherever it already was, if that still works. Without this the
-    // search picks afresh every time the crowd shifts, and a label that was
-    // sitting happily above its neighbour swings to below it and back as the
-    // camera goes round — a smooth slide, but across the whole allowance and
-    // for no reason the visitor can see.
-    const held = previous[index] ?? 0
-    if (held !== 0 && Math.abs(held) <= MAX_SHIFT) {
-      const where = rectOf(box, held)
-      if (!placed.some((other) => hits(where, other))) {
-        offsets[index] = held
-        placed.push(where)
-        continue
-      }
-    }
-
-    // Outwards from home, a step at a time, taking the first clear spot. It
-    // was tempting to jump straight to "flush above or below whatever is in
-    // the way", and that is shorter, but it packs badly: the second label
-    // takes the space the third one needed and the third is left with nowhere
-    // inside the limit at all. Walking out finds the nearest gap wherever it
-    // is, and alternating the sign spreads a crowd either side of the room
-    // rather than dragging all of it downwards.
-    let best = 0
-
-    for (let distance = STEP; distance <= MAX_SHIFT; distance += STEP) {
-      const up = rectOf(box, -distance)
-      if (!placed.some((other) => hits(up, other))) {
-        best = -distance
-        break
-      }
-
-      const down = rectOf(box, distance)
-      if (!placed.some((other) => hits(down, other))) {
-        best = distance
-        break
-      }
-    }
-
-    offsets[index] = best
-    placed.push(rectOf(box, best))
+    inOrder.forEach(({ box, index }, position) => {
+      const wanted = first + position * pitch - box.y
+      // Clamped rather than abandoned: half a step apart still reads better
+      // than none, and it keeps the chip over its own room.
+      offsets[index] = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, wanted))
+    })
   }
 
   return offsets

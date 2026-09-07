@@ -41,143 +41,101 @@ describe('declutterLabels', () => {
     expect(declutterLabels([])).toEqual([])
   })
 
-  /** The room in front is the one being looked at; it keeps its place. */
-  it('leaves the nearest label alone and moves the one behind it', () => {
-    const near = label({ depth: 4 })
-    const far = label({ depth: 9 })
-
-    expect(declutterLabels([near, far])[0]).toBe(0)
-    expect(declutterLabels([near, far])[1]).not.toBe(0)
-    // And the same however the two are listed.
-    expect(declutterLabels([far, near])[1]).toBe(0)
-    expect(declutterLabels([far, near])[0]).not.toBe(0)
-  })
-
-  it('moves by the least that clears, not by a fixed stack', () => {
-    // The far label sits just below the near one, so the way out is downwards
-    // and it is short: half of each height, less what already separates them.
-    const boxes = [label({ depth: 4, y: 0 }), label({ depth: 9, y: 10 })]
-    const [, moved] = declutterLabels(boxes)
-
-    expect(moved).toBeGreaterThan(0)
-    expect(moved).toBeLessThan(24)
-    expect(anyOverlap(boxes)).toBe(false)
-  })
-
-  it('goes up when up is the shorter way out', () => {
-    const boxes = [label({ depth: 4, y: 0 }), label({ depth: 9, y: -10 })]
-    expect(declutterLabels(boxes)[1]).toBeLessThan(0)
-    expect(anyOverlap(boxes)).toBe(false)
-  })
-
-  it('clears a crowd rather than only the first one in the way', () => {
-    const boxes = [label({ depth: 3, y: 0 }), label({ depth: 4, y: 8 }), label({ depth: 5, y: 16 })]
-    expect(anyOverlap(boxes)).toBe(false)
-  })
-
   /**
-   * Three chips of this height fit inside the limit and a fourth does not, so
-   * the fourth takes the overlap rather than being carried off its room. What
-   * matters is that the three that did fit are still readable — a crowd past
-   * what the budget holds must not undo the work done for the rest of it.
+   * The whole point. One chip carrying the separation on its own lands over
+   * nothing; sharing it keeps both over the rooms they name.
    */
-  it('places what it can when a crowd is past what the limit holds', () => {
-    const boxes = Array.from({ length: 5 }, (_, i) => label({ depth: i + 1, y: i * 8 }))
-    const offsets = declutterLabels(boxes)
+  describe('sharing the move', () => {
+    it('spreads a crowded pair about their middle, not off one another', () => {
+      const boxes = [label({ y: 0 }), label({ y: 0 })]
+      const [up, down] = declutterLabels(boxes)
+
+      expect(up).toBe(-down)
+      expect(Math.abs(up)).toBeCloseTo(14, 5)
+      expect(anyOverlap(boxes)).toBe(false)
+    })
+
+    it('keeps every move inside the budget', () => {
+      const boxes = Array.from({ length: 4 }, () => label())
+      const offsets = declutterLabels(boxes)
+
+      expect(Math.max(...offsets.map(Math.abs))).toBeLessThanOrEqual(28)
+    })
+
+    it('leaves the middle of a row of three where it was', () => {
+      const boxes = [label({ y: -6 }), label({ y: 0 }), label({ y: 6 })]
+      const at = middles(boxes)
+
+      // The one in the middle of the crowd is already at the middle of it.
+      expect(at[1]).toBeCloseTo(0, 5)
+      expect(at[0]).toBeLessThan(at[1])
+      expect(at[2]).toBeGreaterThan(at[1])
+      expect(anyOverlap(boxes)).toBe(false)
+    })
+  })
+
+  it('keeps them in the order they were already in', () => {
+    const boxes = [label({ y: 10 }), label({ y: -10 }), label({ y: 0 })]
     const at = middles(boxes)
 
-    expect(Math.max(...offsets.map(Math.abs))).toBeLessThanOrEqual(44)
-    // The nearest three are spread far enough apart to read.
-    expect(Math.abs(at[1] - at[0])).toBeGreaterThanOrEqual(24)
-    expect(Math.abs(at[2] - at[0])).toBeGreaterThanOrEqual(24)
+    // Lowest stays lowest, highest stays highest: nothing crosses anything.
+    expect(at[1]).toBeLessThan(at[2])
+    expect(at[2]).toBeLessThan(at[0])
   })
 
-  it('does not move a label away from one it is already clear of sideways', () => {
-    const boxes = [label({ x: 0 }), label({ x: 140, depth: 20 })]
+  it('does not move a label away from one it is clear of sideways', () => {
+    const boxes = [label({ x: 0 }), label({ x: 140 })]
     expect(declutterLabels(boxes)).toEqual([0, 0])
   })
 
+  it('treats a row of three as one crowd rather than two pairs', () => {
+    // Solved pairwise the middle one would be moved twice, once by each side.
+    const boxes = [label({ y: 0 }), label({ y: 10 }), label({ y: 20 })]
+    expect(anyOverlap(boxes)).toBe(false)
+    expect(Math.max(...declutterLabels(boxes).map(Math.abs))).toBeLessThanOrEqual(28)
+  })
+
+  it('joins two crowds when one label bridges them', () => {
+    const boxes = [label({ x: 0 }), label({ x: 90 }), label({ x: 180 })]
+    // The middle one overlaps both ends, so all three are one problem.
+    expect(anyOverlap(boxes)).toBe(false)
+  })
+
   /**
-   * Better a little overlap than a chip hovering over the wrong half of the
-   * building: past the limit the label stays over the room it names.
+   * A pile past what the budget holds is spread as far as it goes and left to
+   * overlap the rest — better than walking half the markers off the building.
    */
-  it('gives up rather than carry a label off its own room', () => {
-    // Eight labels on one spot: the last of them has nowhere within reach.
+  it('spreads what it can when a crowd is past the budget', () => {
     const boxes = Array.from({ length: 8 }, (_, i) => label({ depth: i + 1 }))
     const offsets = declutterLabels(boxes)
 
-    expect(Math.max(...offsets.map(Math.abs))).toBeLessThanOrEqual(44)
-    expect(offsets[0]).toBe(0)
-  })
-
-  /**
-   * The reason the order is depth and not screen position: two rooms passing
-   * each other as the camera goes round must not disturb anybody else.
-   */
-  it('is unmoved by two labels swapping places on screen', () => {
-    const other = label({ x: 400, depth: 30 })
-    const before = declutterLabels([label({ y: 0, depth: 4 }), label({ y: 6, depth: 9 }), other])
-    const after = declutterLabels([label({ y: 6, depth: 4 }), label({ y: 0, depth: 9 }), other])
-
-    expect(before[2]).toBe(0)
-    expect(after[2]).toBe(0)
+    expect(Math.max(...offsets.map(Math.abs))).toBeLessThanOrEqual(28)
+    expect(offsets.some((offset) => offset !== 0)).toBe(true)
   })
 
   it('settles the same way however the rooms happen to be listed', () => {
-    const boxes = [
-      label({ x: 0, y: 0, depth: 3 }),
-      label({ x: 10, y: 10, depth: 6 }),
-      label({ x: 20, y: 20, depth: 9 }),
-    ]
+    const boxes = [label({ x: 0, y: 0 }), label({ x: 10, y: 10 }), label({ x: 20, y: 20 })]
     const forwards = middles(boxes)
     const backwards = middles([...boxes].reverse()).reverse()
 
     expect(forwards).toEqual(backwards)
   })
 
+  it('breaks a tie by depth, so two on one spot come out the same way round', () => {
+    const offsets = declutterLabels([label({ depth: 9 }), label({ depth: 4 })])
+    // The nearer one takes the upper place, whichever order they are listed in.
+    expect(offsets[1]).toBeLessThan(offsets[0])
+  })
+
   it('leaves an unmeasured label alone, and lets it shove nobody', () => {
-    const boxes = [label({ width: 0, height: 0, depth: 1 }), label({ depth: 5 })]
+    const boxes = [label({ width: 0, height: 0 }), label()]
     expect(declutterLabels(boxes)).toEqual([0, 0])
   })
-})
 
-/**
- * The crowd shifts as the camera goes round, and a label that has already
- * given way must not keep changing its mind about which side to give way on —
- * it slides the whole allowance and back for no reason the visitor can see.
- */
-describe('declutterLabels, holding its place', () => {
-  const crowd = [label({ depth: 3, y: 0 }), label({ depth: 6, y: 6 })]
+  it('settles: once moved, the arrangement asks for no further move', () => {
+    const boxes = [label({ y: 0 }), label({ y: 8 }), label({ y: 16 })]
+    const settled = boxes.map((box, i) => ({ ...box, y: box.y + declutterLabels(boxes)[i] }))
 
-  it('keeps a label where it already is when that still works', () => {
-    const fresh = declutterLabels(crowd)
-    // Told it is currently on the other side, and that side is clear too.
-    const held = declutterLabels(crowd, [0, -30])
-
-    expect(fresh[1]).toBeGreaterThan(0)
-    expect(held[1]).toBe(-30)
-  })
-
-  it('brings it home the moment its room is free again', () => {
-    const apart = [label({ depth: 3, y: 0 }), label({ depth: 6, y: 200 })]
-    expect(declutterLabels(apart, [0, -30])).toEqual([0, 0])
-  })
-
-  it('moves it when where it was stops working', () => {
-    // Held at -30, but another label is now sitting there.
-    const three = [label({ depth: 3, y: 0 }), label({ depth: 4, y: -30 }), label({ depth: 6, y: 6 })]
-    const out = declutterLabels(three, [0, 0, -30])
-
-    expect(out[2]).not.toBe(-30)
-    expect(anyOverlap(three)).toBe(false)
-  })
-
-  it('settles: what it returns, fed back in, comes out unchanged', () => {
-    let state = declutterLabels(crowd)
-    for (let frame = 0; frame < 8; frame++) {
-      const next = declutterLabels(crowd, state)
-      expect(next).toEqual(state)
-      state = next
-    }
+    expect(declutterLabels(settled)).toEqual([0, 0, 0])
   })
 })

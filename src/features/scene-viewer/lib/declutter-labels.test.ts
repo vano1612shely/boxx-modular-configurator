@@ -1,99 +1,101 @@
 import { describe, expect, it } from 'vitest'
 
-import { declutterLabels, type LabelBox } from './declutter-labels'
+import { hiddenLabels, type LabelBox } from './declutter-labels'
 
-/** A chip-sized label: 100 px of words, 32 px tall. */
+/** A chip-sized label: 100 px of words, 32 px tall, ten metres out. */
 function label(over: Partial<LabelBox> = {}): LabelBox {
-  return { x: 0, y: 0, width: 100, height: 32, ...over }
+  return { x: 0, y: 0, width: 100, height: 32, depth: 10, ...over }
 }
 
-/** Where a label ends up: its own middle plus whatever it was moved by. */
-function middles(boxes: LabelBox[]): number[] {
-  const offsets = declutterLabels(boxes)
-  return boxes.map((box, i) => box.y + offsets[i])
-}
-
-/** Whether any two of them still print over each other. */
-function anyOverlap(boxes: LabelBox[]): boolean {
-  const at = middles(boxes)
-
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const a = { ...boxes[i], y: at[i] }
-      const b = { ...boxes[j], y: at[j] }
-      const apartX = Math.abs(a.x - b.x) >= (a.width + b.width) / 2
-      const apartY = Math.abs(a.y - b.y) >= (a.height + b.height) / 2
-      if (!apartX && !apartY) return true
-    }
-  }
-
-  return false
-}
-
-describe('declutterLabels', () => {
+describe('hiddenLabels', () => {
   it('leaves labels that already clear each other alone', () => {
-    const boxes = [label({ x: 0, y: 0 }), label({ x: 200, y: 0 }), label({ x: 0, y: 100 })]
-    expect(declutterLabels(boxes)).toEqual([0, 0, 0])
+    const boxes = [label({ x: 0 }), label({ x: 200 }), label({ y: 100 })]
+    expect(hiddenLabels(boxes)).toEqual(new Set())
   })
 
-  it('moves nothing when there is only one', () => {
-    expect(declutterLabels([label()])).toEqual([0])
-    expect(declutterLabels([])).toEqual([])
+  it('has nothing to say about one label, or none', () => {
+    expect(hiddenLabels([label()])).toEqual(new Set())
+    expect(hiddenLabels([])).toEqual(new Set())
   })
 
-  it('stacks a pile of labels on one spot into a readable column', () => {
-    const boxes = [label(), label(), label()]
-    expect(anyOverlap(boxes)).toBe(false)
+  /** The room in front is the one being looked at; the one behind it is not. */
+  it('drops the further of two labels standing on the same spot', () => {
+    const near = label({ depth: 4 })
+    const far = label({ depth: 9 })
 
-    // The highest one keeps its place; the rest go under it, in order.
-    const at = middles(boxes)
-    expect(at[0]).toBe(0)
-    expect(at[1]).toBeGreaterThan(at[0])
-    expect(at[2]).toBeGreaterThan(at[1])
+    expect(hiddenLabels([near, far])).toEqual(new Set([1]))
+    expect(hiddenLabels([far, near])).toEqual(new Set([0]))
   })
 
-  it('separates labels that only just touch along the words', () => {
-    // Two rooms side by side: the points are 60 px apart, the words 100 px wide.
-    const boxes = [label({ x: 0, y: 0 }), label({ x: 60, y: 4 })]
-    expect(anyOverlap(boxes)).toBe(false)
-  })
-
-  it('does not move a label away from one it is already clear of sideways', () => {
-    // Same height, but far enough apart across the screen to both be read.
-    const boxes = [label({ x: 0, y: 0 }), label({ x: 140, y: 0 })]
-    expect(declutterLabels(boxes)).toEqual([0, 0])
+  it('keeps the nearest of a whole pile and drops the rest', () => {
+    const boxes = [label({ depth: 8 }), label({ depth: 3 }), label({ depth: 12 })]
+    expect(hiddenLabels(boxes)).toEqual(new Set([0, 2]))
   })
 
   /**
-   * The chip pushed down must be checked against everything again, not only
-   * against what it first hit — a third label may be waiting exactly where the
-   * second one was sent.
+   * The building seen edge-on: every room projects into one band. Dropping is
+   * the only honest answer — there is nowhere to move a label to that is still
+   * over its own room.
    */
-  it('re-checks a label against the ones it lands among', () => {
-    const boxes = [label({ y: 0 }), label({ y: 20 }), label({ y: 42 }), label({ y: 64 })]
-    expect(anyOverlap(boxes)).toBe(false)
+  it('thins a row of labels crowded along one line', () => {
+    const boxes = [
+      label({ x: 0, depth: 5 }),
+      label({ x: 40, depth: 6 }),
+      label({ x: 80, depth: 7 }),
+      label({ x: 400, depth: 8 }),
+    ]
+    const out = hiddenLabels(boxes)
+
+    // The nearest keeps its place, its two neighbours go, and the one far
+    // across the screen is untouched.
+    expect(out.has(0)).toBe(false)
+    expect(out.has(3)).toBe(false)
+    expect(out.has(1)).toBe(true)
   })
 
-  it('settles the same way however the rooms happen to be listed', () => {
-    const boxes = [label({ x: 0, y: 0 }), label({ x: 10, y: 10 }), label({ x: 20, y: 20 })]
-    const forwards = middles(boxes)
-    const backwards = middles([...boxes].reverse()).reverse()
+  describe('the dead band', () => {
+    /** Just clear, by less than the slack: a shown label stays shown. */
+    const nearlyTouching = [label({ x: 0, depth: 4 }), label({ x: 104, depth: 9 })]
 
-    expect(forwards).toEqual(backwards)
+    it('keeps a label that is only just clear, once it is on screen', () => {
+      expect(hiddenLabels(nearlyTouching, new Set())).toEqual(new Set())
+    })
+
+    it('holds a hidden label back until it clears by more than the slack', () => {
+      // The same geometry judged the harder way, because it is currently out.
+      expect(hiddenLabels(nearlyTouching, new Set([1]))).toEqual(new Set([1]))
+
+      // Moved properly clear, it comes back.
+      const apart = [nearlyTouching[0], { ...nearlyTouching[1], x: 130 }]
+      expect(hiddenLabels(apart, new Set([1]))).toEqual(new Set())
+    })
+
+    it('does not flicker when nothing moves', () => {
+      let state = hiddenLabels(nearlyTouching)
+      for (let frame = 0; frame < 10; frame++) {
+        const next = hiddenLabels(nearlyTouching, state)
+        expect(next).toEqual(state)
+        state = next
+      }
+    })
   })
 
-  it('leaves an unmeasured label alone, and lets it shove nobody', () => {
-    const boxes = [label({ width: 0, height: 0 }), label(), label()]
-    const offsets = declutterLabels(boxes)
-
-    expect(offsets[0]).toBe(0)
-    // The two real ones still sort themselves out around it.
-    expect(offsets[1]).toBe(0)
-    expect(offsets[2]).toBeGreaterThan(0)
+  it('leaves an unmeasured label showing, and lets it hide nobody', () => {
+    const boxes = [label({ width: 0, height: 0, depth: 1 }), label({ depth: 5 })]
+    expect(hiddenLabels(boxes)).toEqual(new Set())
   })
 
-  it('keeps its nerve on a whole building of rooms in one place', () => {
-    const boxes = Array.from({ length: 9 }, (_, i) => label({ x: i, y: i }))
-    expect(anyOverlap(boxes)).toBe(false)
+  /**
+   * Depth changes smoothly as the camera goes round, so the answer does too —
+   * which is the whole reason it is depth and not screen position. Two rooms
+   * passing each other must not disturb a label on the far side of the screen.
+   */
+  it('does not disturb a distant label when two others swap places', () => {
+    const far = label({ x: 500, depth: 20 })
+    const before = hiddenLabels([label({ depth: 4 }), label({ depth: 5 }), far])
+    const after = hiddenLabels([label({ depth: 5 }), label({ depth: 4 }), far])
+
+    expect(before.has(2)).toBe(false)
+    expect(after.has(2)).toBe(false)
   })
 })

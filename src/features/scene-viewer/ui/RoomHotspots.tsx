@@ -11,7 +11,7 @@ import { cn } from '@/shared/lib'
 import { Chip } from '@/shared/ui/boxx'
 import { For } from '@/shared/ui/control-flow'
 
-import { declutterLabels, type LabelBox } from '../lib/declutter-labels'
+import { hiddenLabels, type LabelBox } from '../lib/declutter-labels'
 import type { RoomMarker } from '../lib/room-markers'
 
 type Props = {
@@ -43,33 +43,44 @@ function labelOf(marker: RoomMarker): string {
 }
 
 /**
- * Keeps the chips off each other as the building turns.
+ * Hides the chips that would print over a nearer one.
  *
  * Nine rooms in a small building put their markers within a chip's width of one
- * another, and on a phone the whole building is a few hundred pixels across —
- * so the names print over each other and none of them can be read. Where each
- * one lands is a question about the screen, not about the scene, so it is
- * answered here rather than by moving the anchors in the model: the chip still
- * belongs to its own room, it is only lifted clear of its neighbour.
+ * another, and on a phone the whole building is a few hundred pixels across, so
+ * the names print over each other and none of them can be read.
  *
- * Written straight onto the elements in the frame loop rather than through
- * state. This runs whenever the camera moves, and re-rendering a dozen drei
- * `<Html>` portals per frame is the one thing that would make turning the
- * building cost more than drawing it.
+ * Nothing is moved to fix that. A chip that is nudged aside stops standing over
+ * the room it names, and seen from the side — where every room in the building
+ * falls into one narrow band — there is nowhere to move it to that is still
+ * over a room at all. The crowded ones are dropped instead, and the one in
+ * front is the one kept.
+ *
+ * Recomputed only when the camera has actually moved. Doing it every frame is
+ * both wasted work and a source of shake: two labels sitting on the edge of a
+ * decision will trade places with any drift, which is what the dead band in
+ * `hiddenLabels` is for and what this skip removes the rest of.
  */
 function useDeclutter(markers: RoomMarker[], active: boolean) {
   const chips = useRef(new Map<string, HTMLDivElement>())
   /** Measured once per chip: the words do not change while the page is open. */
   const sizes = useRef(new Map<string, { width: number; height: number }>())
-  const written = useRef(new Map<string, number>())
+  const hidden = useRef<Set<number>>(new Set())
+  const lastView = useRef('')
   const point = useMemo(() => new Vector3(), [])
 
   useFrame(({ camera, size }) => {
     if (!active) return
 
+    // Sixteen numbers of the camera's pose, plus the canvas. Cheaper than the
+    // projection it guards, and it is exactly what the answer depends on.
+    const view = `${camera.matrixWorld.elements.join(',')}|${size.width}x${size.height}|${markers.length}`
+    if (view === lastView.current) return
+    lastView.current = view
+
     const boxes: LabelBox[] = markers.map((marker) => {
       const element = chips.current.get(marker.key)
-      if (!element) return { x: 0, y: 0, width: 0, height: 0 }
+      const blank = { x: 0, y: 0, width: 0, height: 0, depth: 0 }
+      if (!element) return blank
 
       let measured = sizes.current.get(marker.key)
       if (!measured || measured.width === 0) {
@@ -79,31 +90,37 @@ function useDeclutter(markers: RoomMarker[], active: boolean) {
         if (measured.width > 0) sizes.current.set(marker.key, measured)
       }
 
-      point.set(...anchorOf(marker)).project(camera)
-      // Behind the camera: it comes back mirrored and would drag the labels in
-      // front of it out of the way of something nobody can see.
-      if (point.z > 1) return { x: 0, y: 0, width: 0, height: 0 }
+      point.set(...anchorOf(marker))
+      const depth = point.distanceTo(camera.position)
+      point.project(camera)
+      // Behind the camera: it comes back mirrored, and a label nobody can see
+      // must not hide one they can.
+      if (point.z > 1) return blank
 
       return {
         x: (point.x * 0.5 + 0.5) * size.width,
         y: (-point.y * 0.5 + 0.5) * size.height,
         width: measured.width,
         height: measured.height,
+        depth,
       }
     })
 
-    const offsets = declutterLabels(boxes)
+    const next = hiddenLabels(boxes, hidden.current)
 
     markers.forEach((marker, index) => {
       const element = chips.current.get(marker.key)
       if (!element) return
+      if (next.has(index) === hidden.current.has(index)) return
 
-      const offset = Math.round(offsets[index])
-      if (written.current.get(marker.key) === offset) return
-
-      written.current.set(marker.key, offset)
-      element.style.transform = offset === 0 ? '' : `translateY(${offset}px)`
+      const out = next.has(index)
+      element.style.opacity = out ? '0' : ''
+      // Not opacity alone: a chip faded to nothing still catches the click that
+      // was meant for the building behind it.
+      element.style.visibility = out ? 'hidden' : ''
     })
+
+    hidden.current = next
   })
 
   return (key: string) => (node: HTMLDivElement | null) => {
@@ -111,7 +128,6 @@ function useDeclutter(markers: RoomMarker[], active: boolean) {
     else {
       chips.current.delete(key)
       sizes.current.delete(key)
-      written.current.delete(key)
     }
   }
 }
@@ -140,7 +156,15 @@ export function RoomHotspots({ markers, focusedKey, onOpenMarker }: Props) {
               take you, and the rest belong to rooms you cannot reach from here.
               What the room is and how big it is now lives in the header panel,
               where nothing in the scene can land on top of it. */}
-          <div ref={chipRef(marker.key)} className={cn(focusedKey !== null && 'hidden')}>
+          <div
+            ref={chipRef(marker.key)}
+            // Faded rather than switched off, so a chip giving way to a nearer
+            // one on the way round the building does it without a blink.
+            className={cn(
+              'transition-opacity duration-150',
+              focusedKey !== null && 'hidden',
+            )}
+          >
             <button
               type="button"
               onPointerDown={(event) => event.stopPropagation()}

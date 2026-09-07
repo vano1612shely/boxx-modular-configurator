@@ -123,9 +123,17 @@ export function ConfiguratorHeader({
           {(focused) => (
             <>
               <FloatingBar shape="panel" className="pointer-events-auto min-w-0 max-w-full">
-                <Pill variant="primary" leadingIcon={<ArrowLeft size={16} />} onClick={clearFocus}>
-                  <span className="hidden desktop:inline">Back to building</span>
-                  <span className="desktop:hidden">Building</span>
+                {/* Icon alone on a phone, where the room's own name is what the
+                    width is needed for. `labelFrom` keeps the words as the
+                    button's accessible name, so it is still "Back to building"
+                    to a screen reader at every size. */}
+                <Pill
+                  variant="primary"
+                  leadingIcon={<ArrowLeft size={16} />}
+                  labelFrom="desktop"
+                  onClick={clearFocus}
+                >
+                  Back to building
                 </Pill>
                 <FloatingBar.Divider />
                 <Chip icon={<DoorOpen />} className="min-w-0 shrink">

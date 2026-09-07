@@ -95,9 +95,13 @@ const overlay = tv({
         'bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2',
       /* Between the header on the left and the quote button on the right. On a
          phone those two leave no room across the top, so it drops to its own
-         row underneath rather than being squeezed between them. */
+         row underneath rather than being squeezed between them.
+         The drop is the header's own height plus the gap its column uses: a
+         `panel` bar is p-2 around an md Pill, 0.5 + 2.75 + 0.5 = 3.75rem, and
+         0.5rem after it. It was 3.5rem while the pill was shorter, which left
+         this row sitting a few pixels inside the header it is meant to clear. */
       'top-center':
-        'top-[calc(max(1rem,env(safe-area-inset-top))+3.5rem)] left-1/2 -translate-x-1/2 desktop:top-[max(1rem,env(safe-area-inset-top))]',
+        'top-[calc(max(1rem,env(safe-area-inset-top))+4.25rem)] left-1/2 -translate-x-1/2 desktop:top-[max(1rem,env(safe-area-inset-top))]',
       /* A sheet pads its own bottom inset, so its surface keeps reaching the
          screen edge instead of leaving a strip of canvas under the home bar. */
       'bottom-sheet': 'inset-x-0 bottom-0',

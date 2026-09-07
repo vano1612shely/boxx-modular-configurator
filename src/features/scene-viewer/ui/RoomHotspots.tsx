@@ -1,13 +1,17 @@
 'use client'
 
 import { Html } from '@react-three/drei'
+import { useFrame } from '@react-three/fiber'
 import { Plus, Toilet } from 'lucide-react'
+import { useMemo, useRef } from 'react'
+import { Vector3 } from 'three'
 
 import { roomFloorTopY } from '@/entities/building'
 import { cn } from '@/shared/lib'
 import { Chip } from '@/shared/ui/boxx'
 import { For } from '@/shared/ui/control-flow'
 
+import { declutterLabels, type LabelBox } from '../lib/declutter-labels'
 import type { RoomMarker } from '../lib/room-markers'
 
 type Props = {
@@ -38,10 +42,86 @@ function labelOf(marker: RoomMarker): string {
   return `Enter ${marker.name}`
 }
 
+/**
+ * Keeps the chips off each other as the building turns.
+ *
+ * Nine rooms in a small building put their markers within a chip's width of one
+ * another, and on a phone the whole building is a few hundred pixels across —
+ * so the names print over each other and none of them can be read. Where each
+ * one lands is a question about the screen, not about the scene, so it is
+ * answered here rather than by moving the anchors in the model: the chip still
+ * belongs to its own room, it is only lifted clear of its neighbour.
+ *
+ * Written straight onto the elements in the frame loop rather than through
+ * state. This runs whenever the camera moves, and re-rendering a dozen drei
+ * `<Html>` portals per frame is the one thing that would make turning the
+ * building cost more than drawing it.
+ */
+function useDeclutter(markers: RoomMarker[], active: boolean) {
+  const chips = useRef(new Map<string, HTMLDivElement>())
+  /** Measured once per chip: the words do not change while the page is open. */
+  const sizes = useRef(new Map<string, { width: number; height: number }>())
+  const written = useRef(new Map<string, number>())
+  const point = useMemo(() => new Vector3(), [])
+
+  useFrame(({ camera, size }) => {
+    if (!active) return
+
+    const boxes: LabelBox[] = markers.map((marker) => {
+      const element = chips.current.get(marker.key)
+      if (!element) return { x: 0, y: 0, width: 0, height: 0 }
+
+      let measured = sizes.current.get(marker.key)
+      if (!measured || measured.width === 0) {
+        // The one forced layout, and only until the chip has been laid out
+        // once. Reading this every frame would be a reflow per chip per frame.
+        measured = { width: element.offsetWidth, height: element.offsetHeight }
+        if (measured.width > 0) sizes.current.set(marker.key, measured)
+      }
+
+      point.set(...anchorOf(marker)).project(camera)
+      // Behind the camera: it comes back mirrored and would drag the labels in
+      // front of it out of the way of something nobody can see.
+      if (point.z > 1) return { x: 0, y: 0, width: 0, height: 0 }
+
+      return {
+        x: (point.x * 0.5 + 0.5) * size.width,
+        y: (-point.y * 0.5 + 0.5) * size.height,
+        width: measured.width,
+        height: measured.height,
+      }
+    })
+
+    const offsets = declutterLabels(boxes)
+
+    markers.forEach((marker, index) => {
+      const element = chips.current.get(marker.key)
+      if (!element) return
+
+      const offset = Math.round(offsets[index])
+      if (written.current.get(marker.key) === offset) return
+
+      written.current.set(marker.key, offset)
+      element.style.transform = offset === 0 ? '' : `translateY(${offset}px)`
+    })
+  })
+
+  return (key: string) => (node: HTMLDivElement | null) => {
+    if (node) chips.current.set(key, node)
+    else {
+      chips.current.delete(key)
+      sizes.current.delete(key)
+      written.current.delete(key)
+    }
+  }
+}
+
 // Hidden in CSS rather than unmounted: every drei <Html> runs a full
 // scene.updateMatrixWorld() and spins up its own React root when it mounts, so
 // unmounting these on room entry made leaving one cost a traversal per room.
 export function RoomHotspots({ markers, focusedKey, onOpenMarker }: Props) {
+  const chipRef = useDeclutter(markers, focusedKey === null)
+
   return (
     <For each={markers} getKey={(marker) => marker.key}>
       {(marker) => (
@@ -60,7 +140,7 @@ export function RoomHotspots({ markers, focusedKey, onOpenMarker }: Props) {
               take you, and the rest belong to rooms you cannot reach from here.
               What the room is and how big it is now lives in the header panel,
               where nothing in the scene can land on top of it. */}
-          <div className={cn(focusedKey !== null && 'hidden')}>
+          <div ref={chipRef(marker.key)} className={cn(focusedKey !== null && 'hidden')}>
             <button
               type="button"
               onPointerDown={(event) => event.stopPropagation()}

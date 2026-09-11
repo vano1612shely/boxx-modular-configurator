@@ -277,7 +277,9 @@ function BuildingGlb({
     scene.updateMatrixWorld(true)
     return {
       prepared: scene,
-      controller: applyOverviewClipping(scene),
+      // The editor cuts whatever it opens — a storey kept, a height sliced off
+      // — so the insides those cuts expose are painted, whatever the building.
+      controller: applyOverviewClipping(scene, { capBackfaces: true }),
       resolveNode: createNodeResolver(scene),
     }
   }, [scene])

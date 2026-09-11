@@ -1,13 +1,60 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
-import { useEffect, useMemo } from 'react'
-import { Box3, MathUtils, Vector3, type Mesh } from 'three'
+import { useMemo } from 'react'
+import { Box3, MathUtils, Vector3, type Material, type Mesh, type Object3D } from 'three'
 
-import type { OpeningPlacement } from '../lib/room-shell'
+import type { OpeningPlacement, ShellGroup } from '../lib/room-shell'
 import type { OpeningFit, OpeningModelStyle, Room } from '../model/types'
 import { OPENING_KINDS } from '../model/types'
 import { useModel } from '@/shared/three/use-model'
+
+/**
+ * A door or window glb's materials, copied once per wall side and kept.
+ *
+ * drei caches one glb per URL and Object3D.clone shares material references,
+ * so every instance needs its own copies or they all fade together. They used
+ * to be copied per instance and disposed with it — and three's shader cache
+ * counts references, so the last copy to go took the door's three programs
+ * with it, and the next room compiled them again. Per side rather than per
+ * instance because the side is what fades; two windows in one wall fade as
+ * one anyway. Never disposed: a handful of materials per glb.
+ *
+ * Transparent from the start, for the same reason the shell's are: the fade
+ * would otherwise switch each material between two programs.
+ */
+const copies = new Map<string, Map<Material, Material>>()
+
+export function openingMaterial(url: string, side: ShellGroup, source: Material): Material {
+  const key = `${url}|${side}`
+  let held = copies.get(key)
+  if (!held) {
+    held = new Map()
+    copies.set(key, held)
+  }
+  const kept = held.get(source)
+  if (kept) return kept
+
+  const copy = source.clone()
+  copy.transparent = true
+  held.set(source, copy)
+  return copy
+}
+
+/** A fresh instance of the glb for one wall, drawn with that wall's copies. */
+export function instantiateOpening(scene: Object3D, url: string, side: ShellGroup): Object3D {
+  const object = scene.clone(true)
+  object.traverse((node) => {
+    const mesh = node as Mesh
+    if (!mesh.isMesh) return
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map((entry) => openingMaterial(url, side, entry))
+      : openingMaterial(url, side, mesh.material)
+    mesh.castShadow = false
+    mesh.receiveShadow = false
+  })
+  return object
+}
 
 type Props = {
   placement: OpeningPlacement
@@ -18,20 +65,10 @@ export function OpeningModel({ placement, style }: Props) {
   // The URL is checked by the caller; a null one never reaches this component.
   const scene = useModel(style.url as string)
 
-  const model = useMemo(() => {
-    const object = scene.clone(true)
+  const { opening, center, normal, side } = placement
 
-    // drei caches one glb per URL and Object3D.clone shares material references,
-    // so materials must be cloned too or every instance fades together.
-    object.traverse((node) => {
-      const mesh = node as Mesh
-      if (!mesh.isMesh) return
-      mesh.material = Array.isArray(mesh.material)
-        ? mesh.material.map((entry) => entry.clone())
-        : mesh.material.clone()
-      mesh.castShadow = false
-      mesh.receiveShadow = false
-    })
+  const model = useMemo(() => {
+    const object = instantiateOpening(scene, style.url as string, side)
 
     // Must be measured while the clone is parentless: setFromObject walks world
     // matrices, so measuring after mount folds this component's scale back in.
@@ -42,20 +79,7 @@ export function OpeningModel({ placement, style }: Props) {
       size: bounds.getSize(new Vector3()),
       center: bounds.getCenter(new Vector3()),
     }
-  }, [scene])
-
-  useEffect(() => {
-    return () => {
-      model.object.traverse((node) => {
-        const mesh = node as Mesh
-        if (!mesh.isMesh) return
-        const material = mesh.material
-        for (const entry of Array.isArray(material) ? material : [material]) entry.dispose()
-      })
-    }
-  }, [model])
-
-  const { opening, center, normal } = placement
+  }, [scene, style.url, side])
 
   const scale = useMemo(
     () => fitScale(model.size, opening.width, opening.height, style.fit),

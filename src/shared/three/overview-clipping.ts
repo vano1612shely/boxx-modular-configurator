@@ -80,6 +80,20 @@ export type OverviewClippingOptions = {
    * more tests per fragment, on every fragment, for a cut that never comes.
    */
   cuttable?: boolean
+  /**
+   * Whether to paint the inside of a hollow shell flat where a cut exposes it.
+   *
+   * Defaults to `cuttable`, because only a cut ever shows an inside. The paint
+   * is not free: it needs every face drawn double-sided and the fragment depth
+   * written by hand, and a shader that writes its own depth gives the GPU one
+   * depth per pixel instead of one per sample. On a building that is never
+   * cut, that showed up as hairlines along every module joint — the sides of
+   * the floor slabs, a few millimetres under the finish, winning the odd
+   * sample against it — and as a floor that shimmered while orbiting far out.
+   * The admin editor cuts everything it opens, so it asks for the paint
+   * explicitly.
+   */
+  capBackfaces?: boolean
 }
 
 const FRAGMENT_SNIPPET = /* glsl */ `
@@ -93,7 +107,7 @@ const FRAGMENT_SNIPPET = /* glsl */ `
 // uniforms while the caller still holds the first controller.
 export function applyOverviewClipping(
   root: Object3D,
-  { cuttable = false }: OverviewClippingOptions = {},
+  { cuttable = false, capBackfaces: paintInsides = cuttable }: OverviewClippingOptions = {},
 ): OverviewClippingController {
   const existing = root.userData[CONTROLLER_KEY] as OverviewClippingController | undefined
   if (existing) return existing
@@ -144,8 +158,9 @@ export function applyOverviewClipping(
     if (keepMounted) mountKeepPlanes(material)
 
     // Shells are hollow: cut openings show backfaces, painted flat so they read
-    // as solid. Transparent materials (glass) stay single-sided.
-    const capBackfaces = material.transparent !== true
+    // as solid. Transparent materials (glass) stay single-sided, and a model
+    // that is never cut keeps its faces as its author left them.
+    const capBackfaces = paintInsides && material.transparent !== true
     if (capBackfaces) material.side = DoubleSide
 
     material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {

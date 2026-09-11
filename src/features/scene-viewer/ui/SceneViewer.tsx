@@ -5,7 +5,7 @@ import '@/shared/three/quiet-deprecations'
 
 import { ContactShadows } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { memo, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { useConfiguration } from '@/entities/configuration'
 import {
@@ -31,6 +31,7 @@ import { BuildingModel } from './BuildingModel'
 import { CameraRig } from './CameraRig'
 import { RoomFloors } from './RoomFloors'
 import { RoomHotspots } from './RoomHotspots'
+import { RoomWarmup } from './RoomWarmup'
 import { SceneLoader } from './SceneLoader'
 import { SceneWarmup } from './SceneWarmup'
 import { ShadowUpdates } from './ShadowUpdates'
@@ -82,6 +83,14 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
   // pointing the old way until something unrelated re-armed the map. Memoised,
   // or every render of this component would rebuild the string.
   const placed = useConfiguration((s) => s.placed)
+  const exterior = useConfiguration((s) => s.exterior)
+  const exteriorPicks = useMemo(
+    () =>
+      Object.entries(exterior)
+        .map(([spot, pick]) => `${spot}=${pick}`)
+        .join(';'),
+    [exterior],
+  )
   const poses = useMemo(
     () =>
       placed
@@ -156,6 +165,12 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
       >
         <color attach="background" args={[SCENE_BACKGROUND]} />
         <SceneWarmup key={model} armed={bounds !== null} onWarm={onWarm} />
+        {/* After the building is on the GPU, never alongside it: this is a
+            dozen more shaders and half a dozen textures, and the veil is
+            already down by the time it runs. */}
+        <Show when={warmed === model}>
+          <RoomWarmup rooms={rooms} buildingModelUrl={model} />
+        </Show>
         <ShadowUpdates trigger={shadowTrigger} />
         <SceneLighting bounds={litBounds} focusedRoom={vm.focusedRoom} />
         <Show when={building.roofModel}>
@@ -176,18 +191,7 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
               remount orphaned a set. A storey is also cut out mid-air, and a
               ground shadow under it would say it were standing on something. */}
           <group visible={!vm.isRoomFocused && vm.selectedFloor === null}>
-            <ContactShadows
-              position={[0, (bounds?.min[1] ?? 0) - 0.01, 0]}
-              opacity={0.4}
-              scale={45}
-              blur={3}
-              far={12}
-              // drei defaults this to Infinity: a whole-scene depth render plus
-              // four blur passes, every frame, for a blob under a building that
-              // does not move. One frame per render of this component is
-              // exactly as often as it can have changed.
-              frames={1}
-            />
+            <GroundShadow y={(bounds?.min[1] ?? 0) - 0.01} changed={`${exteriorPicks}|${poses}`} />
           </group>
           {children}
         </Suspense>
@@ -277,7 +281,25 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
           where the shaders and the textures actually reach the GPU. Lifting on
           `bounds` alone handed the visitor a scene that stalled on the first
           frame it drew, which is the frame the veil was fading on. */}
-      <SceneLoader busy={!bounds || warmed !== model} />
+      <SceneLoader busy={!bounds || warmed !== model} settled={warmed === model} />
     </div>
   )
 }
+
+/**
+ * The soft blob under the building, redrawn only when what casts it changes.
+ *
+ * drei renders the whole scene into a depth target and blurs it four times on
+ * every frame by default; `frames={1}` cuts that to one — but its counter is
+ * a plain local of the component, reset by every render of it, and every
+ * render of SceneViewer was one. A room transition renders it several times,
+ * each a 650k-triangle depth pass for a blob under a building that has not
+ * moved. Memoised on the things that can move it: where the ground is, what
+ * stands outside, what stands inside.
+ */
+const GroundShadow = memo(function GroundShadow({ y }: { y: number; changed: string }) {
+  return (
+    <ContactShadows position={[0, y, 0]} opacity={0.4} scale={45} blur={3} far={12} frames={1} />
+  )
+})
+

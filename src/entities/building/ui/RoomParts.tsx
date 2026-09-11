@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
 import { MathUtils, type Material, type Mesh, type Object3D } from 'three'
 
 import { createNodeResolver } from '@/shared/three/node-path'
@@ -27,24 +27,45 @@ type Props = {
  * again — BuildingModel's frame loop returns as soon as a room is focused — so
  * whichever storey was last picked would go on cutting a counter that is no
  * longer part of the building being cut.
+ *
+ * One copy per material of the building, kept for the life of the page. Made
+ * per visit and disposed on the way out, the copy took its shader program
+ * with it — three keeps a program only while a material holds it — and the
+ * next visit to the kitchen compiled the counter's three materials again.
  */
-function detached(material: Material): Material {
+const detachedCopies = new Map<Material, Material>()
+
+export function detachedMaterial(material: Material): Material {
+  const kept = detachedCopies.get(material)
+  if (kept) return kept
+
   const clone = material.clone()
   clone.clippingPlanes = null
   clone.clipShadows = false
   clone.onBeforeCompile = () => {}
   clone.needsUpdate = true
+  detachedCopies.set(material, clone)
   return clone
 }
 
-function disposeMaterials(root: Object3D) {
-  root.traverse((node) => {
+/** The copy of a building node a room draws, materials swapped for detached ones. */
+export function copyBuildingNode(scene: Object3D, nodePath: string): Object3D | null {
+  const source = createNodeResolver(scene)(nodePath)
+  if (!source) return null
+
+  scene.updateMatrixWorld(true)
+  const clone = source.clone(true)
+  clone.matrix.copy(source.matrixWorld)
+  clone.matrix.decompose(clone.position, clone.quaternion, clone.scale)
+
+  clone.traverse((node) => {
     const mesh = node as Mesh
     if (!mesh.isMesh) return
-    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-      material?.dispose()
-    }
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map(detachedMaterial)
+      : detachedMaterial(mesh.material)
   })
+  return clone
 }
 
 /** Never a click surface: the zone floors and the drag plane are behind it. */
@@ -70,30 +91,10 @@ function NodePart({ part, buildingModelUrl }: { part: RoomPart; buildingModelUrl
   const object = useMemo(() => {
     if (!part.nodePath) return null
 
-    const source = createNodeResolver(scene)(part.nodePath)
-    if (!source) return null
-
-    scene.updateMatrixWorld(true)
-    const clone = source.clone(true)
-    clone.matrix.copy(source.matrixWorld)
-    clone.matrix.decompose(clone.position, clone.quaternion, clone.scale)
-
-    clone.traverse((node) => {
-      const mesh = node as Mesh
-      if (!mesh.isMesh) return
-      mesh.material = Array.isArray(mesh.material)
-        ? mesh.material.map(detached)
-        : detached(mesh.material)
-    })
-    makeInert(clone)
-
+    const clone = copyBuildingNode(scene, part.nodePath)
+    if (clone) makeInert(clone)
     return clone
   }, [scene, part.nodePath])
-
-  useEffect(() => {
-    if (!object) return
-    return () => disposeMaterials(object)
-  }, [object])
 
   if (!object) return null
 

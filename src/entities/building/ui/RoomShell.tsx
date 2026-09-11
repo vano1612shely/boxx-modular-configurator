@@ -3,16 +3,7 @@
 import { useFrame } from '@react-three/fiber'
 import { damp } from 'maath/easing'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
-import {
-  BufferAttribute,
-  BufferGeometry,
-  FrontSide,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
-  Vector3,
-  type Group,
-  type Material,
-} from 'three'
+import { BufferAttribute, BufferGeometry, Vector3, type Group, type Material } from 'three'
 
 import { For } from '@/shared/ui/control-flow'
 
@@ -24,6 +15,7 @@ import {
   type ShellGroup,
 } from '../lib/room-shell'
 import { resolveRoomVisibility, type RoomVisibility } from '../lib/room-visibility'
+import { shellMaterial } from '../lib/shell-materials'
 import { useSurfaceTextures } from '../lib/use-surface-textures'
 import type { OpeningKind, Room, ShellSurface } from '../model/types'
 import { OPENING_KINDS } from '../model/types'
@@ -32,21 +24,6 @@ import { OpeningModel } from './OpeningModel'
 type Props = {
   room: Room
 }
-
-const SURFACE_COLORS: Record<ShellSurface, string> = {
-  wallOuter: '#d9d5cd',
-  wallInner: '#f2f0ec',
-  wallEdge: '#ffffff',
-  floor: '#c9b79c',
-  ceiling: '#f6f5f3',
-  // Shown only when a room has no door/window glb. Both used to be wrong about
-  // the product: stained timber where BOXX fits white doors, and a blue-grey
-  // pane that is the only cool value anywhere in the brand.
-  door: '#efece7',
-  window: '#dfe3e2',
-}
-
-const FRAME_SURFACES = new Set<ShellSurface>(['wallEdge', 'wallOuter'])
 
 /** maath smoothTime, in seconds: critically damped, so the tail is long. */
 const FADE_TIME = 0.055
@@ -116,31 +93,15 @@ export function RoomShell({ room }: Props) {
   }, [parts])
 
   // Owned rather than declared as JSX: the frame loop writes to these, and R3F
-  // would re-apply the props over anything set there.
+  // would re-apply the props over anything set there. Held for the life of the
+  // page, not made here — see shellMaterial for what making them cost.
   const materials = useMemo(() => {
     const map = new Map<string, Material>()
     for (const part of parts) {
-      map.set(
-        part.key,
-        FRAME_SURFACES.has(part.surface)
-          ? new MeshBasicMaterial({ color: '#ffffff', toneMapped: false, side: FrontSide })
-          : new MeshStandardMaterial({
-              map: textures[part.surface] ?? null,
-              color: textures[part.surface] ? '#ffffff' : SURFACE_COLORS[part.surface],
-              roughness: 0.85,
-              metalness: 0,
-              side: FrontSide,
-            }),
-      )
+      map.set(part.key, shellMaterial(part.group, part.surface, textures[part.surface] ?? null))
     }
     return map
   }, [parts, textures])
-
-  useEffect(() => {
-    return () => {
-      for (const material of materials.values()) material.dispose()
-    }
-  }, [materials])
 
   const placements = useMemo(
     () => planOpeningPlacements(room.floorPolygon, room.shell, room.openings),

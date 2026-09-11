@@ -11,7 +11,7 @@ import { floorExtent, frameExtent, frameEyeLevel, orbitable } from '@/entities/b
 import { useConfiguratorSession, type BuildingBounds } from '@/entities/configurator-session'
 
 import { applyPreset } from '../lib/apply-preset'
-import { cameraLimits } from '../lib/camera-limits'
+import { cameraLimits, nearPlaneFor } from '../lib/camera-limits'
 import { clampOffsetToLimit } from '../lib/clamp-offset'
 import { groundOffsetLimit } from '../lib/ground-clearance'
 import { holdAboveGround } from '../lib/hold-above-ground'
@@ -82,6 +82,9 @@ const PAN_SPEED = 2
 
 const SMOOTH_TIME = 0.3
 const DRAGGING_SMOOTH_TIME = 0.12
+
+/** Fraction the near plane may drift from its ideal before the projection is rebuilt. */
+const NEAR_TOLERANCE = 0.1
 
 export function CameraRig({
   building,
@@ -169,9 +172,18 @@ export function CameraRig({
    * and the radius both move under the visitor's hand with no render in sight,
    * and it is the radius that decides how low a given tilt puts the eye.
    */
-  useFrame(() => {
+  useFrame((state) => {
     const controls = controlsRef.current
     if (!controls) return
+
+    // The near plane follows the orbit radius — see `nearPlaneFor` for the
+    // floor that showed the timber under it when this was left at 0.1. A
+    // tolerance, so a slow dolly is not a projection rebuild per frame.
+    const near = nearPlaneFor(controls.distance)
+    if (Math.abs(near - state.camera.near) > near * NEAR_TOLERANCE) {
+      state.camera.near = near
+      state.camera.updateProjectionMatrix()
+    }
 
     const ground = groundRef.current
     if (ground === null) controls.maxPolarAngle = authoredMaxPolar

@@ -10,7 +10,7 @@ import {
 } from 'three'
 
 import { roomEnvironment } from '@/shared/three/room-environment'
-import { For, Show } from '@/shared/ui/control-flow'
+import { For } from '@/shared/ui/control-flow'
 
 import { roomFeatureSide, roomFocusTarget } from '../lib/room-framing'
 import { sunPlacement } from '../lib/sun-placement'
@@ -49,15 +49,7 @@ function ImageBasedLight() {
   return <primitive object={roomEnvironment(gl)} attach="environment" />
 }
 
-function Sun({
-  bounds,
-  intensity,
-  casting,
-}: {
-  bounds: Bounds | null
-  intensity: number
-  casting: boolean
-}) {
+function Sun({ bounds, intensity }: { bounds: Bounds | null; intensity: number }) {
   const light = useRef<DirectionalLight>(null)
 
   const placement = useMemo(() => sunPlacement(bounds), [bounds])
@@ -98,7 +90,7 @@ function Sun({
       position={placement.position}
       color={SUNLIGHT}
       intensity={intensity}
-      castShadow={casting}
+      castShadow
       shadow-mapSize={SHADOW_MAP}
       // r185 scales softness by `radius`; PCFSoftShadowMap is deprecated.
       shadow-radius={8}
@@ -162,21 +154,48 @@ function windowCookie(halfU: number, halfV: number): CanvasTexture | null {
   return texture
 }
 
-function WindowSun({ placement, ray, exposure }: { placement: OpeningPlacement; ray: Vec3Tuple; exposure: number }) {
+/**
+ * Beams a room may have lit at once.
+ *
+ * A fixed count, mounted whether or not a room is open: three compiles a
+ * material's shader against the number of lights in the scene, so a spotlight
+ * that comes and goes with a room makes two shaders of every material — and
+ * the building, drawn for a frame on the way out with the room's light still
+ * up, compiled every one of its materials a second time. Idle beams sit at
+ * zero intensity, which costs a little arithmetic per pixel and no compiles.
+ * A room with more sun-facing windows than this lights the first of them.
+ */
+export const WINDOW_BEAMS = 2
+
+/** The cookie an idle beam carries, so the count of mapped spots never moves. */
+const IDLE_COOKIE_HALF = 0.5
+
+function WindowSun({
+  placement,
+  ray,
+  exposure,
+}: {
+  placement: OpeningPlacement | null
+  ray: Vec3Tuple
+  exposure: number
+}) {
   const light = useRef<ThreeSpotLight>(null)
-  const { center, tangent, opening } = placement
 
   const { angle, cookie } = useMemo(() => {
+    if (!placement) {
+      return { angle: Math.PI / 6, cookie: windowCookie(IDLE_COOKIE_HALF, IDLE_COOKIE_HALF) }
+    }
     const { halfWidth, halfHeight } = windowBeamHalfSize(
       ray,
-      tangent,
-      opening.width,
-      opening.height,
+      placement.tangent,
+      placement.opening.width,
+      placement.opening.height,
     )
     const cone = windowBeamCone(halfWidth, halfHeight)
     return { angle: cone.angle, cookie: windowCookie(cone.halfU, cone.halfV) }
-  }, [ray, tangent, opening.width, opening.height])
+  }, [ray, placement])
 
+  const center = placement?.center ?? IDLE_CENTER
   const position: [number, number, number] = [
     center.x - ray[0] * SUN_DISTANCE,
     center.y - ray[1] * SUN_DISTANCE,
@@ -199,7 +218,7 @@ function WindowSun({ placement, ray, exposure }: { placement: OpeningPlacement; 
       map={cookie}
       angle={angle}
       color={DAYLIGHT_COLOR}
-      intensity={DAYLIGHT * exposure}
+      intensity={placement ? DAYLIGHT * exposure : 0}
       // Sunlight does not get dimmer across a room.
       decay={0}
       distance={0}
@@ -208,38 +227,55 @@ function WindowSun({ placement, ray, exposure }: { placement: OpeningPlacement; 
   )
 }
 
-function WindowSuns({ room, exposure }: { room: Room; exposure: number }) {
+/** Where an idle beam points. Anywhere: it is dark. */
+const IDLE_CENTER = { x: 0, y: 0, z: 0 }
+
+/** No room to take a bearing from: the beams still need a direction to hold. */
+const IDLE_RAY: Vec3Tuple = [0, -1, 0]
+
+function WindowSuns({ room, exposure }: { room: Room | null; exposure: number }) {
   const glazed = useMemo(
     () =>
-      planOpeningPlacements(room.floorPolygon, room.shell, room.openings).filter(
-        (placement) => placement.opening.kind === 'window',
-      ),
+      room
+        ? planOpeningPlacements(room.floorPolygon, room.shell, room.openings).filter(
+            (placement) => placement.opening.kind === 'window',
+          )
+        : [],
     [room],
   )
 
-  const bearing = roomSunBearing(room)
-  const ray = useMemo(() => sunRay(bearing), [bearing])
-  const sideAxes = room.shell.sideAxes
+  const bearing = room ? roomSunBearing(room) : 0
+  const ray = useMemo(() => (room ? sunRay(bearing) : IDLE_RAY), [room, bearing])
+  const sideAxes = room?.shell.sideAxes
 
   // Filtered from the windows the shell really cut: an opening too wide for
   // its edge is dropped, and lighting it aims a beam through solid wall.
-  const windows = glazed.filter((placement) => {
-    const axis = sideAxes[placement.side]
-    return axis ? facesSun(axis, bearing) : false
-  })
+  const windows = sideAxes
+    ? glazed.filter((placement) => {
+        const axis = sideAxes[placement.side]
+        return axis ? facesSun(axis, bearing) : false
+      })
+    : []
+
+  // By slot, not by window: a slot keeps its light across rooms, and only the
+  // beam in it changes. Keyed by window, a room change would remount them.
+  const slots = Array.from({ length: WINDOW_BEAMS }, (_, index) => ({
+    key: String(index),
+    placement: windows[index] ?? null,
+  }))
 
   return (
-    <For each={windows} getKey={(placement) => placement.opening.id}>
-      {(placement) => <WindowSun placement={placement} ray={ray} exposure={exposure} />}
+    <For each={slots} getKey={(slot) => slot.key}>
+      {(slot) => <WindowSun placement={slot.placement} ray={ray} exposure={exposure} />}
     </For>
   )
 }
 
-function RoomKey({ room, intensity }: { room: Room; intensity: number }) {
+function RoomKey({ room, intensity }: { room: Room | null; intensity: number }) {
   const light = useRef<DirectionalLight>(null)
-  const [tx, ty, tz] = roomFocusTarget(room)
-  const axis = room.shell.sideAxes[roomFeatureSide(room)] ?? { x: 0, z: -1 }
-  const reach = Math.max(room.shell.wallHeight * 4, 8)
+  const [tx, ty, tz] = room ? roomFocusTarget(room) : [0, 0, 0]
+  const axis = (room && room.shell.sideAxes[roomFeatureSide(room)]) ?? { x: 0, z: -1 }
+  const reach = room ? Math.max(room.shell.wallHeight * 4, 8) : 8
 
   useEffect(() => {
     const key = light.current
@@ -253,7 +289,7 @@ function RoomKey({ room, intensity }: { room: Room; intensity: number }) {
       ref={light}
       position={[tx + axis.x * reach, ty + reach * 0.55, tz + axis.z * reach]}
       color={SUNLIGHT}
-      intensity={intensity}
+      intensity={room ? intensity : 0}
     />
   )
 }
@@ -261,12 +297,20 @@ function RoomKey({ room, intensity }: { room: Room; intensity: number }) {
 /**
  * One rig, dimmed and undimmed, rather than two swapped over.
  *
- * The outdoor lights are kept mounted through a room visit at zero intensity,
- * which looks the same as not having them and costs one thing less: unmounting
- * the sun disposes its 2048² shadow map, and coming back out of the room then
- * has to allocate a new one and fill it from scratch — on the same frame as the
- * room's geometry is being torn down and the camera is flying. That was the
- * hitch on the way out, and it was paid every single time.
+ * Every light is mounted all the time, at zero intensity when its view is not
+ * the one on screen. That is not thrift for its own sake: three compiles each
+ * material's shader against the lights in the scene — how many of each kind,
+ * how many cast shadows, how many carry a cookie — so a rig that changes shape
+ * between the overview and a room hands every material two shaders, compiled
+ * on the frame the visitor crosses the threshold. Worse, the order the frame
+ * loop and React commit in is not fixed, and the building was regularly drawn
+ * once under the room's lights on the way out: thirty-odd materials, compiled
+ * a second time for a frame nobody saw, a second and a half of freeze.
+ *
+ * With the shape fixed, everything is compiled once, under the loading veil,
+ * and a room visit compiles nothing. The sun keeps casting into its map from
+ * inside a room too — the map it wrote stays allocated, and at zero intensity
+ * a shadow is not a thing anyone can see.
  */
 export function SceneLighting({ bounds, focusedRoom, exposure = 1 }: Props) {
   const outside = focusedRoom === null
@@ -281,27 +325,14 @@ export function SceneLighting({ bounds, focusedRoom, exposure = 1 }: Props) {
         color={SKYLIGHT}
         groundColor={GROUND_BOUNCE}
       />
-      <Sun
-        bounds={bounds}
-        intensity={outside ? 1.7 * exposure : 0}
-        // Nothing outdoors is drawn from inside a room, so the pass would be
-        // over an empty scene — but the map it wrote stays allocated, which is
-        // the whole point of keeping the light.
-        casting={outside}
-      />
+      <Sun bounds={bounds} intensity={outside ? 1.7 * exposure : 0} />
       <directionalLight
         position={[-7, 6, -5]}
         color={SKYLIGHT}
         intensity={outside ? 0.3 * exposure : 0}
       />
-      <Show when={focusedRoom}>
-        {(room) => (
-          <>
-            <RoomKey room={room} intensity={0.14 * exposure} />
-            <WindowSuns room={room} exposure={exposure} />
-          </>
-        )}
-      </Show>
+      <RoomKey room={focusedRoom} intensity={0.14 * exposure} />
+      <WindowSuns room={focusedRoom} exposure={exposure} />
     </>
   )
 }

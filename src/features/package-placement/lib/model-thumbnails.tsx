@@ -4,13 +4,32 @@
 import '@/shared/three/quiet-deprecations'
 
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Suspense, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { Box3, MathUtils, Vector3, type PerspectiveCamera } from 'three'
 
 import { ModelStage } from '@/shared/three/ModelStage'
 import { useModel } from '@/shared/three/use-model'
 
 const SIZE = 256
+
+/**
+ * How long a fresh batch waits before its first shot, in milliseconds.
+ *
+ * The batch arrives with the room the visitor has just entered, and the first
+ * shot is the dear one: a second WebGL context, an environment map, a model
+ * parsed and framed, a readback. Taken at once, all of that landed on the
+ * frames the camera was flying into the room on. The panel shows a placeholder
+ * until the picture arrives, and nobody is choosing furniture mid-flight.
+ */
+const FIRST_SHOT_DELAY = 1200
 const cache = new Map<string, string>()
 const listeners = new Set<() => void>()
 
@@ -45,7 +64,18 @@ export function ModelThumbnailFactory({ urls }: { urls: ReadonlyArray<string> })
   )
   const current = pending[0]
 
-  if (!current) return null
+  // A batch is known by its last model: shots are taken from the front, so
+  // that one stays put until the batch is done, and the next room's batch
+  // ends on a different one. The wait is granted per batch, not per shot.
+  const batch = pending.length > 0 ? pending[pending.length - 1] : null
+  const [readyFor, setReadyFor] = useState<string | null>(null)
+  useEffect(() => {
+    if (!batch) return
+    const timer = window.setTimeout(() => setReadyFor(batch), FIRST_SHOT_DELAY)
+    return () => window.clearTimeout(timer)
+  }, [batch])
+
+  if (!current || readyFor !== batch) return null
 
   return (
     <div

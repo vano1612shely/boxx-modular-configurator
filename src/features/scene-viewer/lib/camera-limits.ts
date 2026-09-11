@@ -76,3 +76,27 @@ export function cameraLimits(
     },
   }
 }
+
+/** The near plane, as a fraction of the orbit radius. */
+const NEAR_FRACTION = 1 / 50
+/** Never nearer: the room camera may orbit 0.4 m from its target. */
+const NEAREST_PLANE = 0.1
+/** Never further: beyond this the gain in depth precision buys nothing visible. */
+const FARTHEST_PLANE = 1
+
+/**
+ * Where the near plane should sit for a camera orbiting at `distance`.
+ *
+ * A 24-bit depth buffer spends almost all of its precision on the first few
+ * metres past the near plane, and the default plane at 0.1 m leaves about
+ * 4 mm per step out at the far end of this building's orbit. The model's
+ * floor finish is 6 mm above the timber under it, so at that distance the
+ * two were a step and a half apart and fought while the camera moved —
+ * timber showing through the floor. Moving the plane out with the camera
+ * gives ten times the precision where it is needed, and takes nothing away
+ * up close, where the visitor is in a room and the plane is back at 0.1 m.
+ */
+export function nearPlaneFor(distance: number): number {
+  const near = distance * NEAR_FRACTION
+  return Math.min(FARTHEST_PLANE, Math.max(NEAREST_PLANE, near))
+}

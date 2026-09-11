@@ -8,10 +8,20 @@ import { Progress } from '@/shared/ui/boxx'
 export function SceneLoader({
   /** Still building the scene, even if nothing is downloading. */
   busy = false,
+  /**
+   * True once the building is up and warm.
+   *
+   * From then on a download is never the visitor's wait: doors, windows,
+   * textures and furniture are fetched in the background, on purpose, and
+   * the first of them used to bring this whole veil back — blurred, mid-flight
+   * into a room — for the half second the door took to arrive.
+   */
+  settled = false,
 }: {
   busy?: boolean
+  settled?: boolean
 }) {
-  const active = useProgress((state) => state.active)
+  const active = useProgress((state) => state.active) && !settled
   const loaded = useProgress((state) => state.loaded)
   const total = useProgress((state) => state.total)
   const waiting = active || busy

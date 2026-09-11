@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import { orbitRadius } from '@/entities/building'
 
-import { cameraLimits, LIMITS, type AuthoredCamera, type LimitScope } from './camera-limits'
+import {
+  cameraLimits,
+  LIMITS,
+  nearPlaneFor,
+  type AuthoredCamera,
+  type LimitScope,
+} from './camera-limits'
 import { farthestPresetRadius, VIEW_MODES, viewModePreset } from './view-presets'
 
 /** building-models/4 as stored, every field at its schema default. */
@@ -131,4 +137,24 @@ describe('every preset arrives with somewhere left to go', () => {
       }
     })
   }
+})
+
+describe('nearPlaneFor', () => {
+  it('keeps the room camera able to stand close to a wall', () => {
+    expect(nearPlaneFor(0.4)).toBe(0.1)
+    expect(nearPlaneFor(4)).toBe(0.1)
+  })
+
+  it('moves the plane out with the orbit, and stops at a metre', () => {
+    expect(nearPlaneFor(25)).toBeCloseTo(0.5)
+    expect(nearPlaneFor(60)).toBe(1)
+    expect(nearPlaneFor(84)).toBe(1)
+  })
+
+  it('resolves the floor finish from the timber under it at the far limit', () => {
+    // 24-bit depth: metres per step at distance d is about d² / (near · 2²⁴).
+    const stepAt = (d: number) => (d * d) / (nearPlaneFor(d) * 2 ** 24)
+    const separation = 0.0063
+    expect(separation / stepAt(84)).toBeGreaterThan(10)
+  })
 })

@@ -17,12 +17,12 @@ asset pipeline · Zod.
 cp .env.example .env            # fill PAYLOAD_SECRET (any random string)
 docker compose up -d postgres   # Postgres 17 on :5432
 pnpm install
+pnpm setup                      # schema + catalogue + the admin account from .env
 pnpm dev                        # http://localhost:3000
-pnpm seed                       # demo catalog: 1 building, 2 packages
 ```
 
 - Client configurator: `http://localhost:3000/configurator`
-- Admin panel: `http://localhost:3000/admin` (first visit prompts to create the admin user)
+- Admin panel: `http://localhost:3000/admin` (`pnpm setup` makes the account named in `.env`)
 - Tests: `pnpm test` · Types: `pnpm generate:types` after changing collections
 
 ## Deployment
@@ -161,12 +161,18 @@ docker push ghcr.io/vano1612shely/boxx-modular-configurator:latest
 ```bash
 cd /opt/boxx
 docker compose up -d db          # wait for it to report healthy
-docker compose run --rm app pnpm migrate
+docker compose run --rm app pnpm setup
 docker compose up -d app
 ```
 
-Migrations run **before** the app serves. If they fail, stop — do not start the new
+`pnpm setup` is `pnpm migrate` and then `pnpm catalogue`: it creates the schema and
+writes the catalogue, and both are safe to run again on a database that already has
+them. It runs **before** the app serves. If it fails, stop — do not start the new
 image against a schema it does not match.
+
+On a server with no `DEV_ADMIN_*` in its environment no account is made, and the
+first visit to `/admin` asks for one. That is on purpose: the credentials in a
+development `.env` have no business on somebody else’s hardware.
 
 ### 7. Check it
 
@@ -179,12 +185,95 @@ docker compose logs -f app
 Then open `http://SERVER_IP/admin` and create the first admin user. The admin panel
 refuses to create a second one once any user exists, so do this yourself.
 
+### The catalogue is data, and it lives in one file
+
+`scripts/catalogue.ts` holds the real BOXX catalogue — the product lines, and every
+section added to it since — and it is the only script that writes them:
+
+```bash
+pnpm catalogue            # import, or re-import over what is there
+pnpm catalogue --reset    # empty the catalogue first, then import
+pnpm catalogue --status   # count what is there and change nothing
+```
+
+Every section matches on the key an admin would recognise — a slug, a code — so a
+second run updates rather than duplicates, and a value edited in the admin panel is
+overwritten by the next one. Sections go in that one file rather than in a script
+each: twenty importers would be twenty ideas about what “already there” means.
+
+Which regions a section is sold in is one constant, `SOLD_IN`, rather than a list
+repeated per section — so widening the catalogue to Canada is one edit, and there is
+one place to look to answer what is sold where. An empty `regions` on a document
+means "sold everywhere", so scoping is something you add, never something you forget:
+a region named in `SOLD_IN` that is not in `REGIONS` throws rather than importing a
+line that quietly sells everywhere.
+
+`--reset` empties the catalogue and leaves the accounts alone. The room types and
+furniture tiers come back on the next boot — `ensureCatalogueTerms` writes the
+starter terms into an empty catalogue — so resetting those two restores them rather
+than removing them.
+
+### Buildings are imported from the client's glbs, one spec each
+
+A building is two glb files from the client — the model cut open horizontally, and
+the whole thing for its roof and ceiling — plus a spec under `scripts/buildings/`
+saying where its rooms, doors and windows are, in the file's own coordinates.
+
+```bash
+pnpm analyze:model <file.glb> --out r.json          # what is in the file: floors, materials, nodes
+pnpm analyze:model <file.glb> --islands door_frame  # every door, as a box
+pnpm audit:building <slug>                          # check a spec against its glb
+pnpm import:building <slug> [--reuse]               # audit, cut, upload, write the building
+```
+
+The spec is checked before anything is uploaded: every outline edge must lie on a
+wall, every declared door and window must have a casing at both jambs, and no wall
+may stand inside a room. That check is what lets a new size of a line be written as
+a handful of shifts of pieces already measured — the EDUPlex sizes are all
+`eduplex-school.ts` with a list of columns — rather than measured again.
+
+Assets are shared, not copied: a size names the building it takes its finishes, door
+and window from (`reuseAssetsFrom`), and only its own roof is cut. A room can pick
+a different door than the building's usual one (`openingModelKeys`) — a school's
+offices have one, its classrooms another.
+
+### Furniture packages are imported the same way
+
+A package is one glb from the client, named `<region>_<tier>_<what>_package_NN.glb`
+— the tier and the region are read off the name — and an entry in
+`scripts/furniture/packages.ts`. Every file carries the floor it was rendered on;
+that is dropped. A package is either the whole file as one model, or a group of
+pieces cut out by object name, each standing where the modeller put it unless the
+spec says otherwise. A visitor adds a group whole and then moves its pieces one by
+one, which is what lets a customer rearrange a desk against a table.
+
+```bash
+pnpm analyze:model <file.glb> --objects       # the objects in the file, with where they stand
+pnpm import:furniture <slug|all> [--reuse]    # cut, upload, write the package
+```
+
+The import writes the title, the tier, the region, the pieces and — when the
+spec names them — the rooms. Price, picture and description are set in the admin
+and a re-import leaves them alone.
+
+A fitted package (the kitchens) is laid out by the import in every kitchen of
+every building: the counter and the sink are read off the building's model, and
+the appliances, fridge, cooler, table and bin go where the client's pictures put
+them (`layoutKitchen` in the importer). Re-importing a kitchen re-lays it
+everywhere; re-importing a building keeps the sets it already had.
+
 ### Schema changes need a migration, always
 
 Development runs Payload's push mode: the database is altered to match the
 collections on boot. Production does not — it applies only what is committed under
 `src/migrations`. A field added without a migration therefore works perfectly
 locally and breaks exactly one collection in production.
+
+The history was collapsed on 2026-09-10: twenty-two migrations that only ever ran
+against a test server became one baseline, checked by migrating an empty database
+and diffing the result against the pushed schema column by column. Nothing is
+gained by replaying how the schema got here, and a shorter chain is a faster and
+more honest way to stand up the client’s own hardware.
 
 After changing any collection or field:
 
@@ -204,7 +293,7 @@ while the schema under it is a migration behind.
 ```bash
 cd /opt/boxx
 docker compose pull
-docker compose run --rm app pnpm migrate
+docker compose run --rm app pnpm setup
 docker compose up -d app
 ```
 
@@ -261,8 +350,15 @@ The configurator is iframe-first:
 | Param | Meaning |
 |---|---|
 | `building` | Building line slug (e.g. `boxxplex`). Omit → intake form is shown. |
-| `offices` / `units` | Requested unit count. The rules engine resolves the closest fitting size. |
-| `restrooms` | `1`/`true` if restrooms are required. |
+| `offices` / `units` | Requested unit count for a line counted in offices. The rules engine resolves the closest fitting size. |
+| `classrooms` | Requested unit count for a line counted in classrooms (EDUPlex). |
+| `offices` (with `classrooms`) | Offices wanted on top of the classrooms — a school with two offices and a kitchen is still a six-classroom school, so these never count as units. |
+| `restrooms` | How many restroom sets are wanted (`1`/`true` for one). |
+
+A school link therefore reads `?building=eduplex&classrooms=6&offices=2&restrooms=1`. Among the
+models of the fitting size the engine takes the smallest restroom count that covers the request,
+then the smallest office count that does — restrooms first, because a restroom can be mandated by
+the line's rules and an office never is.
 
 Business rules per line (admin-editable): restrooms become mandatory at a threshold, a second
 restroom set at a higher one, and requests above `maxUnits` route to the custom-quote screen.

@@ -3,7 +3,19 @@ name: Deploy
 on:
   push:
     branches: [main]
+  # Run by hand to release what is on main again — or to reset the server: a
+  # wiped database comes back migrated and, given a release that carries a
+  # `boxx-data.tar.gz` made by deploy/backup-data.sh, filled with that catalogue.
   workflow_dispatch:
+    inputs:
+      wipe_database:
+        description: 'Drop the database and migrate it from scratch. Accounts go too: the admin panel then asks for a first user.'
+        type: boolean
+        default: false
+      data_release:
+        description: 'Tag of a GitHub release carrying boxx-data.tar.gz to restore after the release. Empty keeps the catalogue as it is.'
+        type: string
+        default: ''
 
 # One deploy at a time, and never cancel one halfway: a cancelled run can leave
 # the database migrated but the old image still serving.
@@ -103,6 +115,17 @@ jobs:
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/boxx/docker-compose.yml"
           scp -i ~/.ssh/id_ed25519 deploy/nginx.conf \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/etc/nginx/sites-available/boxx"
+          scp -i ~/.ssh/id_ed25519 deploy/restore-data.sh deploy/backup-data.sh \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/boxx/"
+
+      - name: Fetch the catalogue to restore
+        if: inputs.data_release != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ inputs.data_release }}" -p boxx-data.tar.gz -D /tmp --clobber
+          scp -i ~/.ssh/id_ed25519 /tmp/boxx-data.tar.gz \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/boxx/boxx-data.tar.gz"
 
       # The registry token is the job's own and expires with the run, so nothing
       # long-lived is left behind on the server.
@@ -118,6 +141,8 @@ jobs:
           IMAGE='${{ needs.build.outputs.image }}'
           GH_ACTOR='${{ github.actor }}'
           GH_TOKEN='${{ secrets.GITHUB_TOKEN }}'
+          WIPE='${{ inputs.wipe_database }}'
+          DATA='${{ inputs.data_release }}'
 
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
@@ -127,6 +152,16 @@ jobs:
           grep -q '^APP_IMAGE=' .env || echo "APP_IMAGE=${IMAGE}" >> .env
 
           docker compose pull
+
+          # A reset starts from an empty database directory: the migrations
+          # then build the schema from the baseline, and the catalogue, if one
+          # was asked for, is put back below.
+          if [ "$WIPE" = "true" ]; then
+            echo 'wiping the database'
+            docker compose down
+            rm -rf /opt/boxx/postgres/*
+          fi
+
           docker compose up -d db
           # Migrations run before the new code serves. If they fail the old
           # container is still up and the deploy stops here.
@@ -137,6 +172,12 @@ jobs:
           # quietly having never restarted anything.
           docker compose run --rm -T app pnpm migrate </dev/null
           docker compose up -d app </dev/null
+
+          if [ -n "$DATA" ]; then
+            chmod +x restore-data.sh backup-data.sh
+            ./restore-data.sh boxx-data.tar.gz </dev/null
+            rm -f boxx-data.tar.gz
+          fi
 
           nginx -t && systemctl reload nginx
           docker logout ghcr.io

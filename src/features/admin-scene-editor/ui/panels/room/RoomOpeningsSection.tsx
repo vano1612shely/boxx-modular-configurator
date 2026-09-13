@@ -111,6 +111,20 @@ function OpeningDetail({
           >
             ⇄
           </button>
+          <Show when={opening.kind === 'door'}>
+            <button
+              type="button"
+              style={{
+                ...button(opening.entrance ? 'primary' : 'ghost'),
+                padding: '7px 9px',
+                fontSize: 12,
+              }}
+              title="A door out of the building — drawn with the room's entrance door model"
+              onClick={() => patch({ entrance: !opening.entrance })}
+            >
+              Exit
+            </button>
+          </Show>
         </div>
       </Show>
     </div>

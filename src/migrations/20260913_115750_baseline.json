@@ -1019,12 +1019,18 @@
           "primaryKey": false,
           "notNull": true
         },
-        "room_type": {
-          "name": "room_type",
-          "type": "enum_building_models_rooms_room_type",
-          "typeSchema": "public",
+        "room_type_id": {
+          "name": "room_type_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "is_restroom": {
+          "name": "is_restroom",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
         },
         "area_sq_ft": {
           "name": "area_sq_ft",
@@ -1040,6 +1046,18 @@
         },
         "zones": {
           "name": "zones",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "built_ins": {
+          "name": "built_ins",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fitted_sets": {
+          "name": "fitted_sets",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -1214,6 +1232,34 @@
           "notNull": false,
           "default": 0
         },
+        "opening_models_entrance_model_id": {
+          "name": "opening_models_entrance_model_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "opening_models_entrance_fit": {
+          "name": "opening_models_entrance_fit",
+          "type": "enum_building_models_rooms_opening_models_entrance_fit",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'stretch'"
+        },
+        "opening_models_entrance_yaw_deg": {
+          "name": "opening_models_entrance_yaw_deg",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "opening_models_entrance_depth": {
+          "name": "opening_models_entrance_depth",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
         "camera_preset_position_x": {
           "name": "camera_preset_position_x",
           "type": "numeric",
@@ -1278,6 +1324,21 @@
           "columns": [
             {
               "expression": "_parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "building_models_rooms_room_type_idx": {
+          "name": "building_models_rooms_room_type_idx",
+          "columns": [
+            {
+              "expression": "room_type_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1362,9 +1423,37 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "building_models_rooms_opening_models_entrance_opening_mo_idx": {
+          "name": "building_models_rooms_opening_models_entrance_opening_mo_idx",
+          "columns": [
+            {
+              "expression": "opening_models_entrance_model_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
+        "building_models_rooms_room_type_id_room_types_id_fk": {
+          "name": "building_models_rooms_room_type_id_room_types_id_fk",
+          "tableFrom": "building_models_rooms",
+          "tableTo": "room_types",
+          "columnsFrom": [
+            "room_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "building_models_rooms_surfaces_wall_inner_texture_id_textures_id_fk": {
           "name": "building_models_rooms_surfaces_wall_inner_texture_id_textures_id_fk",
           "tableFrom": "building_models_rooms",
@@ -1430,6 +1519,19 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
+        "building_models_rooms_opening_models_entrance_model_id_models_id_fk": {
+          "name": "building_models_rooms_opening_models_entrance_model_id_models_id_fk",
+          "tableFrom": "building_models_rooms",
+          "tableTo": "models",
+          "columnsFrom": [
+            "opening_models_entrance_model_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "building_models_rooms_parent_id_fk": {
           "name": "building_models_rooms_parent_id_fk",
           "tableFrom": "building_models_rooms",
@@ -1480,6 +1582,13 @@
         },
         "restroom_count": {
           "name": "restroom_count",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "office_count": {
+          "name": "office_count",
           "type": "numeric",
           "primaryKey": false,
           "notNull": false,
@@ -1968,6 +2077,97 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.room_types": {
+      "name": "room_types",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "room_types_slug_idx": {
+          "name": "room_types_slug_idx",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "room_types_updated_at_idx": {
+          "name": "room_types_updated_at_idx",
+          "columns": [
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "room_types_created_at_idx": {
+          "name": "room_types_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.exterior_options": {
       "name": "exterior_options",
       "schema": "",
@@ -2119,42 +2319,68 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.furniture_packages_compatible_room_types": {
-      "name": "furniture_packages_compatible_room_types",
+    "public.furniture_packages_members": {
+      "name": "furniture_packages_members",
       "schema": "",
       "columns": {
-        "order": {
-          "name": "order",
+        "_order": {
+          "name": "_order",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "parent_id": {
-          "name": "parent_id",
+        "_parent_id": {
+          "name": "_parent_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "enum_furniture_packages_compatible_room_types",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
         },
         "id": {
           "name": "id",
-          "type": "serial",
+          "type": "varchar",
           "primaryKey": true,
           "notNull": true
+        },
+        "model_id": {
+          "name": "model_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "x": {
+          "name": "x",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "z": {
+          "name": "z",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "rotation_y_deg": {
+          "name": "rotation_y_deg",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
         }
       },
       "indexes": {
-        "furniture_packages_compatible_room_types_order_idx": {
-          "name": "furniture_packages_compatible_room_types_order_idx",
+        "furniture_packages_members_order_idx": {
+          "name": "furniture_packages_members_order_idx",
           "columns": [
             {
-              "expression": "order",
+              "expression": "_order",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2165,11 +2391,26 @@
           "method": "btree",
           "with": {}
         },
-        "furniture_packages_compatible_room_types_parent_idx": {
-          "name": "furniture_packages_compatible_room_types_parent_idx",
+        "furniture_packages_members_parent_id_idx": {
+          "name": "furniture_packages_members_parent_id_idx",
           "columns": [
             {
-              "expression": "parent_id",
+              "expression": "_parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "furniture_packages_members_model_idx": {
+          "name": "furniture_packages_members_model_idx",
+          "columns": [
+            {
+              "expression": "model_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2182,95 +2423,25 @@
         }
       },
       "foreignKeys": {
-        "furniture_packages_compatible_room_types_parent_fk": {
-          "name": "furniture_packages_compatible_room_types_parent_fk",
-          "tableFrom": "furniture_packages_compatible_room_types",
-          "tableTo": "furniture_packages",
+        "furniture_packages_members_model_id_models_id_fk": {
+          "name": "furniture_packages_members_model_id_models_id_fk",
+          "tableFrom": "furniture_packages_members",
+          "tableTo": "models",
           "columnsFrom": [
-            "parent_id"
+            "model_id"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.furniture_packages_recommended_for": {
-      "name": "furniture_packages_recommended_for",
-      "schema": "",
-      "columns": {
-        "order": {
-          "name": "order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
         },
-        "parent_id": {
-          "name": "parent_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "enum_furniture_packages_recommended_for",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "furniture_packages_recommended_for_order_idx": {
-          "name": "furniture_packages_recommended_for_order_idx",
-          "columns": [
-            {
-              "expression": "order",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "furniture_packages_recommended_for_parent_idx": {
-          "name": "furniture_packages_recommended_for_parent_idx",
-          "columns": [
-            {
-              "expression": "parent_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "furniture_packages_recommended_for_parent_fk": {
-          "name": "furniture_packages_recommended_for_parent_fk",
-          "tableFrom": "furniture_packages_recommended_for",
+        "furniture_packages_members_parent_id_fk": {
+          "name": "furniture_packages_members_parent_id_fk",
+          "tableFrom": "furniture_packages_members",
           "tableTo": "furniture_packages",
           "columnsFrom": [
-            "parent_id"
+            "_parent_id"
           ],
           "columnsTo": [
             "id"
@@ -2301,26 +2472,24 @@
           "primaryKey": false,
           "notNull": true
         },
-        "family": {
-          "name": "family",
-          "type": "enum_furniture_packages_family",
-          "typeSchema": "public",
+        "tier_id": {
+          "name": "tier_id",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "tier": {
-          "name": "tier",
-          "type": "enum_furniture_packages_tier",
-          "typeSchema": "public",
+        "fitted": {
+          "name": "fitted",
+          "type": "boolean",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'core'"
+          "notNull": false,
+          "default": false
         },
         "model_id": {
           "name": "model_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "thumbnail_id": {
           "name": "thumbnail_id",
@@ -2368,6 +2537,21 @@
         }
       },
       "indexes": {
+        "furniture_packages_tier_idx": {
+          "name": "furniture_packages_tier_idx",
+          "columns": [
+            {
+              "expression": "tier_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "furniture_packages_model_idx": {
           "name": "furniture_packages_model_idx",
           "columns": [
@@ -2430,6 +2614,19 @@
         }
       },
       "foreignKeys": {
+        "furniture_packages_tier_id_furniture_tiers_id_fk": {
+          "name": "furniture_packages_tier_id_furniture_tiers_id_fk",
+          "tableFrom": "furniture_packages",
+          "tableTo": "furniture_tiers",
+          "columnsFrom": [
+            "tier_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "furniture_packages_model_id_models_id_fk": {
           "name": "furniture_packages_model_id_models_id_fk",
           "tableFrom": "furniture_packages",
@@ -2491,6 +2688,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "room_types_id": {
+          "name": "room_types_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "building_lines_id": {
           "name": "building_lines_id",
           "type": "integer",
@@ -2550,6 +2753,21 @@
           "method": "btree",
           "with": {}
         },
+        "furniture_packages_rels_room_types_id_idx": {
+          "name": "furniture_packages_rels_room_types_id_idx",
+          "columns": [
+            {
+              "expression": "room_types_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "furniture_packages_rels_building_lines_id_idx": {
           "name": "furniture_packages_rels_building_lines_id_idx",
           "columns": [
@@ -2595,6 +2813,19 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "furniture_packages_rels_room_types_fk": {
+          "name": "furniture_packages_rels_room_types_fk",
+          "tableFrom": "furniture_packages_rels",
+          "tableTo": "room_types",
+          "columnsFrom": [
+            "room_types_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "furniture_packages_rels_building_lines_fk": {
           "name": "furniture_packages_rels_building_lines_fk",
           "tableFrom": "furniture_packages_rels",
@@ -2628,6 +2859,97 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.furniture_tiers": {
+      "name": "furniture_tiers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp(3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "furniture_tiers_slug_idx": {
+          "name": "furniture_tiers_slug_idx",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "furniture_tiers_updated_at_idx": {
+          "name": "furniture_tiers_updated_at_idx",
+          "columns": [
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "furniture_tiers_created_at_idx": {
+          "name": "furniture_tiers_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.quotes": {
       "name": "quotes",
       "schema": "",
@@ -2640,6 +2962,12 @@
         },
         "title": {
           "name": "title",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference": {
+          "name": "reference",
           "type": "varchar",
           "primaryKey": false,
           "notNull": false
@@ -2704,6 +3032,21 @@
         }
       },
       "indexes": {
+        "quotes_reference_idx": {
+          "name": "quotes_reference_idx",
+          "columns": [
+            {
+              "expression": "reference",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "quotes_building_model_idx": {
           "name": "quotes_building_model_idx",
           "columns": [
@@ -3750,6 +4093,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "room_types_id": {
+          "name": "room_types_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "exterior_options_id": {
           "name": "exterior_options_id",
           "type": "integer",
@@ -3758,6 +4107,12 @@
         },
         "furniture_packages_id": {
           "name": "furniture_packages_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "furniture_tiers_id": {
+          "name": "furniture_tiers_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -3884,6 +4239,21 @@
           "method": "btree",
           "with": {}
         },
+        "payload_locked_documents_rels_room_types_id_idx": {
+          "name": "payload_locked_documents_rels_room_types_id_idx",
+          "columns": [
+            {
+              "expression": "room_types_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "payload_locked_documents_rels_exterior_options_id_idx": {
           "name": "payload_locked_documents_rels_exterior_options_id_idx",
           "columns": [
@@ -3904,6 +4274,21 @@
           "columns": [
             {
               "expression": "furniture_packages_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payload_locked_documents_rels_furniture_tiers_id_idx": {
+          "name": "payload_locked_documents_rels_furniture_tiers_id_idx",
+          "columns": [
+            {
+              "expression": "furniture_tiers_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4043,6 +4428,19 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "payload_locked_documents_rels_room_types_fk": {
+          "name": "payload_locked_documents_rels_room_types_fk",
+          "tableFrom": "payload_locked_documents_rels",
+          "tableTo": "room_types",
+          "columnsFrom": [
+            "room_types_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "payload_locked_documents_rels_exterior_options_fk": {
           "name": "payload_locked_documents_rels_exterior_options_fk",
           "tableFrom": "payload_locked_documents_rels",
@@ -4062,6 +4460,19 @@
           "tableTo": "furniture_packages",
           "columnsFrom": [
             "furniture_packages_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "payload_locked_documents_rels_furniture_tiers_fk": {
+          "name": "payload_locked_documents_rels_furniture_tiers_fk",
+          "tableFrom": "payload_locked_documents_rels",
+          "tableTo": "furniture_tiers",
+          "columnsFrom": [
+            "furniture_tiers_id"
           ],
           "columnsTo": [
             "id"
@@ -4557,6 +4968,40 @@
           "notNull": false,
           "default": "'*'"
         },
+        "success_redirect_url": {
+          "name": "success_redirect_url",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "success_title": {
+          "name": "success_title",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'Your quote request has been sent.'"
+        },
+        "success_body": {
+          "name": "success_body",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'The team will get back to you shortly. Your order number is {reference}.'"
+        },
+        "success_show_order_link": {
+          "name": "success_show_order_link",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "success_view_order_label": {
+          "name": "success_view_order_label",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'View your configuration'"
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp(3) with time zone",
@@ -4680,6 +5125,13 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'Classrooms'"
+        },
+        "step2_offices_hint": {
+          "name": "step2_offices_hint",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'On top of the classrooms — a school with offices comes with a kitchen too.'"
         },
         "step2_over_capacity_hint": {
           "name": "step2_over_capacity_hint",
@@ -4893,20 +5345,6 @@
         "w4"
       ]
     },
-    "public.enum_building_models_rooms_room_type": {
-      "name": "enum_building_models_rooms_room_type",
-      "schema": "public",
-      "values": [
-        "office",
-        "classroom",
-        "conference",
-        "kitchen",
-        "restroom",
-        "lounge",
-        "hallway",
-        "other"
-      ]
-    },
     "public.enum_building_models_rooms_shell_sun_direction": {
       "name": "enum_building_models_rooms_shell_sun_direction",
       "schema": "public",
@@ -4939,51 +5377,13 @@
         "none"
       ]
     },
-    "public.enum_furniture_packages_compatible_room_types": {
-      "name": "enum_furniture_packages_compatible_room_types",
+    "public.enum_building_models_rooms_opening_models_entrance_fit": {
+      "name": "enum_building_models_rooms_opening_models_entrance_fit",
       "schema": "public",
       "values": [
-        "office",
-        "classroom",
-        "conference",
-        "kitchen",
-        "restroom",
-        "lounge",
-        "hallway",
-        "other"
-      ]
-    },
-    "public.enum_furniture_packages_recommended_for": {
-      "name": "enum_furniture_packages_recommended_for",
-      "schema": "public",
-      "values": [
-        "office",
-        "classroom",
-        "conference",
-        "kitchen",
-        "restroom",
-        "lounge",
-        "hallway",
-        "other"
-      ]
-    },
-    "public.enum_furniture_packages_family": {
-      "name": "enum_furniture_packages_family",
-      "schema": "public",
-      "values": [
-        "office",
-        "conference",
-        "kitchen",
-        "seating",
-        "other"
-      ]
-    },
-    "public.enum_furniture_packages_tier": {
-      "name": "enum_furniture_packages_tier",
-      "schema": "public",
-      "values": [
-        "core",
-        "plus"
+        "stretch",
+        "contain",
+        "none"
       ]
     },
     "public.enum_quotes_status": {
@@ -5014,6 +5414,6 @@
     "tables": {},
     "columns": {}
   },
-  "id": "e23277c4-1b64-40dd-b03d-2f0bfeec362e",
+  "id": "197d1465-251f-48e1-be51-dd8eaac7cc55",
   "prevId": "00000000-0000-0000-0000-000000000000"
 }

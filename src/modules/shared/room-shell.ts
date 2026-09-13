@@ -44,6 +44,26 @@ export const OPENING_KINDS: readonly OpeningKind[] = OPENING_KIND_OPTIONS.map(
   (option) => option.value,
 )
 
+/**
+ * The models a room can be given, one per slot.
+ *
+ * Two of them are the kinds of opening. The third is for the door out of the
+ * building: a room in a trailer has a red steel entrance door and a plain
+ * interior one a metre apart, and one model for both was wrong for one of
+ * them. An opening marked as an entrance takes this model, and falls back to
+ * the door's when there is none.
+ */
+export const OPENING_MODEL_SLOT_OPTIONS = [
+  ...OPENING_KIND_OPTIONS,
+  { label: 'Entrance door', value: 'entrance' },
+] as const
+
+export type OpeningModelSlot = (typeof OPENING_MODEL_SLOT_OPTIONS)[number]['value']
+
+export const OPENING_MODEL_SLOTS: readonly OpeningModelSlot[] = OPENING_MODEL_SLOT_OPTIONS.map(
+  (option) => option.value,
+)
+
 export const OPENING_FIT_OPTIONS = [
   { label: 'Fill the opening', value: 'stretch' },
   { label: 'Fit inside (keep proportions)', value: 'contain' },

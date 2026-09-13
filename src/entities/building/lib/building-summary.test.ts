@@ -17,6 +17,7 @@ function scene(overrides: Partial<BuildingScene> = {}): BuildingScene {
     },
     unitCount: 6,
     restroomCount: 2,
+    officeCount: 0,
     sqft: 1344,
     sqm: null,
     dimensions: "24' x 56'",
@@ -110,5 +111,30 @@ describe('the unit switch', () => {
     const areaLess = buildingSummary(scene({ sqft: null, sqm: null }), 'sqft')
 
     expect(areaLess.some((fact) => fact.inUnits)).toBe(false)
+  })
+})
+
+describe('offices on top of the units', () => {
+  const school = {
+    line: {
+      id: 2,
+      name: 'EDUPlex',
+      slug: 'eduplex',
+      unitLabel: 'classrooms' as const,
+      rules: { restroomsRequiredAt: null, secondRestroomSetAt: null },
+    },
+  }
+
+  it('names the offices a school has on top of its classrooms', () => {
+    expect(labels(scene({ ...school, officeCount: 2 }))).toContain('Offices')
+  })
+
+  it('says nothing about offices a school has none of', () => {
+    expect(labels(scene({ ...school, officeCount: 0 }))).not.toContain('Offices')
+  })
+
+  it("does not count an office line's offices twice", () => {
+    // The first line already says "Offices": that is the unit.
+    expect(labels(scene({ officeCount: 6 })).filter((label) => label === 'Offices')).toHaveLength(1)
   })
 })

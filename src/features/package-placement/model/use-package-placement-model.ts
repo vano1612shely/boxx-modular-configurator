@@ -1,7 +1,7 @@
 'use client'
 
 import { useGLTF } from '@react-three/drei'
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
 import type { BuildingScene, FittedSet, Room, RoomType, Zone } from '@/entities/building'
 import {
@@ -14,6 +14,7 @@ import {
   reachableFloor,
   zoneAccepts,
   zoneAt,
+  zoneOfSet,
 } from '@/entities/building'
 import { useConfiguration, type PlacedPackage } from '@/entities/configuration'
 import { useConfiguratorSession } from '@/entities/configurator-session'
@@ -201,18 +202,26 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   }, [focusedRoom, packages])
 
   /**
-   * The arrangement standing in the focused room, or null.
+   * The arrangement standing on this piece of floor, or null.
    *
    * Recognised rather than flagged: a placement is fitted exactly when the room
    * it stands in offers an arrangement for its package, which is the same test
-   * the renderer and a reopened order use. One at a time, because adding a
-   * second replaces the first — a room has one kitchen.
+   * the renderer and a reopened order use. One at a time per piece of floor,
+   * because adding a second replaces the first — a kitchen has one kitchen.
+   * Per zone rather than per room: a long building has a kitchen at each end
+   * of one open room, and fitting the far one must not take out the near one.
    */
-  const standingFitted = useMemo<PlacedItem | null>(() => {
-    const room = focusedRoom
-    if (!room) return null
-    return placedInFocusedRoom.find((item) => fittedSetOf(room, item.packageId) !== null) ?? null
-  }, [focusedRoom, placedInFocusedRoom])
+  const standingFittedIn = useCallback(
+    (zone: Zone | null): PlacedItem | null => {
+      const room = focusedRoom
+      if (!room) return null
+      const here = zone
+        ? placedInFocusedRoom.filter((item) => zoneAt(room, item.x, item.z)?.key === zone.key)
+        : placedInFocusedRoom
+      return here.find((item) => fittedSetOf(room, item.packageId, item) !== null) ?? null
+    },
+    [focusedRoom, placedInFocusedRoom],
+  )
 
   /** Which of them to show, and what is standing in each. Cheap, so it may follow a drag. */
   const sections = useMemo<FloorSection[]>(() => {
@@ -223,24 +232,27 @@ export function usePackagePlacementModel({ building, packages }: Args) {
       ? catalogue.filter((section) => section.zone?.key === activeZone.key)
       : catalogue
 
-    return shown.map((section) => ({
-      ...section,
-      // Both halves have to be there: the building says what stands where, the
-      // catalogue says what it is called and what it costs. A set naming a
-      // package that was deleted, or one whose package has since stopped being
-      // fitted, is quietly not offered rather than offered as a blank.
-      fitted: fittedSetsIn(room, section.zone).flatMap((set) => {
-        const pkg = packagesById.get(set.packageId)
-        if (!pkg || !pkg.fitted) return []
-        return [{ set, pkg, standing: standingFitted?.packageId === set.packageId }]
-      }),
-      placed: section.zone
-        ? placedInFocusedRoom.filter(
-            (item) => zoneAt(room, item.x, item.z)?.key === section.zone?.key,
-          )
-        : placedInFocusedRoom,
-    }))
-  }, [catalogue, focusedRoom, activeZone, placedInFocusedRoom, packagesById, standingFitted])
+    return shown.map((section) => {
+      const standing = standingFittedIn(section.zone)
+      return {
+        ...section,
+        // Both halves have to be there: the building says what stands where, the
+        // catalogue says what it is called and what it costs. A set naming a
+        // package that was deleted, or one whose package has since stopped being
+        // fitted, is quietly not offered rather than offered as a blank.
+        fitted: fittedSetsIn(room, section.zone).flatMap((set) => {
+          const pkg = packagesById.get(set.packageId)
+          if (!pkg || !pkg.fitted) return []
+          return [{ set, pkg, standing: standing?.packageId === set.packageId }]
+        }),
+        placed: section.zone
+          ? placedInFocusedRoom.filter(
+              (item) => zoneAt(room, item.x, item.z)?.key === section.zone?.key,
+            )
+          : placedInFocusedRoom,
+      }
+    })
+  }, [catalogue, focusedRoom, activeZone, placedInFocusedRoom, packagesById, standingFittedIn])
 
   // From the catalogue, not from `sections`: this feeds the preloader, and each
   // preload walks suspend-react's whole global cache. It must not churn.
@@ -352,12 +364,14 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   }
 
   /**
-   * Puts an arrangement in the room, taking out whichever one was there.
+   * Puts an arrangement on its piece of floor, taking out whichever one was there.
    *
-   * A room has one kitchen, so this is a swap rather than an add: pressing a
+   * A kitchen has one kitchen, so this is a swap rather than an add: pressing a
    * second arrangement means "that one instead", and asking the visitor to
    * delete the first one first would be asking them to do the obvious thing by
    * hand. Pressing the one already standing does nothing — the tile says so.
+   * The piece of floor is the zone the arrangement stands in, or the whole
+   * room when it is not divided: the other end's kitchen is another kitchen.
    *
    * What it leaves behind is an ordinary placement, at the middle of the parts.
    * Everything downstream of that — the collision tests, the quote, the saved
@@ -366,9 +380,10 @@ export function usePackagePlacementModel({ building, packages }: Args) {
   const putFitted = (set: FittedSet): boolean => {
     const room = focusedRoom
     if (!room) return false
-    if (standingFitted?.packageId === set.packageId) return false
+    const standing = standingFittedIn(zoneOfSet(room, set))
+    if (standing?.packageId === set.packageId) return false
 
-    if (standingFitted) removePackage(standingFitted.instanceId)
+    if (standing) removePackage(standing.instanceId)
 
     const centre = partsCentre(set.parts)
     addPackage({

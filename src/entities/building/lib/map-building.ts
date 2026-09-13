@@ -1,5 +1,5 @@
 import {
-  OPENING_KINDS,
+  OPENING_MODEL_SLOTS,
   SHELL_DEFAULTS,
   SHELL_SURFACES,
   SUN_BEARINGS,
@@ -18,6 +18,7 @@ import type {
   FittedSet,
   OpeningFit,
   OpeningKind,
+  OpeningModelSlot,
   OpeningModelStyle,
   Point2,
   RoofConfig,
@@ -273,6 +274,7 @@ export function roomOpenings(value: unknown): RoomOpening[] {
       sill: numberOr(opening.sill, kind === 'door' ? 0 : SHELL_DEFAULTS.windowSill),
       yawDeg: numberOr(opening.yawDeg, 0),
       mirror: opening.mirror === true,
+      entrance: opening.entrance === true,
     })
   }
   return openings
@@ -389,14 +391,14 @@ function optionalModelUrl(value: unknown): string | null {
   return assetUrl(value as UploadDoc)
 }
 
-function roomOpeningModels(doc: RoomDoc): Record<OpeningKind, OpeningModelStyle> {
+function roomOpeningModels(doc: RoomDoc): Record<OpeningModelSlot, OpeningModelStyle> {
   const group = doc.openingModels
 
-  return Object.fromEntries(
-    OPENING_KINDS.map((kind) => {
-      const entry = group?.[kind]
+  const styles = Object.fromEntries(
+    OPENING_MODEL_SLOTS.map((slot) => {
+      const entry = group?.[slot]
       return [
-        kind,
+        slot,
         {
           url: optionalModelUrl(entry?.model),
           fit: isOpeningFit(entry?.fit) ? entry.fit : 'stretch',
@@ -405,7 +407,12 @@ function roomOpeningModels(doc: RoomDoc): Record<OpeningKind, OpeningModelStyle>
         } satisfies OpeningModelStyle,
       ]
     }),
-  ) as Record<OpeningKind, OpeningModelStyle>
+  ) as Record<OpeningModelSlot, OpeningModelStyle>
+
+  // An entrance with no model of its own is drawn with the door's: a room
+  // authored before there were entrances still gets the door it always had.
+  if (styles.entrance.url === null) styles.entrance = styles.door
+  return styles
 }
 
 function roomSideAxes(value: unknown, polygon: RoomVertex[]): RoomShellConfig['sideAxes'] {
@@ -539,6 +546,7 @@ export function mapBuildingScene(
     },
     unitCount: doc.unitCount,
     restroomCount: doc.restroomCount ?? 0,
+    officeCount: doc.officeCount ?? 0,
     sqft: doc.sqft ?? null,
     sqm: typeof doc.sqm === 'number' ? doc.sqm : null,
     dimensions: doc.dimensions ?? null,

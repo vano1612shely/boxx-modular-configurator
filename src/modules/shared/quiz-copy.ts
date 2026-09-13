@@ -21,6 +21,7 @@ export const QUIZ_COPY_DEFAULTS = {
     description: '',
     officesLabel: 'Offices',
     classroomsLabel: 'Classrooms',
+    officesHint: 'On top of the classrooms — a school with offices comes with a kitchen too.',
     overCapacityHint: 'Beyond the largest standard size — we’ll quote it as a custom build.',
     restroomsLabel: 'Restrooms',
     restroomsHint: 'We’ll pick the closest model that covers it.',
@@ -73,6 +74,8 @@ export type QuizCopy = {
     description: string
     officesLabel: string
     classroomsLabel: string
+    /** Under the offices counter a school gets, on top of its classrooms. */
+    officesHint: string
     overCapacityHint: string
     restroomsLabel: string
     restroomsHint: string

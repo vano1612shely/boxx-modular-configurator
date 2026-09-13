@@ -191,7 +191,11 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
               remount orphaned a set. A storey is also cut out mid-air, and a
               ground shadow under it would say it were standing on something. */}
           <group visible={!vm.isRoomFocused && vm.selectedFloor === null}>
-            <GroundShadow y={(bounds?.min[1] ?? 0) - 0.01} changed={`${exteriorPicks}|${poses}`} />
+            <GroundShadow
+              y={(bounds?.min[1] ?? 0) - 0.01}
+              size={groundSize(bounds)}
+              changed={`${exteriorPicks}|${poses}`}
+            />
           </group>
           {children}
         </Suspense>
@@ -297,9 +301,28 @@ export function SceneViewer({ building, readOnly = false, children }: Props) {
  * moved. Memoised on the things that can move it: where the ground is, what
  * stands outside, what stands inside.
  */
-const GroundShadow = memo(function GroundShadow({ y }: { y: number; changed: string }) {
+const GroundShadow = memo(function GroundShadow({
+  y,
+  size,
+}: {
+  y: number
+  size: number
+  changed: string
+}) {
   return (
-    <ContactShadows position={[0, y, 0]} opacity={0.4} scale={45} blur={3} far={12} frames={1} />
+    <ContactShadows position={[0, y, 0]} opacity={0.4} scale={size} blur={3} far={12} frames={1} />
   )
 })
+
+/**
+ * Wide enough for the building to stand on with room to spare.
+ *
+ * A fixed 45 m did for offices; a ten-classroom school is fifty metres long,
+ * and a shadow plane it overhangs reads as a slab the building fell off.
+ */
+function groundSize(bounds: { min: number[]; max: number[] } | null): number {
+  if (!bounds) return 45
+  const longest = Math.max(bounds.max[0] - bounds.min[0], bounds.max[2] - bounds.min[2])
+  return Math.max(45, Math.ceil(longest * 1.5))
+}
 

@@ -112,7 +112,7 @@ function placementObstacles(
   room: Room | undefined,
   buildingModelUrl: string,
 ): Obstacle[] {
-  const set = room ? fittedSetOf(room, placement.packageId) : null
+  const set = room ? fittedSetOf(room, placement.packageId, placement) : null
   if (set) return fittingObstacles(set.parts, buildingModelUrl)
 
   const pkg = placedPackage(packagesById.get(placement.packageId), placement.memberKey)
@@ -242,7 +242,7 @@ export function PlacedPackages({ building, packages }: Props) {
           // An arrangement the building holds rather than a package carried in.
           // Recognised from the room, not from a flag on the placement, so a
           // saved order reopened months later draws it from the same answer.
-          const set = fittedSetOf(room, placement.packageId)
+          const set = fittedSetOf(room, placement.packageId, placement)
           if (set) {
             return (
               <RoomParts

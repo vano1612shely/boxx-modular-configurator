@@ -3,6 +3,8 @@ export type IntakeAnswers = {
   /** Building line slug. */
   line?: string
   units?: number
+  /** Offices on top of the units — only asked of a line counted in classrooms. */
+  offices?: number
   restrooms?: number
 }
 
@@ -22,9 +24,26 @@ export function changeSelectionHref(answers: IntakeAnswers, region?: string): st
   const params = new URLSearchParams({ change: '1' })
 
   if (answers.line) params.set('building', answers.line)
-  if (answers.units !== undefined) params.set('offices', String(answers.units))
-  if (answers.restrooms !== undefined) params.set('restrooms', String(answers.restrooms))
+  setCounts(params, answers)
   if (region) params.set('region', region)
 
   return `/configurator?${params}`
+}
+
+/**
+ * The counts, spelled the way the URL carries them.
+ *
+ * A school's units go as `classrooms` and its extra offices as `offices`; an
+ * office line's units go as `offices`, which is also what every link written
+ * before there were schools says. The presence of `classrooms` is what tells
+ * the two readings of `offices` apart.
+ */
+export function setCounts(params: URLSearchParams, answers: IntakeAnswers): void {
+  if (answers.offices !== undefined) {
+    if (answers.units !== undefined) params.set('classrooms', String(answers.units))
+    params.set('offices', String(answers.offices))
+  } else if (answers.units !== undefined) {
+    params.set('offices', String(answers.units))
+  }
+  if (answers.restrooms !== undefined) params.set('restrooms', String(answers.restrooms))
 }

@@ -168,6 +168,7 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
     lineSlug: building.line.slug,
     unitCount: building.unitCount,
     restroomCount: building.restroomCount,
+    officeCount: building.officeCount,
     packages: quotePackages,
     exterior: quoteExterior,
     totalPrice,

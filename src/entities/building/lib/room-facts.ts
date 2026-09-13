@@ -35,9 +35,11 @@ export function roomFacts(
   return [
     // A restroom's catalogue type is required by the schema and answers a
     // question nobody asked of it — which furniture fits somewhere nothing is
-    // furnished. Whichever row an admin happened to pick stays unsaid.
+    // furnished. Whichever row an admin happened to pick stays unsaid — unless
+    // they picked something that is plainly not a restroom, which is how a
+    // corridor is made: look-only like a restroom, and named for what it is.
     ...(room.isRestroom
-      ? [{ label: 'Type', value: 'Restroom' }]
+      ? [{ label: 'Type', value: room.roomType === 'restroom' ? 'Restroom' : named(room.roomType) }]
       : room.zones.length > 0
         ? room.zones.map((each) => ({ label: each.name, value: named(each.roomType) }))
         : [{ label: 'Type', value: named(room.roomType) }]),

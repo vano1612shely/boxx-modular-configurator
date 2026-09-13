@@ -87,6 +87,17 @@ describe('fittedSetOf', () => {
   it('answers nothing in a room nobody fitted out', () => {
     expect(fittedSetOf(room([]), 7)).toBeNull()
   })
+
+  // One open room with a kitchen at each end offers the same package twice;
+  // the placement stands where it was put from, and that says which.
+  it('tells two arrangements of one package apart by where the placement stands', () => {
+    const west = set('s-1', 7, [modelPart('a', 1, 1)])
+    const east = set('s-2', 7, [modelPart('b', 9, 1)])
+    const both = room([west, east])
+    expect(fittedSetOf(both, 7, { x: 8.5, z: 1 })).toBe(east)
+    expect(fittedSetOf(both, 7, { x: 2, z: 1 })).toBe(west)
+    expect(fittedSetOf(both, 7)).toBe(west)
+  })
 })
 
 describe('fittedSetsIn', () => {

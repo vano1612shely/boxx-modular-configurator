@@ -4,7 +4,7 @@ import { vec3Field } from '../../shared/fields/vec3'
 import { zoneBoxFields } from '../../shared/fields/zone-box'
 import {
   OPENING_FIT_OPTIONS,
-  OPENING_KIND_OPTIONS,
+  OPENING_MODEL_SLOT_OPTIONS,
   SHELL_DEFAULTS,
   SUN_DIRECTION_OPTIONS,
   TEXTURED_SURFACE_OPTIONS,
@@ -62,6 +62,18 @@ export const BuildingModels: CollectionConfig = {
                   admin: { description: 'Number of offices/classrooms this size provides.' },
                 },
                 { name: 'restroomCount', type: 'number', defaultValue: 0 },
+                {
+                  name: 'officeCount',
+                  type: 'number',
+                  defaultValue: 0,
+                  min: 0,
+                  admin: {
+                    description:
+                      'Offices on top of the units above, for lines counted in classrooms. ' +
+                      'A school with two offices and a kitchen is still a six-classroom school; ' +
+                      'this is what lets it be asked for.',
+                  },
+                },
                 {
                   name: 'sqft',
                   type: 'number',
@@ -555,9 +567,10 @@ export const BuildingModels: CollectionConfig = {
                   type: 'group',
                   admin: {
                     description:
-                      'Real 3D doors and windows. Assign one and it replaces the flat leaf for every opening of that kind in this room.',
+                      'Real 3D doors and windows. Assign one and it replaces the flat leaf for every opening of that kind in this room. ' +
+                      'An opening marked as an entrance takes the entrance door instead, when one is set.',
                   },
-                  fields: OPENING_KIND_OPTIONS.map((option) => ({
+                  fields: OPENING_MODEL_SLOT_OPTIONS.map((option) => ({
                     name: option.value,
                     type: 'group' as const,
                     label: option.label,

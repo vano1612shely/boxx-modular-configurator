@@ -1,7 +1,7 @@
 'use client'
 
 import type { OpeningFit, RoomDoc } from '@/entities/building'
-import { OPENING_KIND_OPTIONS } from '@/modules/shared/room-shell'
+import { OPENING_MODEL_SLOT_OPTIONS } from '@/modules/shared/room-shell'
 import { For, Show } from '@/shared/ui/control-flow'
 
 import type { SceneEditorVm } from '../../../model/use-scene-editor-model'
@@ -15,7 +15,7 @@ import { NumberInput } from '../../controls/NumberInput'
 import { SegmentedControl } from '../../controls/SegmentedControl'
 import { button, s } from '../../editor-styles'
 
-type OpeningKindValue = (typeof OPENING_KIND_OPTIONS)[number]['value']
+type OpeningKindValue = (typeof OPENING_MODEL_SLOT_OPTIONS)[number]['value']
 
 const FIT_OPTIONS = [
   { value: 'stretch', label: 'Fill', title: 'Stretch to meet the reveal exactly' },
@@ -130,9 +130,10 @@ export function RoomOpeningModelsSection({
     <>
       <p style={s.hint}>
         A model replaces the flat leaf for every opening of that kind in this room.{' '}
-        <strong>Facing</strong> turns it so its front points out of the room.
+        <strong>Facing</strong> turns it so its front points out of the room. The entrance
+        door is used by openings marked as entrances; blank, they take the door.
       </p>
-      <For each={OPENING_KIND_OPTIONS} getKey={(option) => option.value}>
+      <For each={OPENING_MODEL_SLOT_OPTIONS} getKey={(option) => option.value}>
         {(option) => (
           <ModelSlot
             vm={vm}

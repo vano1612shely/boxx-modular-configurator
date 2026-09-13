@@ -87,6 +87,7 @@ export async function getQuizCopy(): Promise<QuizCopy> {
       description: typeof step2.description === 'string' ? step2.description : '',
       officesLabel: textOr(step2.officesLabel, D.step2.officesLabel),
       classroomsLabel: textOr(step2.classroomsLabel, D.step2.classroomsLabel),
+      officesHint: textOr(step2.officesHint, D.step2.officesHint),
       overCapacityHint: textOr(step2.overCapacityHint, D.step2.overCapacityHint),
       restroomsLabel: textOr(step2.restroomsLabel, D.step2.restroomsLabel),
       restroomsHint: textOr(step2.restroomsHint, D.step2.restroomsHint),

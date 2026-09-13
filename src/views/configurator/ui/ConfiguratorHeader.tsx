@@ -49,6 +49,10 @@ export function ConfiguratorHeader({
   const area = areaIn(unit, { sqft: building.sqft, sqm: building.sqm }, null)
   const meta = [
     `${building.unitCount} ${building.line.unitLabel}`,
+    // A school's offices, on top of its classrooms; an office line's are its units.
+    building.officeCount > 0 && building.line.unitLabel !== 'offices'
+      ? `${building.officeCount} offices`
+      : null,
     area === null ? null : formatArea(area, unit),
   ]
     .filter(Boolean)

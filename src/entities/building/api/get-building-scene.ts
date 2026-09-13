@@ -20,6 +20,11 @@ type Query = {
   building?: string
   units?: number
   restrooms?: number
+  /**
+   * Offices on top of the units, for a line counted in classrooms. For a line
+   * counted in offices this is ignored: its offices are its units.
+   */
+  offices?: number
   region?: RegionScope
 }
 
@@ -145,12 +150,17 @@ export async function getBuildingScene(query: Query): Promise<BuildingResolution
 
   const first = mapBuildingScene(models.docs[0])
   const result = resolveBuildingSize(
-    { requestedUnits: query.units, restroomsRequested: query.restrooms ?? 0 },
+    {
+      requestedUnits: query.units,
+      restroomsRequested: query.restrooms ?? 0,
+      officesRequested: first.line.unitLabel === 'offices' ? 0 : (query.offices ?? 0),
+    },
     first.line.rules,
     models.docs.map((doc) => ({
       id: doc.id,
       unitCount: doc.unitCount,
       restroomCount: doc.restroomCount ?? 0,
+      officeCount: doc.officeCount ?? 0,
     })),
   )
 

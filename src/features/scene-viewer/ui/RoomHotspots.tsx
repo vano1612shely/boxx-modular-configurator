@@ -1,7 +1,7 @@
 'use client'
 
 import { Html } from '@react-three/drei'
-import { Plus, Toilet } from 'lucide-react'
+import { Eye, Plus, Toilet } from 'lucide-react'
 
 import { roomFloorTopY } from '@/entities/building'
 import { cn } from '@/shared/lib'
@@ -82,8 +82,19 @@ export function RoomHotspots({ markers, focusedKey, onOpenMarker }: Props) {
                 // are the largest thing on it unless they start small.
                 size="sm"
                 // The plus is the whole promise of furnishing, and on a restroom
-                // it would be the most misleading thing on the screen.
-                icon={marker.entry === 'preview' ? <Toilet /> : <Plus />}
+                // it would be the most misleading thing on the screen. A
+                // look-only room that is not a restroom — a corridor, say —
+                // gets an eye: it is there to be looked at, and a toilet over
+                // a corridor would be the second most misleading thing.
+                icon={
+                  marker.entry !== 'preview' ? (
+                    <Plus />
+                  ) : marker.room.roomType === 'restroom' ? (
+                    <Toilet />
+                  ) : (
+                    <Eye />
+                  )
+                }
                 className="max-w-[9rem] shadow-md transition-transform group-hover:scale-105"
               >
                 <span className="truncate">{marker.name}</span>

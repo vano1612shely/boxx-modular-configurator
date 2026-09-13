@@ -64,7 +64,7 @@ export function StaticPlacements({ building, packages }: Props) {
         // configurator resolves it: an order line names a package and a room,
         // and that pair is what the building answers with a kitchen. Nothing
         // about the order had to change for this to come back.
-        const set = fittedSetOf(room, placement.packageId)
+        const set = fittedSetOf(room, placement.packageId, placement)
         if (set) {
           return (
             <RoomParts

@@ -158,6 +158,11 @@ export const ConfiguratorSettings: GlobalConfig = {
                   ],
                 },
                 text(
+                  'officesHint',
+                  QUIZ_COPY_DEFAULTS.step2.officesHint,
+                  'Under the extra offices counter a classroom line gets. The label above it is the offices label.',
+                ),
+                text(
                   'overCapacityHint',
                   QUIZ_COPY_DEFAULTS.step2.overCapacityHint,
                   'Appears under the counter once the number passes the largest size on offer.',

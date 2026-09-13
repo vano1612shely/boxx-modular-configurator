@@ -41,6 +41,7 @@ async function sceneFor(order: SavedOrder) {
   return getBuildingScene({
     building: order.lineSlug,
     units: order.unitCount,
+    offices: order.officeCount,
     restrooms: order.restroomCount,
     // No region, deliberately: an order is a record of what was ordered, and a
     // building that has since stopped being sold somewhere still has to open.

@@ -4,12 +4,20 @@ export type SizingInput = {
   requestedUnits: number
   /** Restroom sets the customer asked for. The line's rules can raise it. */
   restroomsRequested: number
+  /**
+   * Offices asked for on top of the units. Only a line counted in something
+   * else has these — a school's offices are not classrooms, and a school with
+   * two of them and a kitchen is still a six-classroom school. Zero for a line
+   * whose units are offices already.
+   */
+  officesRequested?: number
 }
 
 export type SizingCandidate = {
   id: number
   unitCount: number
   restroomCount: number
+  officeCount?: number
 }
 
 export type SizingResult =
@@ -21,8 +29,17 @@ export type SizingResult =
   | { status: 'over-capacity' }
   | { status: 'no-match' }
 
-// Size is decided before restrooms: smallest model that holds the request, then
-// among those the smallest restroom count covering it.
+/**
+ * Size is decided before anything else: the smallest model that holds the
+ * request. Among those, restrooms — the count the customer asked for or the
+ * line's rules mandate, whichever is more — and among those, offices. Each
+ * step takes the smallest count that covers what was asked, and where nothing
+ * covers it, the most on offer rather than a refusal.
+ *
+ * Restrooms before offices because a restroom can be the law and an office
+ * never is: where the catalogue has a model with the restrooms and another
+ * with the offices but none with both, the one that meets the code wins.
+ */
 export function resolveBuildingSize(
   input: SizingInput,
   rules: BuildingLineRules,
@@ -46,20 +63,38 @@ export function resolveBuildingSize(
     mandatedRestroomSets(rules, input.requestedUnits),
   )
 
-  const covering = variants.filter(
-    (candidate) => candidate.restroomCount >= restroomSetsRequired,
+  const withRestrooms = closest(
+    variants,
+    (candidate) => candidate.restroomCount,
+    restroomSetsRequired,
   )
-  // Nothing covers it: take the most restrooms available rather than refusing.
-  const shortlist = covering.length > 0 ? covering : variants
-  const target = covering.length > 0
-    ? Math.min(...shortlist.map((candidate) => candidate.restroomCount))
-    : Math.max(...shortlist.map((candidate) => candidate.restroomCount))
+  const withOffices = closest(
+    withRestrooms,
+    (candidate) => candidate.officeCount ?? 0,
+    Math.max(input.officesRequested ?? 0, 0),
+  )
 
-  const matches = shortlist.filter((candidate) => candidate.restroomCount === target)
   // Lowest id wins, so identical entries resolve independently of query order.
-  const chosen = matches.reduce((best, candidate) => (candidate.id < best.id ? candidate : best))
+  const chosen = withOffices.reduce((best, candidate) => (candidate.id < best.id ? candidate : best))
 
   return { status: 'ok', modelId: chosen.id, restroomSetsRequired }
+}
+
+/**
+ * The candidates whose count sits closest above what was asked — or, when
+ * none reaches it, the ones with the most.
+ */
+function closest(
+  candidates: SizingCandidate[],
+  count: (candidate: SizingCandidate) => number,
+  wanted: number,
+): SizingCandidate[] {
+  const covering = candidates.filter((candidate) => count(candidate) >= wanted)
+  const shortlist = covering.length > 0 ? covering : candidates
+  const target =
+    covering.length > 0 ? Math.min(...shortlist.map(count)) : Math.max(...shortlist.map(count))
+
+  return shortlist.filter((candidate) => count(candidate) === target)
 }
 
 function mandatedRestroomSets(rules: BuildingLineRules, units: number): number {

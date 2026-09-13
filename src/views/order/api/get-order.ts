@@ -28,6 +28,7 @@ export type SavedOrder = {
   lineSlug: string
   unitCount: number
   restroomCount: number
+  officeCount: number
   packages: StoredQuotePackage[]
   exterior: StoredQuoteExterior[]
   totalPrice: number
@@ -129,6 +130,7 @@ function toSavedOrder(doc: QuoteDoc): SavedOrder {
     lineSlug: config.lineSlug,
     unitCount: config.unitCount,
     restroomCount: config.restroomCount,
+    officeCount: config.officeCount,
     packages: readStoredPackages(config.packages ?? []),
     exterior: readStoredExterior(config.exterior ?? []),
     totalPrice: config.totalPrice,

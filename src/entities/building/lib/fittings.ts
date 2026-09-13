@@ -52,11 +52,36 @@ export function partGeometryKey(part: RoomPart, buildingModelUrl: string): strin
  * Looked up by the package rather than stored on the placement, so a saved
  * order needs nothing it did not already have: an order line names a package
  * and a room, and that pair is what the building answers with an arrangement.
- * The cost is that a room may offer one arrangement per package, which is also
- * what makes "swap it for another" mean something.
+ *
+ * A room may offer the same package in more than one place — a long building
+ * has a kitchen at each end of one open room — and then the placement's own
+ * position tells them apart: a fitted placement stands at the middle of its
+ * parts, so the nearest arrangement is the one it was put from. Without a
+ * position, the first; that is every caller that has only a package to ask
+ * with, and it is right whenever a room offers a package once.
  */
-export function fittedSetOf(room: Room, packageId: number): FittedSet | null {
-  return room.fittedSets.find((set) => set.packageId === packageId) ?? null
+export function fittedSetOf(room: Room, packageId: number, at?: Point2 | null): FittedSet | null {
+  const offered = room.fittedSets.filter((set) => set.packageId === packageId)
+  if (offered.length === 0) return null
+  if (offered.length === 1 || !at) return offered[0]
+
+  let nearest = offered[0]
+  let least = Infinity
+  for (const set of offered) {
+    const centre = partsCentre(set.parts)
+    const distance = (centre.x - at.x) ** 2 + (centre.z - at.z) ** 2
+    if (distance < least) {
+      least = distance
+      nearest = set
+    }
+  }
+  return nearest
+}
+
+/** The zone an arrangement stands in — null in an undivided room, or off every zone. */
+export function zoneOfSet(room: Room, set: FittedSet): Zone | null {
+  const centre = partsCentre(set.parts)
+  return room.zones.find((zone) => pointInPolygon(centre, zone.polygon)) ?? null
 }
 
 /**

@@ -7,7 +7,7 @@ import type { QuizCopy } from '@/modules/shared/quiz-copy'
 import { Card, Eyebrow, Field, OptionGroup, Pill, Progress } from '@/shared/ui/boxx'
 import { Match, Show, Switch } from '@/shared/ui/control-flow'
 
-import type { IntakeAnswers } from '../lib/intake-href'
+import { setCounts, type IntakeAnswers } from '../lib/intake-href'
 
 export type IntakeLine = {
   slug: string
@@ -47,9 +47,13 @@ export function IntakeForm({ lines, region, answers, copy }: Props) {
       : (lines[0]?.slug ?? ''),
   )
   const [units, setUnits] = useState(answers?.units ?? 2)
+  const [offices, setOffices] = useState(answers?.offices ?? 0)
   const [restrooms, setRestrooms] = useState(answers?.restrooms ?? 0)
 
   const line = lines.find((l) => l.slug === lineSlug) ?? lines[0]
+  // A school is counted in classrooms, and its offices are something extra to
+  // ask about. An office line's offices are its units, asked about already.
+  const asksForOffices = line?.unitLabel === 'classrooms'
 
   // Told here rather than after navigating, which is where the over-capacity
   // screen used to be the first news of it.
@@ -64,11 +68,8 @@ export function IntakeForm({ lines, region, answers, copy }: Props) {
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
-    const params = new URLSearchParams({
-      building: lineSlug,
-      offices: String(units),
-      restrooms: String(restrooms),
-    })
+    const params = new URLSearchParams({ building: lineSlug })
+    setCounts(params, { units, offices: asksForOffices ? offices : undefined, restrooms })
     if (region) params.set('region', region)
     router.push(`/configurator?${params.toString()}`)
   }
@@ -142,6 +143,17 @@ export function IntakeForm({ lines, region, answers, copy }: Props) {
                 min={1}
                 max={99}
               />
+
+              <Show when={asksForOffices}>
+                <Field.Stepper
+                  label={copy.step2.officesLabel}
+                  hint={copy.step2.officesHint}
+                  value={offices}
+                  onChange={setOffices}
+                  min={0}
+                  max={20}
+                />
+              </Show>
 
               <Field.Stepper
                 label={copy.step2.restroomsLabel}

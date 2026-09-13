@@ -57,6 +57,8 @@ export const quoteConfigurationSchema = z.object({
   lineSlug: z.string(),
   unitCount: z.number(),
   restroomCount: z.number(),
+  // Optional so quotes taken before schools had offices still parse.
+  officeCount: z.number().optional(),
   packages: z.array(quotePackageSchema),
   // What was picked at each exterior spot. Optional so quotes taken before
   // there were any still parse.

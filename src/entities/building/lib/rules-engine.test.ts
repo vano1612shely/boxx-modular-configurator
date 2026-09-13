@@ -147,3 +147,72 @@ describe('resolveBuildingSize — the line can insist', () => {
     expect(result).toEqual({ status: 'ok', modelId: 2, restroomSetsRequired: 2 })
   })
 })
+
+describe('resolveBuildingSize — offices on top of the units', () => {
+  // The EDUPlex six-classroom family: plain, with restrooms, with two offices
+  // and a kitchen, and with both.
+  const school = [
+    { id: 21, unitCount: 6, restroomCount: 0, officeCount: 0 },
+    { id: 22, unitCount: 6, restroomCount: 3, officeCount: 0 },
+    { id: 23, unitCount: 6, restroomCount: 0, officeCount: 2 },
+    { id: 24, unitCount: 6, restroomCount: 3, officeCount: 2 },
+    { id: 25, unitCount: 8, restroomCount: 0, officeCount: 0 },
+  ]
+
+  it('keeps the offices out of the classroom count', () => {
+    // Six classrooms and two offices is the six-classroom school with offices,
+    // never the eight-classroom one.
+    const result = resolveBuildingSize(
+      { requestedUnits: 6, restroomsRequested: 0, officesRequested: 2 },
+      open,
+      school,
+    )
+    expect(result).toEqual({ status: 'ok', modelId: 23, restroomSetsRequired: 0 })
+  })
+
+  it('gives the plain school to someone who asked for no extras', () => {
+    const result = resolveBuildingSize(
+      { requestedUnits: 6, restroomsRequested: 0, officesRequested: 0 },
+      open,
+      school,
+    )
+    expect(result).toMatchObject({ modelId: 21 })
+  })
+
+  it('combines the two extras when both are asked for', () => {
+    const result = resolveBuildingSize(
+      { requestedUnits: 6, restroomsRequested: 1, officesRequested: 1 },
+      open,
+      school,
+    )
+    expect(result).toMatchObject({ modelId: 24 })
+  })
+
+  it('lets a mandated restroom outrank a wished-for office', () => {
+    const noBoth = school.filter((candidate) => candidate.id !== 24)
+    const result = resolveBuildingSize(
+      { requestedUnits: 6, restroomsRequested: 0, officesRequested: 2 },
+      rules,
+      noBoth,
+    )
+    expect(result).toMatchObject({ modelId: 22, restroomSetsRequired: 1 })
+  })
+
+  it('offers the most offices it has rather than refusing', () => {
+    const result = resolveBuildingSize(
+      { requestedUnits: 6, restroomsRequested: 0, officesRequested: 5 },
+      open,
+      school,
+    )
+    expect(result).toMatchObject({ modelId: 23 })
+  })
+
+  it('treats a catalogue without the field as one without offices', () => {
+    const result = resolveBuildingSize(
+      { requestedUnits: 4, restroomsRequested: 0, officesRequested: 2 },
+      open,
+      catalog,
+    )
+    expect(result).toMatchObject({ modelId: 1 })
+  })
+})

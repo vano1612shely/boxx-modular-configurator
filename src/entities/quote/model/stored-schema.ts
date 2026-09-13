@@ -86,6 +86,7 @@ export const storedQuoteConfigurationSchema = z.object({
   lineSlug: looseText(),
   unitCount: looseNumber(0),
   restroomCount: looseNumber(0),
+  officeCount: looseNumber(0),
   packages: z
     .array(z.unknown())
     .nullable()

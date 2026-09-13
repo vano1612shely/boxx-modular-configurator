@@ -210,6 +210,10 @@ export interface BuildingModel {
   unitCount: number;
   restroomCount?: number | null;
   /**
+   * Offices on top of the units above, for lines counted in classrooms. A school with two offices and a kitchen is still a six-classroom school; this is what lets it be asked for.
+   */
+  officeCount?: number | null;
+  /**
    * Overall size of the building. Rooms carry their own floor area and will not add up to this — walls, corridors and plant are not in any room.
    */
   sqft?: number | null;
@@ -540,7 +544,7 @@ export interface BuildingModel {
           };
         };
         /**
-         * Real 3D doors and windows. Assign one and it replaces the flat leaf for every opening of that kind in this room.
+         * Real 3D doors and windows. Assign one and it replaces the flat leaf for every opening of that kind in this room. An opening marked as an entrance takes the entrance door instead, when one is set.
          */
         openingModels?: {
           door?: {
@@ -559,6 +563,21 @@ export interface BuildingModel {
             depth?: number | null;
           };
           window?: {
+            model?: (number | null) | Model;
+            /**
+             * How the model is sized into the opening.
+             */
+            fit?: ('stretch' | 'contain' | 'none') | null;
+            /**
+             * Turn the source model so its front faces out of the room.
+             */
+            yawDeg?: number | null;
+            /**
+             * Metres from the middle of the wall, + is outward.
+             */
+            depth?: number | null;
+          };
+          entrance?: {
             model?: (number | null) | Model;
             /**
              * How the model is sized into the opening.
@@ -1063,6 +1082,7 @@ export interface BuildingModelsSelect<T extends boolean = true> {
   line?: T;
   unitCount?: T;
   restroomCount?: T;
+  officeCount?: T;
   sqft?: T;
   sqm?: T;
   dimensions?: T;
@@ -1273,6 +1293,14 @@ export interface BuildingModelsSelect<T extends boolean = true> {
                     depth?: T;
                   };
               window?:
+                | T
+                | {
+                    model?: T;
+                    fit?: T;
+                    yawDeg?: T;
+                    depth?: T;
+                  };
+              entrance?:
                 | T
                 | {
                     model?: T;
@@ -1679,6 +1707,10 @@ export interface ConfiguratorSetting {
      */
     classroomsLabel?: string | null;
     /**
+     * Under the extra offices counter a classroom line gets. The label above it is the offices label.
+     */
+    officesHint?: string | null;
+    /**
      * Appears under the counter once the number passes the largest size on offer.
      */
     overCapacityHint?: string | null;
@@ -1780,6 +1812,7 @@ export interface ConfiguratorSettingsSelect<T extends boolean = true> {
         description?: T;
         officesLabel?: T;
         classroomsLabel?: T;
+        officesHint?: T;
         overCapacityHint?: T;
         restroomsLabel?: T;
         restroomsHint?: T;

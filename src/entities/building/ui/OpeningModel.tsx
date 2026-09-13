@@ -6,7 +6,6 @@ import { Box3, MathUtils, Vector3, type Material, type Mesh, type Object3D } fro
 
 import type { OpeningPlacement, ShellGroup } from '../lib/room-shell'
 import type { OpeningFit, OpeningModelStyle, Room } from '../model/types'
-import { OPENING_KINDS } from '../model/types'
 import { useModel } from '@/shared/three/use-model'
 
 /**
@@ -126,9 +125,8 @@ function fitScale(size: Vector3, width: number, height: number, fit: OpeningFit)
 
 export function preloadOpeningModels(rooms: Room[]) {
   for (const room of rooms) {
-    for (const kind of OPENING_KINDS) {
-      const url = room.openingModels[kind]?.url
-      if (url) useGLTF.preload(url, false, true)
+    for (const style of Object.values(room.openingModels)) {
+      if (style?.url) useGLTF.preload(style.url, false, true)
     }
   }
 }

@@ -25,6 +25,7 @@ import {
   type CutFailure,
   type OpeningFit,
   type OpeningKind,
+  type OpeningModelSlot,
   type Point2,
   type RoomOpening,
   type RoomType,
@@ -1755,7 +1756,7 @@ export function useSceneEditorModel() {
     },
     onSetOpeningModel: (
       roomIndex: number,
-      kind: OpeningKind,
+      kind: OpeningModelSlot,
       patch: {
         /** Populated, not a bare id — the viewport previews the DRAFT. */
         model?: { id: number; url?: string | null } | null

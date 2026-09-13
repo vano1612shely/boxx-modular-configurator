@@ -29,8 +29,18 @@ function parseRestrooms(value: string | undefined): number {
 
 export async function ConfiguratorView({ searchParams }: Props) {
   const building = firstParam(searchParams.building)
-  const unitsRaw = firstParam(searchParams.offices) ?? firstParam(searchParams.units)
+  // A line's units are named for what they are: `offices` for an office line,
+  // `classrooms` for a school — and a school's `offices` are the extra ones.
+  // `units` is the older spelling, still honoured. Which reading `offices`
+  // gets is decided once the line is known, in getBuildingScene.
+  const classroomsRaw = firstParam(searchParams.classrooms)
+  const officesRaw = firstParam(searchParams.offices)
+  const unitsRaw = classroomsRaw ?? firstParam(searchParams.units) ?? officesRaw
   const units = unitsRaw ? Number.parseInt(unitsRaw, 10) || undefined : undefined
+  const offices =
+    classroomsRaw !== undefined && officesRaw !== undefined
+      ? Number.parseInt(officesRaw, 10) || 0
+      : undefined
   const restrooms = parseRestrooms(firstParam(searchParams.restrooms))
   // Set by the host page, e.g. ?region=us. Absent means the whole catalogue.
   const regionCode = firstParam(searchParams.region)
@@ -38,7 +48,7 @@ export async function ConfiguratorView({ searchParams }: Props) {
   // Set by the "change selection" link, which carries the answers it wants the
   // form to open on — and those look exactly like an ordinary configurator link.
   const changing = firstParam(searchParams.change) === '1'
-  const answers = { line: building, units, restrooms }
+  const answers = { line: building, units, offices, restrooms }
 
   if (!building || changing) {
     const [lines, copy] = await Promise.all([getIntakeLines(region), getQuizCopy()])
@@ -50,7 +60,7 @@ export async function ConfiguratorView({ searchParams }: Props) {
     )
   }
 
-  const resolution = await getBuildingScene({ building, units, restrooms, region })
+  const resolution = await getBuildingScene({ building, units, offices, restrooms, region })
 
   if (resolution.status === 'not-found') {
     const copy = await getQuizCopy()

@@ -11,6 +11,7 @@ export type {
   FittedSet,
   OpeningFit,
   OpeningKind,
+  OpeningModelSlot,
   OpeningModelStyle,
   Point2,
   RoofConfig,
@@ -29,7 +30,13 @@ export type {
   Zone,
   ZoneBox,
 } from './model/types'
-export { OPENING_KINDS, SHELL_SURFACES, TEXTURED_SURFACES, WALL_SIDES } from './model/types'
+export {
+  OPENING_KINDS,
+  OPENING_MODEL_SLOTS,
+  SHELL_SURFACES,
+  TEXTURED_SURFACES,
+  WALL_SIDES,
+} from './model/types'
 
 export {
   mapBuildingScene,
@@ -56,7 +63,7 @@ export {
   type ExteriorSelection,
 } from './lib/exterior'
 export { roomFloorTopY } from './lib/floor'
-export { fittedSetOf, fittedSetsIn, partGeometryKey, partsCentre } from './lib/fittings'
+export { fittedSetOf, fittedSetsIn, partGeometryKey, partsCentre, zoneOfSet } from './lib/fittings'
 export { RoomParts } from './ui/RoomParts'
 export {
   containingFloor,

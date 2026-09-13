@@ -43,6 +43,11 @@ export function buildingSummary(building: BuildingScene, unit: AreaUnit): Summar
   if (building.restroomCount > 0) {
     facts.push({ label: 'Restrooms', value: NUMBER.format(building.restroomCount) })
   }
+  // Only where offices are the extra and not the unit: a BOXXPlex counts its
+  // offices on the first line already.
+  if (building.officeCount > 0 && building.line.unitLabel !== 'offices') {
+    facts.push({ label: 'Offices', value: NUMBER.format(building.officeCount) })
+  }
   if (building.occupancy !== null) {
     facts.push({ label: 'Estimated occupancy', value: NUMBER.format(building.occupancy) })
   }

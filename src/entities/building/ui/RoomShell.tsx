@@ -17,7 +17,7 @@ import {
 import { resolveRoomVisibility, type RoomVisibility } from '../lib/room-visibility'
 import { shellMaterial } from '../lib/shell-materials'
 import { useSurfaceTextures } from '../lib/use-surface-textures'
-import type { OpeningKind, Room, ShellSurface } from '../model/types'
+import type { OpeningKind, OpeningModelStyle, Room, RoomOpening, ShellSurface } from '../model/types'
 import { OPENING_KINDS } from '../model/types'
 import { OpeningModel } from './OpeningModel'
 
@@ -43,13 +43,26 @@ function targetOpacity(group: ShellGroup, visibility: RoomVisibility): number {
   return visibility.hiddenSides.includes(group) ? 0 : 1
 }
 
+/** The model an opening is drawn with: the entrance door's for a door out of the building. */
+function openingStyle(room: Room, opening: RoomOpening): OpeningModelStyle {
+  if (opening.kind === 'door' && opening.entrance) return room.openingModels.entrance
+  return room.openingModels[opening.kind as OpeningKind]
+}
+
 export function RoomShell({ room }: Props) {
   const textures = useSurfaceTextures(room.surfaces)
 
   // A kind with a model gets no flat leaf: both in the same 12 cm would fight
   // for depth.
   const modelledKinds = useMemo(
-    () => new Set(OPENING_KINDS.filter((kind) => room.openingModels[kind]?.url)),
+    () =>
+      new Set(
+        OPENING_KINDS.filter(
+          (kind) =>
+            room.openingModels[kind]?.url ||
+            (kind === 'door' && room.openingModels.entrance?.url),
+        ),
+      ),
     [room.openingModels],
   )
 
@@ -183,10 +196,7 @@ export function RoomShell({ room }: Props) {
             <For each={content.openings} getKey={(placement) => placement.opening.id}>
               {(placement) => (
                 <Suspense fallback={null}>
-                  <OpeningModel
-                    placement={placement}
-                    style={room.openingModels[placement.opening.kind as OpeningKind]}
-                  />
+                  <OpeningModel placement={placement} style={openingStyle(room, placement.opening)} />
                 </Suspense>
               )}
             </For>

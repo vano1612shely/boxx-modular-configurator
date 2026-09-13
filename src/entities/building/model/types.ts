@@ -2,6 +2,7 @@ import type { RoomType } from '@/modules/shared/room-types'
 import type {
   OpeningFit,
   OpeningKind,
+  OpeningModelSlot,
   ShellSurface,
   SunDirection,
   TexturedSurface,
@@ -9,6 +10,7 @@ import type {
 } from '@/modules/shared/room-shell'
 import {
   OPENING_KINDS,
+  OPENING_MODEL_SLOTS,
   SHELL_SURFACES,
   TEXTURED_SURFACES,
   WALL_SIDES,
@@ -59,6 +61,8 @@ export type RoomOpening = {
   yawDeg?: number
   /** Handed doors: mirrors the model across the wall, which no rotation can. */
   mirror?: boolean
+  /** A door out of the building, drawn with the room's entrance model where there is one. */
+  entrance?: boolean
 }
 
 export type SurfaceStyle = {
@@ -220,7 +224,7 @@ export type Room = {
   shell: RoomShellConfig
   openings: RoomOpening[]
   surfaces: Record<ShellSurface, SurfaceStyle>
-  openingModels: Record<OpeningKind, OpeningModelStyle>
+  openingModels: Record<OpeningModelSlot, OpeningModelStyle>
   cameraPreset: CameraPreset
 }
 
@@ -296,6 +300,8 @@ export type BuildingScene = {
   line: BuildingLineInfo
   unitCount: number
   restroomCount: number
+  /** Offices on top of the units, for a line counted in something else. */
+  officeCount: number
   sqft: number | null
   sqm: number | null
   dimensions: string | null
@@ -326,10 +332,11 @@ export type BuildingScene = {
   exteriorSlots: ExteriorSlot[]
 }
 
-export { OPENING_KINDS, SHELL_SURFACES, TEXTURED_SURFACES, WALL_SIDES }
+export { OPENING_KINDS, OPENING_MODEL_SLOTS, SHELL_SURFACES, TEXTURED_SURFACES, WALL_SIDES }
 export type {
   OpeningFit,
   OpeningKind,
+  OpeningModelSlot,
   Point2,
   RoomType,
   ShellSurface,

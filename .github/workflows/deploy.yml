@@ -170,7 +170,29 @@ jobs:
           # remote shell's stdin, and `compose run` claims stdin by default —
           # without them it swallows the rest of the script and the deploy ends
           # quietly having never restarted anything.
-          docker compose run --rm -T app pnpm migrate </dev/null
+          docker compose run --rm -T app pnpm migrate </dev/null 2>&1 || {
+            echo "pnpm migrate exited with $?"
+            exit 1
+          }
+
+          # The schema has to be there before anything is served or restored —
+          # and it has to be in the database the stack's own settings name, or
+          # a migration that ran somewhere else reads as success here.
+          PGUSER="$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2-)"
+          PGDB="$(grep -E '^POSTGRES_DB=' .env | cut -d= -f2-)"
+          APPDB="$(docker compose run --rm -T app node -e 'const u=new URL(process.env.DATABASE_URL);console.log(u.username+"@"+u.hostname+u.pathname)' </dev/null 2>/dev/null | tail -1)"
+          echo "database: POSTGRES_USER=${PGUSER} POSTGRES_DB=${PGDB}; the app connects to ${APPDB}"
+          recorded="$(docker compose exec -T db psql -At -U "$PGUSER" -d "$PGDB" -c 'select count(*) from payload_migrations' 2>&1 || true)"
+          echo "migrations recorded in ${PGDB}: ${recorded}"
+          case "$recorded" in
+            ''|*[!0-9]*|0)
+              echo 'The schema is not in place after pnpm migrate.'
+              docker compose run --rm -T app sh -c 'ls -la src/migrations' </dev/null 2>&1 || true
+              docker compose logs --tail 40 db
+              exit 1
+              ;;
+          esac
+
           docker compose up -d app </dev/null
 
           if [ -n "$DATA" ]; then

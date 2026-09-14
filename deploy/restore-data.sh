@@ -59,4 +59,4 @@ echo 'starting the app'
 docker compose up -d app
 
 docker compose exec -T db psql -At -U "$PGUSER" -d "$PGDB" -c \
-  "select 'buildings: ' || count(*) from building_models union all select 'packages: ' || count(*) from furniture_packages union all select 'models: ' || count(*) from models"
+  "select 'buildings: ' || count(*) from building_models union all select 'packages: ' || count(*) from furniture_packages union all select 'models: ' || count(*) from models" </dev/null

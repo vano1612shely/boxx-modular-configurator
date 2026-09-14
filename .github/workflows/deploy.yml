@@ -170,31 +170,34 @@ jobs:
           # remote shell's stdin, and `compose run` claims stdin by default —
           # without them it swallows the rest of the script and the deploy ends
           # quietly having never restarted anything.
-          docker compose run --rm -T app pnpm migrate </dev/null 2>&1 || {
-            echo "pnpm migrate exited with $?"
-            exit 1
-          }
-
-          # The schema has to be there before anything is served or restored —
-          # and it has to be in the database the stack's own settings name, or
-          # a migration that ran somewhere else reads as success here. Every
-          # compose command gets </dev/null for the reason given above: one
-          # without it ate the rest of this script, and the release "passed"
-          # with the app never started.
+          #
+          # Tried more than once, and judged by the database rather than by the
+          # exit code: on this box the CLI has twice ended in eight seconds
+          # with nothing printed, nothing migrated and a zero exit — its TypeScript
+          # loader runs in a worker thread, and a worker that never comes back
+          # leaves the main thread with nothing to wait for. The schema is
+          # checked in the database the stack's own settings name, so a
+          # migration that ran somewhere else cannot read as success here.
           PGUSER="$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2-)"
           PGDB="$(grep -E '^POSTGRES_DB=' .env | cut -d= -f2-)"
           APPDB="$(docker compose run --rm -T app node -e 'const u=new URL(process.env.DATABASE_URL);console.log(u.username+"@"+u.hostname+u.pathname)' </dev/null 2>/dev/null | tail -1)"
           echo "database: POSTGRES_USER=${PGUSER} POSTGRES_DB=${PGDB}; the app connects to ${APPDB}"
-          recorded="$(docker compose exec -T db psql -At -U "$PGUSER" -d "$PGDB" -c 'select count(*) from payload_migrations' </dev/null 2>&1 || true)"
-          echo "migrations recorded in ${PGDB}: ${recorded}"
-          case "$recorded" in
-            ''|*[!0-9]*|0)
-              echo 'The schema is not in place after pnpm migrate.'
-              docker compose run --rm -T app sh -c 'ls -la src/migrations' </dev/null 2>&1 || true
-              docker compose logs --tail 40 db </dev/null
-              exit 1
-              ;;
-          esac
+
+          # What has to be recorded: one row per migration file in the image.
+          shipped="$(docker compose run --rm -T app sh -c 'ls src/migrations/*.ts | grep -vc index.ts' </dev/null 2>/dev/null | tail -1)"
+          recorded=''
+          for attempt in 1 2 3; do
+            docker compose run --rm -T app pnpm migrate </dev/null 2>&1 || echo "pnpm migrate exited with $?"
+            recorded="$(docker compose exec -T db psql -At -U "$PGUSER" -d "$PGDB" -c 'select count(*) from payload_migrations' </dev/null 2>/dev/null || echo 0)"
+            echo "attempt ${attempt}: ${recorded} of ${shipped} migrations recorded in ${PGDB}"
+            [ "$recorded" = "$shipped" ] && break
+            sleep 5
+          done
+          [ "$recorded" = "$shipped" ] || {
+            echo 'The schema is not in place after three runs of pnpm migrate.'
+            docker compose logs --tail 40 db </dev/null
+            exit 1
+          }
 
           docker compose up -d app </dev/null
 

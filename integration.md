@@ -137,15 +137,59 @@ webhook, if any, has run). Always sent before `configurator:redirect`.
 ```ts
 {
   type: 'configurator:quote-submitted'
-  quoteId: number          // row id in Sales → Quotes; admin-only, do not show to customers
-  reference: string        // order number shown to the customer, e.g. "K7MD4XQ2MN3P"
-  orderUrl: string         // "<configurator origin>/order/<reference>" — read-only 3D view of the order
-  configuration: QuoteConfiguration   // section 4
+  quoteId: number
+  reference: string
+  orderUrl: string
+  configuration: QuoteConfiguration
 }
 ```
 
-The contact details are **not** in the message — they are in the webhook and
-in the admin.
+**`quoteId`** — `number`. The primary key of the row in the `quotes` table,
+i.e. the id in the admin URL `/admin/collections/quotes/<quoteId>` and in the
+REST API `GET /api/quotes/<quoteId>` (signed-in user required). It is a serial
+integer: it counts up with every quote, so it reveals order volume and is
+guessable. Use it for internal bookkeeping — logging, matching against a REST
+query, a link for staff — and never show it to the customer or build a public
+link on it. `/order/<quoteId>` opens the order only for a signed-in admin; for
+anyone else it answers as not found.
+
+**`reference`** — `string`, always 12 characters from the alphabet
+`23456789ABCDEFGHJKMNPQRSTVWXYZ` (no `0`/`O`, no `1`/`I`/`L`, so it can be
+read out over the phone). Regex: `^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{12}$`.
+Minted on the server from `crypto.getRandomValues` when the row is created,
+~59 bits of entropy, `unique` and indexed in the database. Written once and
+never changed: editing the quote in the admin keeps it, and *Duplicate* in the
+admin gives the copy a fresh one. This is the order number the customer sees
+on the thank-you page (the `{reference}` placeholder in *After submitting*),
+and it is the credential for the order page — whoever has it can open the 3D
+view. That is the intended bargain, the same as a password-reset link: safe to
+email to the customer, safe to put in your own URLs and CRM, not something to
+publish. Look a quote up by it with
+`GET /api/quotes?where[reference][equals]=<reference>`.
+Defensive note: the server falls back to `''` if the row somehow came back
+without one, so a listener that builds links should check `reference.length === 12`.
+
+**`orderUrl`** — `string`, absolute:
+`<configurator origin>/order/<reference>`, e.g.
+`https://configurator.example.com/order/K7MD4XQ2MN3P`. The origin is the
+iframe's own (`window.location.origin` inside the frame — the host of your
+`<iframe src>`), never the host page's. It opens the read-only 3D view of
+exactly this order: same building, same furniture in the same places, same
+exterior options, nothing editable, no contact details on the page. It is
+what the *View order* button on the thank-you page points at. Appending
+`?submitted=1` turns it into the thank-you page instead of the 3D view. Use
+it as-is in a `window.location.href`, an `<a href>`, or an email; it needs no
+auth and does not expire. It is provided so the host does not have to know the
+configurator's URL layout; if you build links yourself, `reference` is the
+only part you need.
+
+**`configuration`** — the same `QuoteConfiguration` object (section 4) that
+was stored in the quote and POSTed to the webhook: built once in the browser at
+submit time and sent unchanged to all three places.
+
+**What is not there** — `contact` (name, email, phone, company). The host page
+has no need for it, and a message to `targetOrigin: *` would hand it to any
+embedding page. It is in the webhook body and in the admin.
 
 #### `configurator:redirect`
 
@@ -327,7 +371,18 @@ Slots with a single option are part of the building and are not listed.
 ```
 
 The `postMessage` variant carries the same `configuration` plus `quoteId`,
-`reference`, `orderUrl`, and no `contact`.
+`reference`, `orderUrl` (each described under `configurator:quote-submitted`
+in section 3), and no `contact`:
+
+```json
+{
+  "type": "configurator:quote-submitted",
+  "quoteId": 42,
+  "reference": "K7MD4XQ2MN3P",
+  "orderUrl": "https://configurator.example.com/order/K7MD4XQ2MN3P",
+  "configuration": { "...": "as above" }
+}
+```
 
 ---
 

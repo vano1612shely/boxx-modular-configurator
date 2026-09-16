@@ -196,16 +196,26 @@ export function useQuoteSummaryModel({ building, packages, integration }: Args) 
       return
     }
 
-    // First, and unchanged: this is the host page's documented contract, and it
-    // has to go out whatever we do about navigating afterwards.
+    const { quoteId, reference } = result.data
+
+    // First, and unchanged in what it always carried: this is the host page's
+    // documented contract, and it has to go out whatever we do about navigating
+    // afterwards. The reference and the order page are there so a host that
+    // moves the visitor itself can land on the order — by the number the
+    // customer was shown, not by a row id.
     if (integration.enablePostMessage && window.parent !== window) {
       window.parent.postMessage(
-        { type: 'configurator:quote-submitted', quoteId: result.data.quoteId, configuration },
+        {
+          type: 'configurator:quote-submitted',
+          quoteId,
+          reference,
+          orderUrl: `${window.location.origin}/order/${encodeURIComponent(reference)}`,
+          configuration,
+        },
         integration.targetOrigin || '*',
       )
     }
 
-    const { quoteId, reference } = result.data
     const target = successTarget(integration.successRedirectUrl, reference)
 
     // Set before navigating, not instead of it: the dialog shows the same

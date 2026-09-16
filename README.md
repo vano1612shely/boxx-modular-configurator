@@ -375,12 +375,17 @@ On submit the configuration is:
 ```js
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'configurator:quote-submitted') {
+    // event.data.quoteId       — the row in the admin panel
+    // event.data.reference     — the order number the customer was shown, e.g. K7MD4XQ2
+    // event.data.orderUrl      — the configurator's own page for it, /order/<reference>
     // event.data.configuration — building, packages, prices
+    // A host that wants to move the visitor itself can do it here, e.g.
+    // window.location.href = '/order-received?ref=' + event.data.reference
   }
 })
 ```
 
-The payload shape is defined once in `src/entities/quote/model/schema.ts` (Zod).
+The configuration's shape is defined once in `src/entities/quote/model/schema.ts` (Zod).
 
 Then the visitor is sent on. **Integration Settings → After submitting** decides where:
 

@@ -365,7 +365,8 @@ restroom set at a higher one, and requests above `maxUnits` route to the custom-
 
 ### Quote hand-off
 
-On submit the configuration is:
+Full reference — message types, webhook contract, data shapes, use cases — is in
+[integration.md](integration.md). In short, on submit the configuration is:
 
 1. Stored in the **Quotes** collection (admin panel → Sales → Quotes).
 2. POSTed as JSON to the webhook configured in **Integration Settings** (optional headers

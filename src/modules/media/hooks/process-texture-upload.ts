@@ -20,6 +20,13 @@ export const processTextureUpload: CollectionBeforeOperationHook = async ({
   if (operation !== 'create' && operation !== 'update') return args
   if (!req.file?.data) return args
 
+  // Access is checked after this hook, not before it — so an anonymous POST
+  // to /api/textures used to have its image decoded and re-encoded, and only
+  // then be refused. Nothing is done for a request that is about to be turned
+  // away. The Local API has no user either, but it overrides access, and that
+  // is what tells the two apart.
+  if (!req.user && !args.overrideAccess) return args
+
   const name = req.file.name.toLowerCase()
   if (!SUPPORTED.some((ext) => name.endsWith(ext))) {
     throw new APIError(`Unsupported texture format. Use one of: ${SUPPORTED.join(', ')}.`, 400)

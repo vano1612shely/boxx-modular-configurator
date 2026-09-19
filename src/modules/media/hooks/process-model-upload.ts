@@ -8,6 +8,13 @@ export const processModelUpload: CollectionBeforeOperationHook = async ({ args, 
   if (operation !== 'create' && operation !== 'update') return args
   if (!req.file?.data) return args
 
+  // Access is checked after this hook, not before it — so an anonymous POST
+  // to /api/models used to have its file optimised, minutes of CPU and
+  // gigabytes of memory, and only then be refused. Nothing is done for a
+  // request that is about to be turned away. The Local API has no user
+  // either, but it overrides access, and that is what tells the two apart.
+  if (!req.user && !args.overrideAccess) return args
+
   const name = req.file.name.toLowerCase()
 
   if (!GLB_EXTENSIONS.some((ext) => name.endsWith(ext))) {

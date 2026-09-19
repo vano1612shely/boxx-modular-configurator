@@ -118,6 +118,12 @@ export type BuildingSpec = {
    */
   reuseRoofFrom?: string
 
+  /**
+   * The client's two files: the model cut open horizontally, and the whole
+   * thing for its roof and ceiling. Under `SOURCES` — the folder
+   * `MODEL_SOURCES` names, or Downloads. Only cutting opens them; an import
+   * from `catalogue/` does not.
+   */
   source: { main: string; full: string }
 
   /**

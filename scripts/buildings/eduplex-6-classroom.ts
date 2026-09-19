@@ -1,5 +1,7 @@
 import path from 'node:path'
 
+import { SOURCES } from '../lib/import-tools'
+
 import { classroom, door, type Classroom, type EduplexFaces } from './eduplex-classroom'
 import type { BuildingSpec, RoomSpec } from './types'
 
@@ -18,7 +20,6 @@ import type { BuildingSpec, RoomSpec } from './types'
  * `eduplex-classroom.ts`, and each of the six supplies its faces.
  */
 
-const DOWNLOADS = 'C:/Users/ivan/Downloads'
 
 /** Inner faces of the four exterior walls. */
 export const WEST = -13.386
@@ -160,8 +161,8 @@ export const eduplex6Classroom: BuildingSpec = {
   regionCodes: ['us'],
 
   source: {
-    main: path.join(DOWNLOADS, '6classroom_horizontal_cut_-_copy.glb'),
-    full: path.join(DOWNLOADS, '6classroom_eduplex_-_copy.glb'),
+    main: path.join(SOURCES, '6classroom_horizontal_cut_-_copy.glb'),
+    full: path.join(SOURCES, '6classroom_eduplex_-_copy.glb'),
   },
 
   // Plan centre of the exterior walls to the origin; the finished floor of the

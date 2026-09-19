@@ -1,5 +1,7 @@
 import path from 'node:path'
 
+import { SOURCES } from '../lib/import-tools'
+
 import {
   CLASSROOMS,
   CORRIDOR_EAST,
@@ -50,7 +52,6 @@ import type { BuildingSpec, OpeningSpec, RoomSpec } from './types'
  * before the import will run.
  */
 
-const DOWNLOADS = 'C:/Users/ivan/Downloads'
 
 /**
  * A column of the school — one classroom in each row — by which of the base
@@ -216,8 +217,8 @@ export function eduplexSchool(config: EduplexSchool): BuildingSpec {
       ...(config.officeModuleAt === undefined ? [] : [eduplex6ClassroomOffices.slug]),
     ],
     source: {
-      main: path.join(DOWNLOADS, config.files.main),
-      full: path.join(DOWNLOADS, config.files.full),
+      main: path.join(SOURCES, config.files.main),
+      full: path.join(SOURCES, config.files.full),
     },
     offset,
     dropNodes: ['Object_5'],

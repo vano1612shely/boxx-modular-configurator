@@ -95,18 +95,22 @@ Open `https://<domain>/admin` — the panel asks to create the first admin accou
 The catalogue — product lines, buildings, furniture, models — is not in the
 repository. Put it on the server one of two ways.
 
-**Option A — from the import scripts.** On a workstation with Node 22, pnpm and
-Docker, and the client's glb files in `~/Downloads`:
+**Option A — from the repository.** Every model and texture is in
+`catalogue/`, already optimised; the import scripts upload them as they are and
+write the rows. On a workstation with Node 22, pnpm and Docker:
 
 ```bash
 pnpm install
 docker compose up -d                     # local Postgres
 cp .env.example .env                     # DATABASE_URL points at it already
 pnpm setup                               # migrate + product lines, regions, quiz copy
-pnpm import:building <slug>              # one per building; slugs: scripts/buildings/index.ts
+pnpm import:building all                 # every building
 pnpm import:furniture all                # every furniture package, kitchens laid out in every kitchen
 deploy/backup-data.sh boxx-data.tar.gz   # packs the rows and the uploaded files
 ```
+
+The client's original glb files are not needed for this. They are only needed
+to cut a model again (`--recut`, see README).
 
 Copy `boxx-data.tar.gz` to the server, then `cd /opt/boxx && ./restore-data.sh boxx-data.tar.gz`.
 

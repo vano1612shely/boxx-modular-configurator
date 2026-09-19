@@ -1,5 +1,7 @@
 import path from 'node:path'
 
+import { SOURCES } from '../lib/import-tools'
+
 import type { BuildingSpec, OpeningSpec, Rect, RoomSpec } from './types'
 
 /**
@@ -15,7 +17,6 @@ import type { BuildingSpec, OpeningSpec, Rect, RoomSpec } from './types'
  * can be asked about again, and a width is a thing somebody worked out once.
  */
 
-const DOWNLOADS = 'C:/Users/ivan/Downloads'
 
 /** What a size has to say about itself. Everything else is the same building. */
 export type SectionConfig = {
@@ -314,12 +315,12 @@ export function boxxplexSection(
 
     source: {
       main: path.join(
-        DOWNLOADS,
+        SOURCES,
         config.files?.main ??
           `GLB/${config.sections}_section_horizontal_cut_boxx_modular_boxxplex_office_3d_modeling.glb`,
       ),
       full: path.join(
-        DOWNLOADS,
+        SOURCES,
         config.files?.full ?? `GLB/${config.sections}_section_boxx_modular_boxxplex_office_3d_modeling.glb`,
       ),
     },

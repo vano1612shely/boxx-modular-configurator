@@ -10,6 +10,10 @@ models
 textures
 images
 
+# The catalogue's files go into a database through the import scripts, not
+# into the image: 300 MB the app never reads from disk.
+catalogue
+
 .env
 .env.*
 !.env.example

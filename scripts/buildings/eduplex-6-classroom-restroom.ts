@@ -1,5 +1,7 @@
 import path from 'node:path'
 
+import { SOURCES } from '../lib/import-tools'
+
 import {
   CLASSROOMS,
   CORRIDOR_EAST,
@@ -32,7 +34,6 @@ import type { BuildingSpec, OpeningSpec, RoomSpec } from './types'
  * Which restroom is which is read off the fittings: urinals make the men's.
  */
 
-const DOWNLOADS = 'C:/Users/ivan/Downloads'
 
 /** The bay's width, which is also how far the western rooms moved. */
 const BAY = 3.607
@@ -204,8 +205,8 @@ export const eduplex6ClassroomRestroom: BuildingSpec = {
   reuseAssetsFrom: eduplex6Classroom.slug,
 
   source: {
-    main: path.join(DOWNLOADS, '6classroomrestroom_horizontal_cut_-_copy.glb'),
-    full: path.join(DOWNLOADS, '6classroomrestroom_eduplex_-_copy.glb'),
+    main: path.join(SOURCES, '6classroomrestroom_horizontal_cut_-_copy.glb'),
+    full: path.join(SOURCES, '6classroomrestroom_eduplex_-_copy.glb'),
   },
 
   offset: [2.705, -0.914, -0.515],

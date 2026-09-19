@@ -213,6 +213,28 @@ furniture tiers come back on the next boot — `ensureCatalogueTerms` writes the
 starter terms into an empty catalogue — so resetting those two restores them rather
 than removing them.
 
+### The models are in the repository, ready to import
+
+`catalogue/models/` and `catalogue/textures/` hold every model and texture of
+the catalogue exactly as the app stores them — cut from the client's files and
+optimised once, on the machine that did the cutting. An import takes them from
+there, uploads them as they are (the upload hooks are told not to optimise
+again) and writes the rows. Nothing else is needed: a fresh database is filled
+from a checkout with
+
+```bash
+pnpm setup                     # migrate, then the product lines, regions, room types
+pnpm import:building all       # every building, in the order they borrow from each other
+pnpm import:furniture all      # every package; the kitchens laid out in every kitchen
+```
+
+The client's glb files are only needed to *cut* a model — a new building, or a
+building whose spec changed. They are looked for in `~/Downloads`, or in the
+folder `MODEL_SOURCES` names. A model missing from `catalogue/` is cut from
+them and the stored result is written into `catalogue/` to be committed;
+`--recut` does that for every model of the building or package named, and
+deleting one file from `catalogue/` does it for that file alone.
+
 ### Buildings are imported from the client's glbs, one spec each
 
 A building is two glb files from the client — the model cut open horizontally, and
@@ -223,12 +245,12 @@ saying where its rooms, doors and windows are, in the file's own coordinates.
 pnpm analyze:model <file.glb> --out r.json          # what is in the file: floors, materials, nodes
 pnpm analyze:model <file.glb> --islands door_frame  # every door, as a box
 pnpm audit:building <slug>                          # check a spec against its glb
-pnpm import:building <slug> [--reuse]               # audit, cut, upload, write the building
+pnpm import:building <slug|all> [--recut]           # audit, cut, upload, write the building
 ```
 
-The spec is checked before anything is uploaded: every outline edge must lie on a
-wall, every declared door and window must have a casing at both jambs, and no wall
-may stand inside a room. That check is what lets a new size of a line be written as
+The spec is checked before anything is uploaded, where the glb is there to check
+it against: every outline edge must lie on a wall, every declared door and window
+must have a casing at both jambs, and no wall may stand inside a room. That check is what lets a new size of a line be written as
 a handful of shifts of pieces already measured — the EDUPlex sizes are all
 `eduplex-school.ts` with a list of columns — rather than measured again.
 
@@ -243,13 +265,13 @@ A package is one glb from the client, named `<region>_<tier>_<what>_package_NN.g
 — the tier and the region are read off the name — and an entry in
 `scripts/furniture/packages.ts`. Every file carries the floor it was rendered on;
 that is dropped. A package is either the whole file as one model, or a group of
-pieces cut out by object name, each standing where the modeller put it unless the
-spec says otherwise. A visitor adds a group whole and then moves its pieces one by
-one, which is what lets a customer rearrange a desk against a table.
+pieces cut out by object name, each standing where the spec puts it. A visitor
+adds a group whole and then moves its pieces one by one, which is what lets a
+customer rearrange a desk against a table.
 
 ```bash
 pnpm analyze:model <file.glb> --objects       # the objects in the file, with where they stand
-pnpm import:furniture <slug|all> [--reuse]    # cut, upload, write the package
+pnpm import:furniture <slug|all> [--recut]    # cut, upload, write the package
 ```
 
 The import writes the title, the tier, the region, the pieces and — when the

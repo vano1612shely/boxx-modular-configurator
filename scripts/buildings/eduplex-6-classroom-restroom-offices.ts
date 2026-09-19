@@ -1,5 +1,7 @@
 import path from 'node:path'
 
+import { SOURCES } from '../lib/import-tools'
+
 import {
   CLASSROOMS,
   CORRIDOR_EAST as SIBLING_CORRIDOR_EAST,
@@ -31,7 +33,6 @@ import type { BuildingSpec, OpeningSpec, RoomSpec } from './types'
  * the fountain recess — is traced here.
  */
 
-const DOWNLOADS = 'C:/Users/ivan/Downloads'
 
 /** How far the rooms moved: the western ones, and the eastern ones. */
 const WEST_SHIFT = -3.607
@@ -151,8 +152,8 @@ export const eduplex6ClassroomRestroomOffices: BuildingSpec = {
   reuseAssetsFrom: [eduplex6Classroom.slug, eduplex6ClassroomOffices.slug],
 
   source: {
-    main: path.join(DOWNLOADS, '6classroomrestroomoffices_horizontal_cut_-_copy.glb'),
-    full: path.join(DOWNLOADS, '6classroomrestroomoffices_eduplex_-_copy.glb'),
+    main: path.join(SOURCES, '6classroomrestroomoffices_horizontal_cut_-_copy.glb'),
+    full: path.join(SOURCES, '6classroomrestroomoffices_eduplex_-_copy.glb'),
   },
 
   offset: [0.597, -0.914, -0.515],

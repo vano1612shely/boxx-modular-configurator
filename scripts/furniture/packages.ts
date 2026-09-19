@@ -9,10 +9,12 @@
  * want a customer to be able to rearrange.
  *
  * Object names are read off `pnpm analyze:model <file> --objects` — every
- * object with where it stands in the file's own frame. A piece stands where
- * the modeller put it unless `at` says otherwise: metres right and towards
- * the viewer of the middle of the group, looked at from above; `rotationYDeg`
- * turns it about its own middle.
+ * object with where it stands in the file's own frame. A piece stands at `at`:
+ * metres right and towards the viewer of the middle of the group, looked at
+ * from above; `rotationYDeg` turns it about its own middle. The modeller's own
+ * arrangement is the middle of a piece's objects less the middle of them all,
+ * off the same listing — written in rather than read off the file, so an
+ * import on a machine without the file stands the pieces the same way.
  *
  * The tier and the region are in the file name — `us_plus_…`, `us_core_…` —
  * and are read from it. What a package costs is not here: the client sets the
@@ -31,8 +33,8 @@ export type PieceSpec = {
    * or `rest`: every object no other piece claims, less the render floor.
    */
   nodes: string[] | 'rest'
-  /** Where its middle stands in the group; the file's own place if left out. */
-  at?: [number, number]
+  /** Where its middle stands in the group. */
+  at: [number, number]
   rotationYDeg?: number
 }
 
@@ -50,7 +52,7 @@ export type FittingSpec = {
 
 export type FurnitureSpec = {
   slug: string
-  /** The file, in Downloads. */
+  /** The client's file, in the sources folder (`MODEL_SOURCES`, or Downloads). */
   file: string
   /** What the card says. The same at both tiers; the card carries the grade. */
   title: string
@@ -134,8 +136,9 @@ export const FURNITURE: Record<string, FurnitureSpec> = {
         key: 'workstation',
         name: 'Desk, chair and cabinet',
         nodes: ['Planning_Table_002', 'file_cabinet_002', 'stool_002'],
+        at: [-0.79, 0],
       },
-      { key: 'table', name: 'Large table', nodes: ['Desk_01'] },
+      { key: 'table', name: 'Large table', nodes: ['Desk_01'], at: [1.021, 0.306] },
     ],
   },
 
@@ -150,13 +153,15 @@ export const FURNITURE: Record<string, FurnitureSpec> = {
         key: 'table-1',
         name: 'Table with chairs',
         nodes: ['8_Foot_6_Foot_Folding_Table001', ...FOLDING(['02', '004', '006', '008', '033', '034', '035', '036'])],
+        at: [-1.683, 0],
       },
       {
         key: 'table-2',
         name: 'Second table with chairs',
         nodes: ['8_Foot_6_Foot_Folding_Table002', ...FOLDING(['037', '038', '039', '040', '041', '042', '043', '044'])],
+        at: [0.974, 0],
       },
-      { key: 'bin', name: 'Waste basket', nodes: ['BOXX_Office_waste_basket001'] },
+      { key: 'bin', name: 'Waste basket', nodes: ['BOXX_Office_waste_basket001'], at: [2.737, -0.113] },
     ],
   },
 
@@ -178,13 +183,20 @@ export const FURNITURE: Record<string, FurnitureSpec> = {
         key: 'table-1',
         name: 'Table with chairs',
         nodes: ['Desk_01', ...CHAIR(['02', '004', '026', '027', '028', '029'])],
+        at: [-1.664, 0.36],
       },
       {
         key: 'table-2',
         name: 'Second table with chairs',
         nodes: ['Desk_002', ...CHAIR(['030', '031', '032', '033', '034', '035'])],
+        at: [1.664, 0.36],
       },
-      { key: 'board', name: 'Whiteboard and waste basket', nodes: ['Whiteboard_02', 'BOXX_Office_waste_basket'] },
+      {
+        key: 'board',
+        name: 'Whiteboard and waste basket',
+        nodes: ['Whiteboard_02', 'BOXX_Office_waste_basket'],
+        at: [0.183, -1.188],
+      },
     ],
   },
 
@@ -203,8 +215,8 @@ export const FURNITURE: Record<string, FurnitureSpec> = {
     rooms: NOT_KITCHEN,
     // The desk first: a group with no picture of its own is shown by its first piece.
     pieces: [
-      { key: 'desk', name: 'Desk and seating', nodes: 'rest' },
-      { key: 'board', name: 'Whiteboard', nodes: ['Whiteboard_02'] },
+      { key: 'desk', name: 'Desk and seating', nodes: 'rest', at: [0, 0.345] },
+      { key: 'board', name: 'Whiteboard', nodes: ['Whiteboard_02'], at: [-0.08, -1.439] },
     ],
   },
 

@@ -1,8 +1,10 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 import { NodeIO, type Document, type Node } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer'
 import type { Payload } from 'payload'
 
 /**
@@ -10,19 +12,52 @@ import type { Payload } from 'payload'
  * client's glb by name, and putting a file into the catalogue.
  */
 
-export const CACHE = path.resolve('.import-cache')
+/**
+ * The client's glb files, which the catalogue's models are cut from.
+ *
+ * Only cutting opens them. An import that finds its files in `catalogue/`
+ * never looks here, so a machine with the repository and nothing else can
+ * fill a database — which is the case on every machine but the one that
+ * did the cutting.
+ */
+export const SOURCES = process.env.MODEL_SOURCES ?? path.join(os.homedir(), 'Downloads')
+
+/** The catalogue's files as the app stores them, kept in the repository. */
+export const CATALOGUE = path.resolve(import.meta.dirname, '../../catalogue')
 
 export async function io() {
-  return new NodeIO().registerExtensions(ALL_EXTENSIONS)
+  // The decoder for reading what the app stores — every stored model is
+  // meshopt-compressed — and the encoder so that a document read that way can
+  // be written again.
+  await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready])
+  return new NodeIO()
+    .registerExtensions(ALL_EXTENSIONS)
+    .registerDependencies({ 'meshopt.decoder': MeshoptDecoder, 'meshopt.encoder': MeshoptEncoder })
+}
+
+/** A client's file, read — or a message saying where the files go. */
+export async function readSource(file: string): Promise<Document> {
+  if (!existsSync(file)) {
+    throw new Error(
+      `Cutting needs the client's file ${path.basename(file)}, and there is no ${file}. ` +
+        `Put the client's glb files in ${SOURCES}, or point MODEL_SOURCES at the folder ` +
+        'that has them. An import that finds its files in catalogue/ needs neither.',
+    )
+  }
+  return (await io()).read(file)
+}
+
+/**
+ * A name as three.js tidies it on the way in — spaces to underscores, dots
+ * and brackets dropped — so a 3ds Max "ground001_Material #324_0" and the
+ * analyzer's "ground001_Material_#324_0" are the same name.
+ */
+export function tidyName(value: string): string {
+  return value.replace(/\s/g, '_').replace(/[[\].:/]/g, '')
 }
 
 /**
  * The nodes the analyzer listed under this name.
- *
- * The analyzer names nodes as three.js does, and three.js tidies a name on
- * the way in — spaces to underscores, dots and brackets dropped — so a 3ds Max
- * "ground001_Material #324_0" is listed as "ground001_Material_#324_0". The
- * same tidying is applied here, so the listed name finds the node.
  *
  * Nodes, not node: an exporter splits a big mesh at its vertex limit into
  * sibling nodes of one name, and each of the mobile-office stairs comes as two
@@ -31,12 +66,11 @@ export async function io() {
  * the option, and the two fought over the landing once the option stood there.
  */
 export function findAllByName(document: Document, name: string): Node[] {
-  const tidy = (value: string) => value.replace(/\s/g, '_').replace(/[[\].:/]/g, '')
-  const wanted = tidy(name)
+  const wanted = tidyName(name)
   return document
     .getRoot()
     .listNodes()
-    .filter((node) => tidy(node.getName()) === wanted)
+    .filter((node) => tidyName(node.getName()) === wanted)
 }
 
 /**
@@ -95,12 +129,16 @@ export function wrapScene(document: Document, name: string): Node {
   return holder
 }
 
+type UploadFile = { data: Buffer; name: string; mimetype: string }
+
 /** Uploads, or replaces the file on the row already carrying that title. */
-export async function upsertUpload(
+async function upsertUpload(
   payload: Payload,
   collection: 'models' | 'textures',
   title: string,
-  file: { data: Buffer; name: string; mimetype: string },
+  file: UploadFile,
+  /** Tell the upload hooks the file is already what they would make of it. */
+  asIs: boolean,
 ) {
   const found = await payload.find({
     collection,
@@ -110,6 +148,7 @@ export async function upsertUpload(
   })
 
   const body = { data: file.data, mimetype: file.mimetype, name: file.name, size: file.data.byteLength }
+  const context = asIs ? { storeAsIs: true } : {}
 
   if (found.docs.length > 0) {
     const updated = await payload.update({
@@ -117,40 +156,72 @@ export async function upsertUpload(
       id: found.docs[0].id,
       data: { title },
       file: body,
+      context,
     })
     payload.logger.info(`${collection}: replaced "${title}" (${updated.filesize} bytes)`)
     return updated
   }
 
-  const created = await payload.create({ collection, data: { title }, file: body })
+  const created = await payload.create({ collection, data: { title }, file: body, context })
   payload.logger.info(`${collection}: uploaded "${title}" (${created.filesize} bytes)`)
   return created
 }
 
-/**
- * A prepared file, made once and kept under `.import-cache/<slug>/`.
- *
- * `reuse` takes the cached copy when there is one — most of an import's
- * runtime is preparing glbs, and a second run for a changed row need not
- * repeat it.
- */
-export function cached(slug: string, name: string, make: () => Promise<Buffer>, reuse: boolean) {
-  const file = path.join(CACHE, slug, name)
-  mkdirSync(path.dirname(file), { recursive: true })
+/** What the upload hooks turn every file into, and so what the catalogue holds. */
+const STORED = {
+  models: { extension: '.glb', mimetype: 'model/gltf-binary' },
+  textures: { extension: '.webp', mimetype: 'image/webp' },
+} as const
 
-  return async () => {
-    if (reuse) {
-      try {
-        const data = readFileSync(file)
-        console.log(`reusing ${name} (${(data.byteLength / 1024 / 1024).toFixed(1)} MB)`)
-        return data
-      } catch {
-        // Not cached yet — fall through and make it.
-      }
-    }
-    const data = await make()
-    writeFileSync(file, data)
-    console.log(`prepared ${name} (${(data.byteLength / 1024 / 1024).toFixed(1)} MB)`)
-    return data
+export type CatalogueFile = {
+  id: number
+  filename: string
+  url: string
+  /** The copy in `catalogue/`, which is byte for byte the file the app stores. */
+  file: string
+}
+
+/**
+ * Puts one file of the catalogue in place, and says which row holds it.
+ *
+ * `catalogue/<collection>/<name>` is the file as the app stores it, made the
+ * first time it was imported. When it is there it is uploaded exactly as it
+ * is, and the upload hooks are told to leave it alone: another machine then
+ * stores the same bytes this one did, and every node path written against the
+ * file stays true of it — and nobody waits on the optimiser for a file that
+ * has been through it. When it is not there, or `recut` says to do it over,
+ * `make` cuts it from the client's source, the upload optimises it as it would
+ * anything, and what was stored is written into the folder: for the next
+ * import, and for git.
+ */
+export async function catalogueFile(
+  payload: Payload,
+  collection: 'models' | 'textures',
+  title: string,
+  name: string,
+  make: () => Promise<UploadFile>,
+  recut: boolean,
+): Promise<CatalogueFile> {
+  const stored = STORED[collection]
+  const file = path.join(CATALOGUE, collection, `${name}${stored.extension}`)
+  const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
+
+  if (!recut && existsSync(file)) {
+    const data = readFileSync(file)
+    const doc = await upsertUpload(
+      payload,
+      collection,
+      title,
+      { data, name: path.basename(file), mimetype: stored.mimetype },
+      true,
+    )
+    console.log(`${collection}/${path.basename(file)}: from the catalogue (${mb(data.byteLength)} MB)`)
+    return { id: doc.id, filename: doc.filename as string, url: doc.url as string, file }
   }
+
+  const doc = await upsertUpload(payload, collection, title, await make(), false)
+  mkdirSync(path.dirname(file), { recursive: true })
+  copyFileSync(path.resolve(collection, doc.filename as string), file)
+  console.log(`${collection}/${path.basename(file)}: cut and stored (${mb(doc.filesize as number)} MB) — commit it`)
+  return { id: doc.id, filename: doc.filename as string, url: doc.url as string, file }
 }

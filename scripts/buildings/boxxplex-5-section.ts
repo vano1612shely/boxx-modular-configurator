@@ -1,5 +1,7 @@
 import path from 'node:path'
 
+import { SOURCES } from '../lib/import-tools'
+
 import type { BuildingSpec, OpeningSpec, RoomSpec } from './types'
 
 /**
@@ -20,7 +22,6 @@ import type { BuildingSpec, OpeningSpec, RoomSpec } from './types'
  * the building, and the uncut one is only opened to take the roof out of it.
  */
 
-const DOWNLOADS = 'C:/Users/ivan/Downloads'
 
 /** Inner faces of the four exterior walls. */
 const WEST = -8.986
@@ -251,8 +252,8 @@ export const boxxplex5Section: BuildingSpec = {
   regionCodes: ['us'],
 
   source: {
-    main: path.join(DOWNLOADS, 'GLB/5_section_horizontal_cut_boxx_modular_boxxplex_office_3d_modeling.glb'),
-    full: path.join(DOWNLOADS, 'GLB/5_section_boxx_modular_boxxplex_office_3d_modeling.glb'),
+    main: path.join(SOURCES, 'GLB/5_section_horizontal_cut_boxx_modular_boxxplex_office_3d_modeling.glb'),
+    full: path.join(SOURCES, 'GLB/5_section_boxx_modular_boxxplex_office_3d_modeling.glb'),
   },
 
   // Plan centre of the exterior walls to the origin; the finished floor of the

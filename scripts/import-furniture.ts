@@ -12,12 +12,22 @@ import config from '../src/payload.config'
 
 import { islands, loadScene } from './analyze-model'
 import { FURNITURE, type FittingSpec, type FurnitureSpec, type PieceSpec } from './furniture/packages'
-import { cached, findAllByName, io, keepOnlyNodes, upsertUpload, wrapScene } from './lib/import-tools'
+import {
+  catalogueFile,
+  findAllByName,
+  io,
+  keepOnlyNodes,
+  readSource,
+  SOURCES,
+  tidyName,
+  wrapScene,
+  type CatalogueFile,
+} from './lib/import-tools'
 
 /**
  * Turns a client's furniture glb into a catalogue package.
  *
- *   pnpm import:furniture <slug|all> [--reuse]
+ *   pnpm import:furniture <slug|all> [--recut]
  *
  * The numbers live in `scripts/furniture/packages.ts`; this is the machinery.
  * A one-model package is the file less its render floor; a group is one model
@@ -26,10 +36,15 @@ import { cached, findAllByName, io, keepOnlyNodes, upsertUpload, wrapScene } fro
  * a model the same way when it draws one, and a piece that hangs on a wall
  * keeps the height its modeller gave it.
  *
- * `--reuse` takes the prepared glbs from `.import-cache/` when they are there.
+ * The models go in from `catalogue/models/` when they are there — which they
+ * are, in the repository, for every package below — and are stored as they
+ * are. Cutting from the client's file happens for a model that is not there
+ * yet, or for all of a package's with `--recut`; what the upload stores is
+ * then written back into `catalogue/` to be committed.
  */
 
-const DOWNLOADS = 'C:/Users/ivan/Downloads'
+/** The client's file a spec names, in the sources folder. */
+const sourceOf = (spec: FurnitureSpec) => path.join(SOURCES, spec.file)
 
 /** The render floor every file carries: a ground plane and a slab under the furniture. */
 function isRenderFloor(name: string): boolean {
@@ -61,42 +76,6 @@ function nodesOf(document: Document, spec: FurnitureSpec, piece: PieceSpec): str
   return objectsOf(document)
     .map((node) => node.getName())
     .filter((name) => !claimed.has(name) && !isRenderFloor(name))
-}
-
-/**
- * Where each piece stands in the file, relative to the middle of them all.
- *
- * The default place of a piece in its group: the modeller's own arrangement,
- * kept unless the spec says otherwise.
- */
-async function sourcePlaces(spec: FurnitureSpec): Promise<Map<string, [number, number]>> {
-  const document = await (await io()).read(path.join(DOWNLOADS, spec.file))
-  const boxes = new Map<string, { min: number[]; max: number[] }>()
-  const all = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
-
-  for (const piece of spec.pieces ?? []) {
-    const box = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
-    for (const name of nodesOf(document, spec, piece)) {
-      for (const node of findAllByName(document, name)) {
-        const bounds = getBounds(node)
-        for (let axis = 0; axis < 3; axis += 1) {
-          box.min[axis] = Math.min(box.min[axis], bounds.min[axis])
-          box.max[axis] = Math.max(box.max[axis], bounds.max[axis])
-          all.min[axis] = Math.min(all.min[axis], bounds.min[axis])
-          all.max[axis] = Math.max(all.max[axis], bounds.max[axis])
-        }
-      }
-    }
-    boxes.set(piece.key, box)
-  }
-
-  const middle = (box: { min: number[]; max: number[] }, axis: number) => (box.min[axis] + box.max[axis]) / 2
-  return new Map(
-    [...boxes].map(([key, box]) => [
-      key,
-      [middle(box, 0) - middle(all, 0), middle(box, 2) - middle(all, 2)] as [number, number],
-    ]),
-  )
 }
 
 /** The tier and the region, as the client writes them into the file name. */
@@ -136,7 +115,7 @@ async function finish(document: Document, spec: FurnitureSpec): Promise<Buffer> 
 
 /** Everything in the file but the render floor and what the spec leaves out. */
 async function prepareWhole(spec: FurnitureSpec): Promise<Buffer> {
-  const document = await (await io()).read(path.join(DOWNLOADS, spec.file))
+  const document = await readSource(sourceOf(spec))
 
   for (const node of document.getRoot().listNodes()) {
     if (isRenderFloor(node.getName())) node.dispose()
@@ -153,7 +132,7 @@ async function prepareWhole(spec: FurnitureSpec): Promise<Buffer> {
 
 /** One piece of a group: its objects and nothing else. */
 async function preparePiece(spec: FurnitureSpec, piece: PieceSpec): Promise<Buffer> {
-  const document = await (await io()).read(path.join(DOWNLOADS, spec.file))
+  const document = await readSource(sourceOf(spec))
   keepOnlyNodes(document, nodesOf(document, spec, piece))
   centreFootprint(document)
   return finish(document, spec)
@@ -235,15 +214,51 @@ function flattenFittings(document: Document, spec: FurnitureSpec): Flat[] {
 }
 
 async function prepareFitted(spec: FurnitureSpec): Promise<Buffer> {
-  const document = await (await io()).read(path.join(DOWNLOADS, spec.file))
+  const document = await readSource(sourceOf(spec))
   flattenFittings(document, spec)
   return finish(document, spec)
 }
 
-/** Where each fitting's objects stand in the file — the same reading the cut was made with. */
-async function fittingsOf(spec: FurnitureSpec): Promise<Flat[]> {
-  const document = await (await io()).read(path.join(DOWNLOADS, spec.file))
-  return flattenFittings(document, spec)
+/**
+ * Where each fitting's objects stand, read off the stored file.
+ *
+ * The stored file is the flattened one: its root nodes are the fittings in
+ * spec order, each carrying its world transform, so the reading is the one
+ * the cut was made with — and it is there on a machine that has never seen
+ * the client's file. Walked against the spec rather than taken on trust: a
+ * file that no longer matches the spec is a file to cut again.
+ */
+async function fittingsOf(spec: FurnitureSpec, file: string): Promise<Flat[]> {
+  const document = await (await io()).read(file)
+  const root = document.getRoot()
+  const nodes = (root.getDefaultScene() ?? root.listScenes()[0]).listChildren()
+  const flat: Flat[] = []
+
+  for (const fitting of spec.fitted ?? []) {
+    for (const name of fitting.nodes) {
+      // As many nodes as the name found in the client's file, side by side.
+      const from = flat.length
+      while (flat.length < nodes.length && tidyName(nodes[flat.length].getName()) === tidyName(name)) {
+        const node = nodes[flat.length]
+        const bounds = getBounds(node)
+        flat.push({
+          fitting,
+          path: String(flat.length),
+          name,
+          centre: [(bounds.min[0] + bounds.max[0]) / 2, (bounds.min[2] + bounds.max[2]) / 2],
+          baseY: bounds.min[1],
+          size: [bounds.max[0] - bounds.min[0], bounds.max[2] - bounds.min[2]],
+        })
+      }
+      if (flat.length === from) {
+        throw new Error(
+          `${path.basename(file)} has no "${name}" at node ${from} — it no longer matches the spec; run with --recut.`,
+        )
+      }
+    }
+  }
+
+  return flat
 }
 
 type Point = { x: number; z: number }
@@ -531,8 +546,13 @@ function turned(offset: [number, number], facing: Facing): [number, number] {
  * Lays the package out in every kitchen of every building, as a fitted set on
  * the room. A set already there for this package is replaced; the others stay.
  */
-async function fitKitchens(payload: Payload, spec: FurnitureSpec, packageId: number, modelUrl: string): Promise<number> {
-  const flat = await fittingsOf(spec)
+async function fitKitchens(
+  payload: Payload,
+  spec: FurnitureSpec,
+  packageId: number,
+  model: { url: string; file: string },
+): Promise<number> {
+  const flat = await fittingsOf(spec, model.file)
   const byFitting = new Map<string, Flat[]>()
   for (const entry of flat) byFitting.set(entry.fitting.key, [...(byFitting.get(entry.fitting.key) ?? []), entry])
 
@@ -598,7 +618,7 @@ async function fitKitchens(payload: Payload, spec: FurnitureSpec, packageId: num
             key: `${spec.slug}-${key}-${entry.path}`,
             source: 'model' as const,
             nodePath: entry.path,
-            modelUrl,
+            modelUrl: model.url,
             name: entry.fitting.nodes.length > 1 ? `${entry.fitting.name} — ${entry.name}` : entry.fitting.name,
             groupKey: entry.fitting.nodes.length > 1 ? `${spec.slug}-${key}-${entry.fitting.key}` : null,
             position: [Number(x.toFixed(3)), Number((spot.y - floorY + (entry.baseY - anchor.baseY)).toFixed(3)), Number(z.toFixed(3))],
@@ -648,7 +668,7 @@ async function roomTypeIds(payload: Payload, rooms: FurnitureSpec['rooms']): Pro
   return wanted.map((slug) => known.get(slug)!)
 }
 
-async function importPackage(payload: Payload, spec: FurnitureSpec, reuse: boolean) {
+async function importPackage(payload: Payload, spec: FurnitureSpec, recut: boolean) {
   const { tier, region } = await lookups(payload, spec)
   const glb = (name: string, data: Buffer) => ({ data, name: `${name}.glb`, mimetype: 'model/gltf-binary' })
 
@@ -664,37 +684,52 @@ async function importPackage(payload: Payload, spec: FurnitureSpec, reuse: boole
 
   let model: number | null = null
   let members: Array<{ id?: string; model: number; name: string; x: number; z: number; rotationYDeg: number }> = []
-  let fittedModel: { id: number; url: string } | null = null
+  let fittedModel: CatalogueFile | null = null
 
   if (spec.fitted?.length) {
     // The whole file, flattened, and no model on the row: a fitted package's
     // geometry lives on the rooms it is arranged in, by path into this file.
-    const data = await cached(spec.slug, 'fittings.glb', () => prepareFitted(spec), reuse)()
-    const doc = await upsertUpload(payload, 'models', spec.slug, glb(spec.slug, data))
-    fittedModel = { id: doc.id, url: doc.url as string }
+    fittedModel = await catalogueFile(
+      payload,
+      'models',
+      spec.slug,
+      spec.slug,
+      async () => glb(spec.slug, await prepareFitted(spec)),
+      recut,
+    )
   } else if (spec.pieces?.length) {
     // A piece keeps its row id across imports: a saved order names a piece by
     // it, and a fresh id would leave that order pointing at nothing.
     const rows = (current?.members ?? []) as Array<{ id?: string | null; name?: string | null }>
-    const places = await sourcePlaces(spec)
 
     for (const piece of spec.pieces) {
-      const data = await cached(spec.slug, `${piece.key}.glb`, () => preparePiece(spec, piece), reuse)()
-      const doc = await upsertUpload(payload, 'models', `${spec.slug} — ${piece.key}`, glb(`${spec.slug}-${piece.key}`, data))
+      const doc = await catalogueFile(
+        payload,
+        'models',
+        `${spec.slug} — ${piece.key}`,
+        `${spec.slug}-${piece.key}`,
+        async () => glb(`${spec.slug}-${piece.key}`, await preparePiece(spec, piece)),
+        recut,
+      )
       const kept = rows.find((row) => row.name === piece.name)?.id ?? undefined
-      const at = piece.at ?? places.get(piece.key)!
       members.push({
         ...(kept ? { id: kept } : {}),
         model: doc.id,
         name: piece.name,
-        x: Number(at[0].toFixed(3)),
-        z: Number(at[1].toFixed(3)),
+        x: Number(piece.at[0].toFixed(3)),
+        z: Number(piece.at[1].toFixed(3)),
         rotationYDeg: piece.rotationYDeg ?? 0,
       })
     }
   } else {
-    const data = await cached(spec.slug, 'package.glb', () => prepareWhole(spec), reuse)()
-    const doc = await upsertUpload(payload, 'models', spec.slug, glb(spec.slug, data))
+    const doc = await catalogueFile(
+      payload,
+      'models',
+      spec.slug,
+      spec.slug,
+      async () => glb(spec.slug, await prepareWhole(spec)),
+      recut,
+    )
     model = doc.id
     members = []
   }
@@ -718,7 +753,7 @@ async function importPackage(payload: Payload, spec: FurnitureSpec, reuse: boole
     : await payload.create({ collection: 'furniture-packages', data })
 
   if (fittedModel) {
-    const fitted = await fitKitchens(payload, spec, row.id, fittedModel.url)
+    const fitted = await fitKitchens(payload, spec, row.id, fittedModel)
     payload.logger.info(`${spec.title} (${fromFileName(spec.file).tier}): fitted in ${fitted} kitchens (id ${row.id}).`)
     return
   }
@@ -734,14 +769,14 @@ async function main() {
   const which = process.argv[2]
   const specs = which === 'all' ? Object.values(FURNITURE) : which ? [FURNITURE[which]] : []
   if (specs.length === 0 || specs.some((spec) => !spec)) {
-    console.error(`Usage: pnpm import:furniture <slug|all> [--reuse]\nKnown: ${Object.keys(FURNITURE).join(', ')}`)
+    console.error(`Usage: pnpm import:furniture <slug|all> [--recut]\nKnown: ${Object.keys(FURNITURE).join(', ')}`)
     process.exit(1)
   }
 
-  const reuse = process.argv.includes('--reuse')
+  const recut = process.argv.includes('--recut')
   const payload = await getPayload({ config })
 
-  for (const spec of specs) await importPackage(payload, spec, reuse)
+  for (const spec of specs) await importPackage(payload, spec, recut)
   process.exit(0)
 }
 

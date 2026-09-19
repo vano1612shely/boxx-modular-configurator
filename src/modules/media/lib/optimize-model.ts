@@ -77,6 +77,19 @@ export async function optimizeGltfJson(
   return run(document, input.byteLength)
 }
 
+/**
+ * The measurements of a glb that is stored as it is, with no pass over it.
+ *
+ * Before and after are the one size: nothing was saved on this upload, and
+ * the row should say so rather than repeat a saving made on another machine.
+ */
+export async function describeGlb(input: Buffer): Promise<ModelMeta> {
+  const nodeIO = await getModelIO()
+  const document = await nodeIO.readBinary(new Uint8Array(input))
+
+  return readModelMeta(document, input.byteLength, input.byteLength)
+}
+
 /** Reads from disk so a glTF's relative .bin/texture paths resolve; emits one embedded GLB. */
 export async function optimizeModelFile(
   path: string,

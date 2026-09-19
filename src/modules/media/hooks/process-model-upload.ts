@@ -1,6 +1,6 @@
 import { APIError, type CollectionBeforeOperationHook } from 'payload'
 
-import { externalReferences, optimizeGlb, optimizeGltfJson } from '../lib/optimize-model'
+import { describeGlb, externalReferences, optimizeGlb, optimizeGltfJson } from '../lib/optimize-model'
 
 const GLB_EXTENSIONS = ['.glb', '.gltf']
 
@@ -12,6 +12,16 @@ export const processModelUpload: CollectionBeforeOperationHook = async ({ args, 
 
   if (!GLB_EXTENSIONS.some((ext) => name.endsWith(ext))) {
     throw new APIError('Only .glb / self-contained .gltf files are supported.', 400)
+  }
+
+  // A file the importer takes from the repository's `catalogue/` has been
+  // through this pass once, on the machine that cut it, and is stored as it
+  // is: the pass again would cost minutes a building for nothing, and anything
+  // that re-emits a glb may renumber the nodes every path in the catalogue is
+  // written against. It is still measured — the row describes the file.
+  if (req.context.storeAsIs && name.endsWith('.glb')) {
+    req.context.modelMeta = await describeGlb(req.file.data)
+    return args
   }
 
   if (name.endsWith('.gltf')) {

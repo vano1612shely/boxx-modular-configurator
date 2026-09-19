@@ -53,11 +53,5 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 
-
-
-
-# Prepared glbs the building importer caches between runs — derived from the sources.
-/.import-cache/
-
 # Knowledge-graph caches a local tool leaves beside what it walks; never part of the product.
 .graphify/

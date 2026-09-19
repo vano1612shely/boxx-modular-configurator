@@ -25,6 +25,19 @@ export const processTextureUpload: CollectionBeforeOperationHook = async ({
     throw new APIError(`Unsupported texture format. Use one of: ${SUPPORTED.join(', ')}.`, 400)
   }
 
+  // From the repository's `catalogue/`: already the webp this hook made of it
+  // once, and encoding a lossy image a second time only loses more of it.
+  if (req.context.storeAsIs) {
+    const { width = 0, height = 0 } = await sharp(req.file.data).metadata()
+    req.context.textureMeta = {
+      width,
+      height,
+      sizeBefore: req.file.data.byteLength,
+      sizeAfter: req.file.data.byteLength,
+    } satisfies TextureMeta
+    return args
+  }
+
   try {
     const sizeBefore = req.file.data.byteLength
     const image = sharp(req.file.data)

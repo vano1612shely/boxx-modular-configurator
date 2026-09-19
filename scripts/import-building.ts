@@ -1,5 +1,6 @@
 import 'dotenv/config'
 
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 import { getBounds, type Document, type Node } from '@gltf-transform/core'
@@ -14,7 +15,7 @@ import { loadScene, pathsByMaterial } from './analyze-model'
 import { auditSpec } from './audit-building'
 import { SPECS } from './buildings'
 import type { BuildingSpec, Facing, OpeningSpec, RoomSpec, Rect } from './buildings/types'
-import { cached, findAllByName, io, keepOnlyNodes, upsertUpload, wrapScene } from './lib/import-tools'
+import { catalogueFile, findAllByName, io, keepOnlyNodes, readSource, wrapScene } from './lib/import-tools'
 
 /**
  * Turns a client's building glb into a catalogue entry.
@@ -23,10 +24,14 @@ import { cached, findAllByName, io, keepOnlyNodes, upsertUpload, wrapScene } fro
  * because every building asks the same questions and answers them differently.
  * Nothing about one building is written into this file.
  *
- *   pnpm import:building <slug> [--reuse]
+ *   pnpm import:building <slug|all> [--recut] [--no-audit]
  *
- * `--reuse` skips re-preparing the glbs when the cache already holds them,
- * which is most of the runtime on a 160 MB source.
+ * The models go in from `catalogue/models/` when they are there — which they
+ * are, in the repository, for every building below — and are stored as they
+ * are. Cutting from the client's glb files happens for a model that is not
+ * there yet, or for all of a building's with `--recut`; what the upload stores
+ * is then written back into `catalogue/` to be committed. `all` takes every
+ * building, each after the ones it borrows finishes and doors from.
  *
  * Coordinates in a spec are the ones `pnpm analyze:model` prints — the source
  * file's own. The recentring offset is applied here, to the geometry and to the
@@ -62,7 +67,7 @@ async function prepareExteriorOption(
   origin: [number, number, number],
   facing: Facing,
 ): Promise<Buffer> {
-  const document = await (await io()).read(source)
+  const document = await readSource(source)
   keepOnlyNodes(document, nodes)
 
   const yaw = (yawToPlusZ(facing) * Math.PI) / 180
@@ -81,7 +86,7 @@ async function prepareExteriorOption(
 
 /** The main model: the site pad and anything else unwanted taken out, re-centred. */
 async function prepareMain(spec: BuildingSpec): Promise<Buffer> {
-  const document = await (await io()).read(spec.source.main)
+  const document = await readSource(spec.source.main)
 
   for (const name of spec.dropNodes) {
     const found = findAllByName(document, name)
@@ -106,8 +111,8 @@ async function prepareMain(spec: BuildingSpec): Promise<Buffer> {
  * by eye in the editor would be a slower way to get a worse answer.
  */
 async function prepareRoof(spec: BuildingSpec): Promise<Buffer> {
-  const document = await (await io()).read(spec.source.full)
-  const cut = await (await io()).read(spec.source.main)
+  const document = await readSource(spec.source.full)
+  const cut = await readSource(spec.source.main)
 
   // What the horizontal cut took away, which is exactly the roof and the
   // suspended ceiling under it — tiles, grid, lamps and diffusers. Anything
@@ -213,7 +218,7 @@ async function prepareOpeningModel(
   /** Base colours written over the named materials, for a file that lost them. */
   paint: Record<string, [number, number, number]> = {},
 ): Promise<Buffer> {
-  const document = await (await io()).read(source)
+  const document = await readSource(source)
   const wanted = new Set(materials)
 
   for (const [name, rgb] of Object.entries(paint)) {
@@ -362,7 +367,7 @@ async function prepareOpeningModel(
 
 /** The base-colour image of a named material, as the file it already is. */
 async function extractTexture(file: string, material: string) {
-  const document = await (await io()).read(file)
+  const document = await readSource(file)
   const found = document
     .getRoot()
     .listMaterials()
@@ -741,30 +746,28 @@ async function roomTypeLookup(payload: Payload) {
   }
 }
 
-async function main() {
-  const slug = process.argv[2]
+type Flags = { recut: boolean; audit: boolean }
+
+/** A glb as the upload takes it. */
+const glb = (name: string, data: Buffer) => ({ data, name: `${name}.glb`, mimetype: 'model/gltf-binary' })
+
+async function importBuilding(payload: Payload, slug: string, { recut, audit }: Flags) {
   const spec = SPECS[slug]
-  if (!spec) {
-    console.error(`Usage: pnpm import:building <slug>\nKnown: ${Object.keys(SPECS).join(', ')}`)
-    process.exit(1)
-  }
 
   // Nothing is uploaded on the strength of a number somebody typed: every
-  // edge, door and window of the spec is checked against the glb first.
-  if (!process.argv.includes('--no-audit')) {
+  // edge, door and window of the spec is checked against the glb first —
+  // where the glb is. An import from `catalogue/` has no source to hold the
+  // spec against; its numbers were audited on the machine that cut the files.
+  if (audit && existsSync(spec.source.main)) {
     const findings = await auditSpec(spec)
     if (findings.length > 0) {
       for (const finding of findings) console.error(`  ${finding.room}: ${finding.what}`)
       throw new Error(`${slug}: ${findings.length} finding(s) against the geometry — fix the spec, or pass --no-audit.`)
     }
     console.log(`audited: ${spec.rooms.length} rooms against the geometry, nothing to report`)
+  } else if (audit) {
+    console.log(`no ${path.basename(spec.source.main)} to audit against — importing from catalogue/`)
   }
-
-  const reuse = process.argv.includes('--reuse')
-  const mainGlb = await cached(slug, 'main.glb', () => prepareMain(spec), reuse)()
-  const roofGlb = await cached(slug, 'roof.glb', () => prepareRoof(spec), reuse)()
-
-  const payload = await getPayload({ config })
   const roomType = await roomTypeLookup(payload)
 
   const line = await payload.find({
@@ -821,20 +824,28 @@ async function main() {
 
   for (const texture of spec.textures) {
     const source = texture.from === 'full' ? spec.source.full : spec.source.main
-    const image = await extractTexture(source, texture.material)
-    const doc = await upsertUpload(payload, 'textures', `${spec.slug} — ${texture.surface}`, {
-      data: image.data,
-      name: `${spec.slug}-${texture.surface}.${image.extension}`,
-      mimetype: image.mime,
-    })
+    const doc = await catalogueFile(
+      payload,
+      'textures',
+      `${spec.slug} — ${texture.surface}`,
+      `${spec.slug}-${texture.surface}`,
+      async () => {
+        const image = await extractTexture(source, texture.material)
+        return { data: image.data, name: `${spec.slug}-${texture.surface}.${image.extension}`, mimetype: image.mime }
+      },
+      recut,
+    )
     textureIds[texture.surface] = doc.id
   }
 
-  const model = await upsertUpload(payload, 'models', spec.modelTitle, {
-    data: mainGlb,
-    name: `${spec.slug}.glb`,
-    mimetype: 'model/gltf-binary',
-  })
+  const model = await catalogueFile(
+    payload,
+    'models',
+    spec.modelTitle,
+    spec.slug,
+    async () => glb(spec.slug, await prepareMain(spec)),
+    recut,
+  )
 
   const sharedRoof = spec.reuseRoofFrom ? SPECS[spec.reuseRoofFrom] : null
   if (spec.reuseRoofFrom && !sharedRoof) {
@@ -844,11 +855,14 @@ async function main() {
   const roofId = sharedRoof
     ? await findByTitle('models', `${sharedRoof.modelTitle} — roof`)
     : (
-        await upsertUpload(payload, 'models', `${spec.modelTitle} — roof`, {
-          data: roofGlb,
-          name: `${spec.slug}-roof.glb`,
-          mimetype: 'model/gltf-binary',
-        })
+        await catalogueFile(
+          payload,
+          'models',
+          `${spec.modelTitle} — roof`,
+          `${spec.slug}-roof`,
+          async () => glb(`${spec.slug}-roof`, await prepareRoof(spec)),
+          recut,
+        )
       ).id
   if (sharedRoof) payload.logger.info(`models: reusing "${sharedRoof.modelTitle} — roof"`)
 
@@ -870,28 +884,30 @@ async function main() {
   for (const opening of spec.openingModels ?? []) {
     const key = opening.key ?? opening.kind
     const source = opening.from === 'full' ? spec.source.full : spec.source.main
-    console.log(`cutting the ${key} out of the building…`)
 
-    const glb = await cached(
-      slug,
-      `${key}.glb`,
-      () => prepareOpeningModel(
-          source,
-          opening.region,
-          opening.materials,
-          opening.regionByMaterial ?? {},
-          opening.thinBy ?? null,
-          opening.turn ?? null,
-          opening.facing ?? '+z',
-          opening.paint ?? {},
-        ),
-      reuse,
-    )()
-    const doc = await upsertUpload(payload, 'models', `${spec.modelTitle} — ${key}`, {
-      data: glb,
-      name: `${spec.slug}-${key}.glb`,
-      mimetype: 'model/gltf-binary',
-    })
+    const doc = await catalogueFile(
+      payload,
+      'models',
+      `${spec.modelTitle} — ${key}`,
+      `${spec.slug}-${key}`,
+      async () => {
+        console.log(`cutting the ${key} out of the building…`)
+        return glb(
+          `${spec.slug}-${key}`,
+          await prepareOpeningModel(
+            source,
+            opening.region,
+            opening.materials,
+            opening.regionByMaterial ?? {},
+            opening.thinBy ?? null,
+            opening.turn ?? null,
+            opening.facing ?? '+z',
+            opening.paint ?? {},
+          ),
+        )
+      },
+      recut,
+    )
     payload.logger.info(`  ${key}: sits ${opening.intoWall} m out of the wall's middle`)
     openingModelIds[key] = {
       model: doc.id,
@@ -933,18 +949,20 @@ async function main() {
   }
   for (const option of spec.exteriorOptions ?? []) {
     const source = option.from === 'full' ? spec.source.full : spec.source.main
-    console.log(`cutting the ${option.key} out of the building…`)
-    const glb = await cached(
-      slug,
-      `${option.key}.glb`,
-      () => prepareExteriorOption(source, option.nodes, option.origin, option.facing),
-      reuse,
-    )()
-    const doc = await upsertUpload(payload, 'models', `${spec.modelTitle} — ${option.key}`, {
-      data: glb,
-      name: `${spec.slug}-${option.key}.glb`,
-      mimetype: 'model/gltf-binary',
-    })
+    const doc = await catalogueFile(
+      payload,
+      'models',
+      `${spec.modelTitle} — ${option.key}`,
+      `${spec.slug}-${option.key}`,
+      async () => {
+        console.log(`cutting the ${option.key} out of the building…`)
+        return glb(
+          `${spec.slug}-${option.key}`,
+          await prepareExteriorOption(source, option.nodes, option.origin, option.facing),
+        )
+      },
+      recut,
+    )
     exteriorOptionIds[option.key] = await optionRow(option.title, option.description, doc.id)
     payload.logger.info(`exterior-options: "${option.title}" → model ${doc.id}`)
   }
@@ -1055,6 +1073,40 @@ async function main() {
   ) as { id: number; rooms?: unknown[] }
 
   payload.logger.info(`${spec.title}: ${building.rooms?.length ?? 0} rooms (id ${building.id}).`)
+}
+
+/** Every building, each after the ones whose finishes, doors or roof it takes. */
+function inImportOrder(): string[] {
+  const order: string[] = []
+  const visit = (slug: string) => {
+    if (order.includes(slug)) return
+    const spec = SPECS[slug]
+    if (!spec) throw new Error(`No building "${slug}" to take shared assets from.`)
+    for (const donor of [spec.reuseAssetsFrom ?? [], spec.reuseRoofFrom ?? []].flat()) visit(donor)
+    order.push(slug)
+  }
+  for (const slug of Object.keys(SPECS)) visit(slug)
+  return order
+}
+
+async function main() {
+  const which = process.argv[2]
+  const slugs = which === 'all' ? inImportOrder() : which && SPECS[which] ? [which] : []
+  if (slugs.length === 0) {
+    console.error(`Usage: pnpm import:building <slug|all> [--recut] [--no-audit]\nKnown: ${Object.keys(SPECS).join(', ')}`)
+    process.exit(1)
+  }
+
+  const flags: Flags = {
+    recut: process.argv.includes('--recut'),
+    audit: !process.argv.includes('--no-audit'),
+  }
+  const payload = await getPayload({ config })
+
+  for (const slug of slugs) {
+    console.log(`\n== ${slug} ==`)
+    await importBuilding(payload, slug, flags)
+  }
   process.exit(0)
 }
 

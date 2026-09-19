@@ -1,5 +1,7 @@
 import path from 'node:path'
 
+import { SOURCES } from '../lib/import-tools'
+
 import type { BuildingSpec, OpeningSpec, RoomSpec } from './types'
 
 /**
@@ -20,7 +22,6 @@ import type { BuildingSpec, OpeningSpec, RoomSpec } from './types'
  * and each door gets a spot with the two choices standing on its threshold.
  */
 
-const DOWNLOADS = 'C:/Users/ivan/Downloads'
 
 /** Floor top to the ceiling tile, the same in every unit to a millimetre. */
 const CEILING_ABOVE_FLOOR = 2.615
@@ -104,8 +105,8 @@ function mobileOffice(unit: Unit): BuildingSpec {
     reuseAssetsFrom: unit.own ? undefined : 'mobile-office-12x56',
 
     source: {
-      main: path.join(DOWNLOADS, unit.files.main),
-      full: path.join(DOWNLOADS, unit.files.full),
+      main: path.join(SOURCES, unit.files.main),
+      full: path.join(SOURCES, unit.files.full),
     },
 
     // Plan centre of the walls to the origin, the finished floor down to y=0.
